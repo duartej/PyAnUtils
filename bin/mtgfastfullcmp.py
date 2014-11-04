@@ -2,6 +2,25 @@
 # FIXME: Missing documentation
 NBINS=500
 
+def printdiff(g,xvar):
+	"""
+	Just print values of the TGraph
+	"""
+	from array import array
+	tolerance=1e-1
+	npoints = g.GetN()
+	x = g.GetX()
+	y = g.GetY()
+	print "============================================"
+	print " Muon Spectrometer Differences w.r.t. %s" % xvar
+	print " -- Just showing diff. greater than %.3f -- " % tolerance
+	print "============================================"
+	print "%6s || FullSim-FastSim [mm]" % "x"
+	for i in xrange(npoints):
+		if abs(y[i]) > tolerance:
+			print "%6.3f || %.3f" % (x[i],y[i])
+	print "============================================"
+
 
 def drawgraph(gdict,dname,xtitle):
 	"""
@@ -92,6 +111,9 @@ def drawgraph(gdict,dname,xtitle):
 	diffg.Draw("LSAME")
 
 	c.SaveAs(dname+"_"+xtitle+"_diff.png")
+	c.Close()
+
+	return diffg
 
 
 def drawstacked(indet,cadet,msdet,xvar,simtype):
@@ -247,8 +269,11 @@ def main(ffullname,ffastname):
 				reordergraph(f)
 		#print "Evaluated points for the each subdetector:"
 		# Drawing for each subdetector
+		diffgraph = {}
 		for detname,grdict in [('innerdetector',tid), ('calorimeter',cad),('muonspectrometer',msd)]:
-			drawgraph(grdict,detname,xvariable)
+			diffgraph[detname] = drawgraph(grdict,detname,xvariable)
+		# Print differences in the muon spectrometer (between full-fast)
+		printdiff(diffgraph['muonspectrometer'],xvariable)
 		# Draw a stacked graph with all the detectors: 
 		# FIXME: TESTING... To be decided if it's included or not
 		drawstacked(tid['fullsim'],cad['fullsim'],msd['fullsim'],xvariable,'fullsim')
