@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%% PyAnUtils: Physics Analysis Utils %%%%
 %%%%                                   %%%%
-%%%% Set of utilities usefuls to do    %%%%
+%%%% Container of utilities to do      %%%%
 %%%% pysics analysis. It includes      %%%%
 %%%% generic software to do plots,     %%%%
 %%%% make useful functions, etc; as    %%%%
