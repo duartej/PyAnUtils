@@ -1,36 +1,33 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%% PyAnUtils: Physics Analysis Utils %%%%
-%%%%                                   %%%%
-%%%% Container of utilities to do      %%%%
-%%%% pysics analysis. It includes      %%%%
-%%%% generic software to do plots,     %%%%
-%%%% make useful functions, etc; as    %%%%
-%%%% well as more specific ATLAS/CMS   %%%%
-%%%% oriented.                         %%%%
-%%%%                                   %%%%
-%%%% Jordi Duarte-Campderros (11/2014) %%%%
-%%%% jorge.duarte.campderros@cern      %%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% PyAnUtils: Physics Analysis Utils                                 %%%%
+%%%%                                                                   %%%%
+%%%% Container of utilities to do pysics analysis. It includes generic %%%%
+%%%% software to do plots, make useful functions, etc; as well as more %%%%
+%%%% specific ATLAS/CMS oriented.                                      %%%%
+%%%%                                                                   %%%%
+%%%% author: Jordi Duarte-Campderros (Nov.2014)                        %%%%
+%%%% email : jorge.duarte.campderros@cern                              %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 1. INSTALLATION: 
-The package provides a (Distutils) 'setup.py'
-to build and install it. Just 
- % python setup.py install [--user]
-The --user option is used when you don't 
-have root privilegies (or you don't want
-to install the package in the global 
-site-packages directories). The package
-will be installed inside of the user 
-directory '$HOME/.local'. You have to modify 
-the enviroment variable:
- % export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
- % export PATH=$PATH:$HOME/.local/bin
-in order to use the new scripts and modules
+The package provides a (Distutils) 'setup.py' to build and install it. Just 
+  % python setup.py install [--user] 
+The --user option is used when you don't have root privilegies (or you 
+don't want to install the package in the global site-packages directories). 
+The package will be installed inside of the user directory '$HOME/.local'. 
+You have to modify the enviroment variables: 
+  % export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
+   % export PATH=$PATH:$HOME/.local/bin
+in order to use the new scripts and modules.
 
-UTILITIES
-===========================================
- PyAnUtils.plotsytyles 
+2. CONTENT
+  2.1. Modules
+   * PyAnUtils.plotsytyles:   ROOT styles 
+   * PyAnUtils.pyanfunctions: bunch of functions
 
-SCRIPTS
-===========================================
+  2.2. Scripts
+   * mtgfastfullcmp: plot and show differences between Full (G4) and Fast
+   simulation in the MuonTrackingGeometry ATLAS's package
+
+Use *help* function for detailed information of each module and script.
  
