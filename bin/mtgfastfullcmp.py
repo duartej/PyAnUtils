@@ -94,49 +94,56 @@ def drawgraph(gdict,dname,xtitle):
 	c.SaveAs(dname+"_"+xtitle+"_diff.png")
 
 
-def graphtohist(graph,binning=1000):
-	"""
-	"""
-	from ROOT import Double,TH1F
-	# Extract limits to build the histo
-	xmin = graph.GetXaxis().GetBinLowEdge(graph.GetXaxis().GetFirst())
-	xmax = graph.GetXaxis().GetBinUpEdge(graph.GetXaxis().GetLast())
-	h = TH1F(graph.GetName()+'_histo','',binning,xmin,xmax)
-	xbins = [ h.GetXaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsX()+2) ]
-	yval = Double(0.0)
-	xval = Double(0.0)
-	# dict to count how many entries are pushed in the same bin, in order to
-	# make an average later
-	hdict = {}
-	for i in xrange(graph.GetN()):
-		point = graph.GetPoint(i,xval,yval)
-		_hbin = h.Fill(xval,yval)
-		try:
-			hdict[_hbin] +=1 
-		except KeyError:
-			hdict[_hbin] = 1
-	# Let's average the bins with more than one entry
-	for b,nentries in hdict.iteritems():
-		valaux = h.GetBinContent(b)
-		h.SetBinContent(b,valaux/nentries)
-	
-	return h
-
-
-def drawstacked(indet,cadet,msdet,xvar):
+def drawstacked(indet,cadet,msdet,xvar,simtype):
 	"""
 	"""
 	import ROOT
+	from PyAnUtils.pyanfunctions import graphtohist
+
+	legend = ROOT.TLegend(0.45,0.85,0.75,0.9)
+	legend.SetBorderSize(0)
+	legend.SetTextSize(0.03)
+	legend.SetFillColor(10)
+	legend.SetTextFont(112)
+	# Making histograms from TGraphs
+	# and setting up attributes and
+	# associating a legend entry
 	hindet = graphtohist(indet,100)
+	hindet.SetLineColor(38)
+	hindet.SetMarkerColor(38)
+	hindet.SetFillColor(38)
+	legend.AddEntry(hindet,'Inner Detector','F')
+
 	cadet  = graphtohist(cadet,100)
+	cadet.SetLineColor(30)
+	cadet.SetMarkerColor(30)
+	cadet.SetFillColor(30)
+	legend.AddEntry(cadet,'Calorimeters','F')
+	
 	msdet  = graphtohist(msdet,100)
+	msdet.SetLineColor(46)
+	msdet.SetMarkerColor(46)
+	msdet.SetFillColor(46)
+	legend.AddEntry(msdet,'Muon Spectrometer','F')
 
 	hstack = ROOT.THStack('hs','hstack')
+	hstack.SetTitle()
+	hstack.Add(hindet)
 	hstack.Add(cadet)
 	hstack.Add(msdet)
+
 	c =ROOT.TCanvas()
 	hstack.Draw("HIST")
-	c.SaveAs('test_'+xvar+'.png')
+	hframe = hstack.GetHistogram()
+	hframe.SetTitle(simtype)
+	hframe.SetXTitle('#'+xvar)
+	hframe.SetYTitle('Material Length [X_{0}]')
+	hframe.Draw("SAME")
+	legend.Draw()
+	c.SaveAs('stacked_'+xvar+'_'+simtype+'+.png')
+	c.SetLogy()
+	c.SaveAs('stacked_log_'+xvar+'_'+simtype+'.png')
+	c.Close()
 
 def reordergraph(f):
 	"""
@@ -244,7 +251,8 @@ def main(ffullname,ffastname):
 			drawgraph(grdict,detname,xvariable)
 		# Draw a stacked graph with all the detectors: 
 		# FIXME: TESTING... To be decided if it's included or not
-		drawstacked(tid['fullsim'],cad['fullsim'],msd['fullsim'],xvariable)
+		drawstacked(tid['fullsim'],cad['fullsim'],msd['fullsim'],xvariable,'fullsim')
+		drawstacked(tid['fastsim'],cad['fastsim'],msd['fastsim'],xvariable,'fastsim')
 
 	ffull.Close()
 	ffast.Close()

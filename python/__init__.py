@@ -9,3 +9,4 @@
 	  .. packageauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 import plotstyles
+import pyanfunctions
