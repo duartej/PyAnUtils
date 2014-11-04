@@ -1,17 +1,20 @@
 #!/usr/bin/env python
-
+# FIXME: Missing documentation
 NBINS=500
 
 
 def drawgraph(gdict,dname,xtitle):
 	"""
 	"""
+	import ROOT
+	from PyAnUtils.plotstyles import squaredStyle
+    # Avoiding the canvas creation in X
+	ROOT.gROOT.SetBatch(1)
+
 	TOLERANCE = 1e-6
-	from array import array
-	from LatinoStyle_mod import LatinosStyle
 	
 	ROOT.gStyle.SetLegendBorderSize(0)
-	lstyle = LatinosStyle()
+	lstyle = squaredStyle()
 	lstyle.cd()
 	ROOT.gROOT.ForceStyle()
 	ROOT.gStyle.SetOptStat(0)
@@ -94,12 +97,11 @@ def drawgraph(gdict,dname,xtitle):
 def graphtohist(graph,binning=1000):
 	"""
 	"""
-	from array import array
-	from ROOT import Double
+	from ROOT import Double,TH1F
 	# Extract limits to build the histo
 	xmin = graph.GetXaxis().GetBinLowEdge(graph.GetXaxis().GetFirst())
 	xmax = graph.GetXaxis().GetBinUpEdge(graph.GetXaxis().GetLast())
-	h = ROOT.TH1F(graph.GetName()+'_histo','',binning,xmin,xmax)
+	h = TH1F(graph.GetName()+'_histo','',binning,xmin,xmax)
 	xbins = [ h.GetXaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsX()+2) ]
 	yval = Double(0.0)
 	xval = Double(0.0)
@@ -153,23 +155,21 @@ def reordergraph(f):
 
 def filldict(geoid,phi,theta,x0,fdict):
 	from math import pi,log,tan
-	eta = -log(tan(theta_a[0]/2.0))
+	eta = -log(tan(theta/2.0))
 	fdict[(eta,geoid)] = (x0,phi,theta)
 	
-
-if __name__ == '__main__':
+def main(ffullname,ffastname):
+	"""
+	"""
 	import ROOT
 	from array import array
 	
-	ROOT.gROOT.SetBatch(1)
-	
-	ffull  = ROOT.TFile.Open("ISFG4SimKernel.root")
-	ffast  = ROOT.TFile.Open("ISFFatras.root")
-	
-	cfiles = { 'fullsim': ffull, 'fastsim': ffast }
-	
+	ffull  = ROOT.TFile.Open(ffullname)
+	ffast  = ROOT.TFile.Open(ffastname)
+	# Files and trees associated to full and fast
+	cfiles = { 'fullsim': ffull, 'fastsim': ffast }	
 	ctrees = dict(map(lambda (t,x): (t,x.Get("particles")),cfiles.iteritems()))
-	
+	#
 	hd = dict(map(lambda t: (t,{}),ctrees.keys()))
 	
 	# Getting quantities of interest and setting the branch
@@ -191,7 +191,6 @@ if __name__ == '__main__':
 			_phi= phi_a[0]
 			_theta=theta_a[0]
 			filldict(geoID_a[0],phi_a[0],theta_a[0],_x0,hd[simtype])
-			
 			
 	# Converting acquired info to TGraph in order to draw for each
 	# topological (angular) variable 
@@ -227,7 +226,7 @@ if __name__ == '__main__':
 					activef = msd[simtype]
 				else:
 					continue
-				# actually fill (with the current angular variable
+				# actually fill (with the current angular variable)
 				xvar = eval(xvariable)
 				activef.SetPoint(k[geoID],xvar,x0)
 				k[geoID] += 1
@@ -240,6 +239,30 @@ if __name__ == '__main__':
 			for simtype,f in msd.iteritems():
 				reordergraph(f)
 		#print "Evaluated points for the each subdetector:"
+		# Drawing for each subdetector
 		for detname,grdict in [('innerdetector',tid), ('calorimeter',cad),('muonspectrometer',msd)]:
 			drawgraph(grdict,detname,xvariable)
+		# Draw a stacked graph with all the detectors: 
+		# FIXME: TESTING... To be decided if it's included or not
 		drawstacked(tid['fullsim'],cad['fullsim'],msd['fullsim'],xvariable)
+
+	ffull.Close()
+	ffast.Close()
+
+if __name__ == '__main__':
+	import os
+	from optparse import OptionParser,OptionGroup
+	
+	cwd = os.getcwd()
+	parser = OptionParser()
+	parser.set_defaults(fullsim=os.path.join(cwd,'ISFG4SimKernel.root'),\
+			fastsim=os.path.join(cwd,'ISFFatras.root'))
+
+	parser.add_option( '--full', action='store', type='string', dest='fullsim',\
+			help="Full (Geant4) simulation root file [ISFG4SimKernel.root]")
+	parser.add_option( '--fast', action='store', type='string', dest='fastsim',\
+			help="Fast simulation root file [ISFFatras.root]")
+
+	(opt, args)=parser.parse_args()	
+	# See main function
+	main(opt.fullsim,opt.fastsim)

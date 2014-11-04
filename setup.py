@@ -6,8 +6,9 @@ setup(name='PyAnUtils',
 		author='Jordi Duarte-Campderros',
 		author_email='Jordi.Duarte.Campderros@cern.ch',
 		url='https://github.com/',
+		# See https://docs.python.org/2/distutils/setupscript.html#listing-whole-packages
+		# for changes in the package distribution
+		package_dir={'PyAnUtils':'python'},
 		packages = ['PyAnUtils' ],
-		package_dir={'PyAnUtils':''},
-		#scripts=[],
+		scripts=['bin/mtgfastfullcmp.py'],
 		)
-																				)
