@@ -1,0 +1,151 @@
+#!/usr/bin/env python
+""":script:`lazycmt` -- Compiles cmt directories in the Athena framework
+===================================================
+
+.. script:: lazycmt <build|clean> [OPTIONS]    
+      :platform: Unix
+      :synopsis: Search the cmt directories presents in a release Athena directory
+   and perform the compilation, cleaning or other programmed action. 
+
+	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+"""
+DEBUG=False
+
+def iscompiled(p):
+	""".. function:: iscompiled(p) --> bool
+
+	Checks the output of the Popen.communicate call, contains
+	an error.
+
+	:p: The ouput of the subprocess.Popen.communicate call, (stdout,stderr)
+	:type p: (str, str)
+
+	:return: If the error word was found (False) or not (True)
+	:rtype: bool
+	"""
+	if p[0].lower().find('error') != -1 or \
+			p[1].lower().find('error') != -1:
+				return False
+	return True
+
+
+def findcmtdirs(pardir,targetdir = 'cmt'):
+	""".. function:: findcmtdir(pardir) --> cmtdir
+	
+	Perform a recursively search down for the cmt directory
+	Return a list of directories
+
+	::FIXME:: Function to be put in a generic module
+	"""
+	import os
+	matches = []
+	for root, dirnames, filenames in os.walk(pardir):
+		if len(filter(lambda x: x == targetdir, dirnames)) == 1:
+			matches.append( os.path.join(root,targetdir))
+	return matches
+
+def sendshellcommand(command,d):
+	""".. function:: sendshellcommand(command,d) 
+
+	Send a shell command using as current working directory d.
+	Checks for any output error, which prints
+	
+	:command: command to be executed
+	:type command: string
+	"""
+	from subprocess import Popen,PIPE
+
+	p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+	if DEBUG:
+		print p[1],p[0]
+	if not iscompiled(p):
+		print "\033[31mlazycmt CONFIGURATION ERROR\033[m: [%s]" % (d.split('/')[-2])
+
+def config(wd):
+	""".. function:: configure(wd)
+
+	Configure all packages found inside the wd, by searching the cmt directory
+
+	:wd: Parent directory where to find recursively 'cmt' directories
+	:type wd: str
+	"""
+	cmtdirs = findcmtdirs(wd)
+	command = 'cmt.exe config'
+	for d in cmtdirs:
+		sendshellcommand(command,d)
+
+def build(wd):
+	""".. function:: build(wd)
+	
+	Build all packages found inside the wd, by searching the cmt directory
+	
+	:wd: Parent directory where to find recursively 'cmt' directories
+	:type wd: str
+	"""
+	cmtdirs = findcmtdirs(wd)
+	command = 'cmt.exe make -j8'
+	for d in cmtdirs:
+		print "Building directory '%s'" % d
+		sendshellcommand(command,d)
+	
+def clean(wd):
+	"""..function:: clean(wd)
+
+	Clean all packages found inside the wd, by searching the cmt directory
+
+	:wd: Parent directory where to find recursively 'cmt' directories
+	:type wd: str
+	"""
+	import os 
+	import shutil
+	from subprocess import Popen,PIPE	
+
+	cwd = os.getcwd()
+	cmtdirs = findcmtdirs(wd)
+	removedirs = [ 'genConf', os.getenv('CMTCONFIG') ]
+	for d in cmtdirs:
+		print "Cleaning directory '%s'" % d
+		os.chdir(d)
+		command2 = 'cmt.exe clean'
+		command =  'gmake clean'
+		p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+		p2 = Popen(command2,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+		# Check if there is directories to remove
+		for k in removedirs:
+			rmdir = os.path.join(os.path.join(d,'..'),k)
+			shutil.rmtree(rmdir, ignore_errors=True)
+	os.chdir(cwd)
+
+if __name__ == '__main__':
+	from optparse import OptionParser
+	import os
+
+	usage  = "usage: lazycmt.py <build|clean> [options]"
+	parser = OptionParser(usage=usage)
+	parser.add_option( "-p",action='store',dest='packages', metavar="PKG[,...]",\
+			help="just build|clean this package(s)")
+	parser.add_option( "-d",action='store_true',dest='debug', default=False,\
+			help="print full output from 'cmt'")
+
+	(opt,args) = parser.parse_args()
+	if len(args) != 1:
+		message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean"
+		raise RuntimeError(message)
+	else:
+		if args[0] != 'build' and args[0] != 'clean':
+			message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean."
+			message+= " (Introduced argument: '%s')" % args[0]
+			raise RuntimeError(message)
+
+	if opt.packages:
+		wd = opt.packages
+	else:
+		wd = os.getcwd()
+	if args[0] == 'build':
+		if opt.debug:
+			DEBUG=True
+		config(wd)
+		build(wd)
+	elif args[0] == 'clean':
+		clean(wd)
+
