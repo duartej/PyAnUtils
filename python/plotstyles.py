@@ -89,6 +89,7 @@ def squaredStyle():
 	squaredStyle.SetTitleY         (0.860)
 	squaredStyle.SetTitleFont(42, "")
 	
+	squaredStyle.SetPalette(1)
 	#----------------------------------------------------------------------------
 	# Stat
 	#----------------------------------------------------------------------------
@@ -174,6 +175,7 @@ def atlasStyle():
 	atlasStyle.SetPadTickX(1)
 	atlasStyle.SetPadTickY(1)
 	
+	atlasStyle.SetPalette(1)
 	#ROOT.gROOT.SetStyle("Plain")
 	#ROOT.gROOT.SetStyle("ATLAS")
 	#ROOT.gROOT.ForceStyle()

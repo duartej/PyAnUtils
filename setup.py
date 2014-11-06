@@ -10,5 +10,5 @@ setup(name='PyAnUtils',
 		# for changes in the package distribution
 		package_dir={'PyAnUtils':'python'},
 		packages = ['PyAnUtils' ],
-		scripts=['bin/mtgfastfullcmp.py'],
+		scripts=['bin/mtgfastfullcmp','bin/lazycmt'],
 		)
