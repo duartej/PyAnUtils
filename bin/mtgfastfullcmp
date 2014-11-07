@@ -35,7 +35,8 @@ def drawgraph2d(gdict,dname):
 	"""
 	import ROOT
 	from math import sqrt
-	from PyAnUtils.plotstyles import squaredStyle
+	from PyAnUtils.plotstyles import squaredStyle as dfStyle
+	from PyAnUtils.plotstyles import setpalette
 
     # Avoiding the canvas creation in X
 	ROOT.gROOT.SetBatch(1)
@@ -43,8 +44,8 @@ def drawgraph2d(gdict,dname):
 	TOLERANCE = 1e-6
 	
 	ROOT.gStyle.SetLegendBorderSize(0)
-	lstyle = squaredStyle()
-	#lstyle.SetPalette(55)
+	lstyle = dfStyle()
+	setpalette('inv_darkbody')
 	lstyle.cd()
 	ROOT.gROOT.ForceStyle()
 	ROOT.gStyle.SetOptStat(0)
@@ -101,8 +102,12 @@ def drawgraph2d(gdict,dname):
 	hframediff.SetLineColor(0)
 
 	hframediff.Draw()
-	hframediff.SetContour(80)
-	diffg.Draw("TRI1")
+	# Allowing root to put the Z-title
+	c.SetRightMargin(0.2)
+	c.SetLeftMargin(0.14)
+	if abs(diffg.GetZmax()) < abs(diffg.GetZmin()):
+		setpalette('darkbody')
+	diffg.Draw("COLZ")
 
 	c.SaveAs(dname+"_ETAPHI_2D_diff.png")
 	c.Close()
@@ -114,14 +119,14 @@ def drawgraph(gdict,dname,xtitle):
 	"""
 	"""
 	import ROOT
-	from PyAnUtils.plotstyles import squaredStyle
-    # Avoiding the canvas creation in X
+	from PyAnUtils.plotstyles import squaredStyle as dfStyle
+    # Avoiding the canvas creation in the X
 	ROOT.gROOT.SetBatch(1)
 
 	TOLERANCE = 1e-6
 	
 	ROOT.gStyle.SetLegendBorderSize(0)
-	lstyle = squaredStyle()
+	lstyle = dfStyle()
 	lstyle.cd()
 	ROOT.gROOT.ForceStyle()
 	ROOT.gStyle.SetOptStat(0)
