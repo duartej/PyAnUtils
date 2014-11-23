@@ -110,7 +110,7 @@ def clean(wdi,ncpu):
 	for d in cmtdirs:
 		print "Cleaning directory '%s'" % d
 		os.chdir(d)
-		command2 = 'cmt.exe clean -j'+ncpu
+		command2 = 'cmt.exe clean -j'+str(ncpu)
 		command =  'gmake clean'
 		p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
 		p2 = Popen(command2,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
