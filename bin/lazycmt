@@ -74,27 +74,31 @@ def config(wd):
 	for d in cmtdirs:
 		sendshellcommand(command,d)
 
-def build(wd):
+def build(wd,ncpu):
 	""".. function:: build(wd)
 	
 	Build all packages found inside the wd, by searching the cmt directory
 	
 	:wd: Parent directory where to find recursively 'cmt' directories
 	:type wd: str
+	:ncpu: number of available cpu for make
+	:type ncpu: int
 	"""
 	cmtdirs = findcmtdirs(wd)
-	command = 'cmt.exe make -j8'
+	command = 'cmt.exe make -j'+str(ncpu)
 	for d in cmtdirs:
 		print "Building directory '%s'" % d
 		sendshellcommand(command,d)
 	
-def clean(wd):
-	"""..function:: clean(wd)
+def clean(wdi,ncpu):
+	"""..function:: clean(wd,ncpu)
 
 	Clean all packages found inside the wd, by searching the cmt directory
 
 	:wd: Parent directory where to find recursively 'cmt' directories
 	:type wd: str
+	:ncpu: number of available cpu for make
+	:type ncpu: int
 	"""
 	import os 
 	import shutil
@@ -106,7 +110,7 @@ def clean(wd):
 	for d in cmtdirs:
 		print "Cleaning directory '%s'" % d
 		os.chdir(d)
-		command2 = 'cmt.exe clean'
+		command2 = 'cmt.exe clean -j'+ncpu
 		command =  'gmake clean'
 		p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
 		p2 = Popen(command2,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
@@ -141,11 +145,15 @@ if __name__ == '__main__':
 		wd = opt.packages
 	else:
 		wd = os.getcwd()
+	# number of cpu's
+	import multiprocessing
+	ncpu=multiprocessing.cpu_count()
+	# do the job
 	if args[0] == 'build':
 		if opt.debug:
 			DEBUG=True
 		config(wd)
-		build(wd)
+		build(wd,ncpu)
 	elif args[0] == 'clean':
-		clean(wd)
+		clean(wd,ncpu)
 
