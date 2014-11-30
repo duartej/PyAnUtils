@@ -77,7 +77,10 @@ def drawgraph2d(gdict,dname):
 	diffg.SetTitle()
 	diffg.SetLineColor(1)
 
-	# Assuming different number of points
+	# FIXME: Using the distributions with more points as the 
+	#        base to put the other one
+	# Assuming different number of points 
+	TOLERANCE = abs(xfullsim[0]-xfullsim[1])
 	k = 0
 	j_k = 0
 	for i in xrange(npointsfullsim):
@@ -255,7 +258,7 @@ def drawstacked(indet,cadet,msdet,xvar,simtype):
 	hframe.SetYTitle('Material Length [X_{0}]')
 	hframe.Draw("SAME")
 	legend.Draw()
-	c.SaveAs('stacked_'+xvar+'_'+simtype+'+.png')
+	c.SaveAs('stacked_'+xvar+'_'+simtype+'.png')
 	c.SetLogy()
 	c.SaveAs('stacked_log_'+xvar+'_'+simtype+'.png')
 	c.Close()
