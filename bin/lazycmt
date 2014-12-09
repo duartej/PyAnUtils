@@ -135,7 +135,13 @@ def clean(wd,ncpu,forcedel=False):
 		raise RuntimeError(message)
 	# -- Assuming that the package name is in the path, just before cmt
 	pkgnames = map(lambda x: x.split('/')[-2], cmtdirs)
-	# Removing the Install area related pkgs
+	# --- I'm assuming we're cleaning all the repo if
+	if len(pkgnames) == len(filter(lambda x: x.find('InstallArea') == -1, \
+			glob.glob(iadir+'/../*'))):
+		shutil.rmtree(iadir,ignore_errors=True)
+		return
+	
+	# Removing the Install area related pkgs (if was not removed everything)
 	for pkg in pkgnames:
 		print "Removing InstallArea related files '%s'" % pkg
 		relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
