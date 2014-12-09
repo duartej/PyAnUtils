@@ -92,3 +92,69 @@ def graphtohist2D(graph,binning=1000):
 		h.SetBinContent(b,valaux/nentries)
 	
 	return h
+
+def psitest(predicted,observed):
+	""".. function:: psitest(predicted,observed) -> value
+	Function which evaluate the amount of plausability a hypothesis has (i.e., 
+	predicted) when it is found a particular set of observed data (i.e. observed). 
+	The unit are decibels, and more close to 0 implies a better	reliability of 
+	the hypothesis. On the other hand, getting a psi_B = X db implies that there is
+	another hypothesis that it is X db better than B. So, psi function is useful to
+	compare two hypothesis with respect the same observed and see which of them 
+	has a psi nearest zero.
+
+	:param predicted: the set of values which are predicted. Usually a MC histogram 
+	:type predicted: numpy.array
+	:param observed: the set of values which are observed; usually the data
+	:type observed: numpy.array
+	
+	:return: the evaluation of the psi function
+	:rtype: float
+	
+	See reference at 'Probability Theory. The logic of Science. T.E Jaynes, 
+	pags. 300-305. Cambridge University Press (2003)'
+	"""
+	from math import log10
+	# Preferably use numpy package
+	try:
+		from numpy import array as array
+	except ImportError:
+		from array import array as array
+
+	N_total = 0
+	for n in observed:
+		N_total += n
+	# build the frecuency array for observed
+	try:
+		arrobs = array([ x/N_total for x in observed ],dtype='d')
+	except TypeError:
+		arrobs = array('d',[ x/N_total for x in observed ])
+
+	# Extracting info from the predicted
+	N_total_pre = 0
+	for n in predicted:
+		N_total_pre += n
+	# and build frequency array for predicted
+	try:
+		arrpre = array( [ x/N_total_pre for x in predicted ], dtype='d' )
+	except TypeError:
+		arrpre = array( 'd', [ x/N_total_pre for x in predicted ])
+	
+	#Consistency check: same number of measures (bins)
+	if len(arrpre) != len(arrobs):
+		message = "\033[31;1mpsitest ERROR\033[m Different number of elements (bins) for predicted and observed"
+		raise RuntimeError(message)
+	#Evaluating psi (in decibels units)
+	psib = 0.0
+	for i in xrange(len(arrpre)):
+		if not arrpre[i] > 0.0:
+			continue
+		try:
+			psib += arrobs[i]*log10(arrobs[i]/arrpre[i])
+		except ValueError:
+			continue
+		except OverflowError:
+			# FIXME--- CHECK WHAT IT MEANS
+			continue
+	
+	return 10.0*N_total*psib
