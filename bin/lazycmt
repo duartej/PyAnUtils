@@ -44,7 +44,7 @@ def findcmtdirs(pardir,targetdir = 'cmt'):
 			matches.append( os.path.join(root,targetdir))
 	return matches
 
-def sendshellcommand(command,d):
+def sendshellcommand(command,d,shell=True):
 	""".. function:: sendshellcommand(command,d) 
 
 	Send a shell command using as current working directory d.
@@ -55,7 +55,7 @@ def sendshellcommand(command,d):
 	"""
 	from subprocess import Popen,PIPE
 
-	p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+	p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=shell).communicate()
 	if DEBUG:
 		print p[1],p[0]
 	if not iscompiled(p):
@@ -103,35 +103,30 @@ def clean(wd,ncpu,forcedel=False):
 	import os 
 	import shutil
 	import glob
-	from subprocess import Popen,PIPE	
 
-	cwd = os.getcwd()
 	cmtdirs = findcmtdirs(wd)
 	removedirs = [ 'genConf', os.getenv('CMTCONFIG') ]
 	for d in cmtdirs:
 		print "Cleaning directory '%s'" % d
-		os.chdir(d)
-		command2 = 'cmt.exe clean -j'+str(ncpu)
-		command =  'gmake clean'
-		p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
-		p2 = Popen(command2,cwd=d,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+		command =  'make clean -j'+str(ncpu)
+		p = sendshellcommand(command,d)
 		# Check if there is directories to remove
 		for k in removedirs:
 			rmdir = os.path.join(os.path.join(d,'..'),k)
 			shutil.rmtree(rmdir, ignore_errors=True)
-	os.chdir(cwd)
 	# A proper clean will remove the contents of InstallArea
 	# directory
 
 	# -- Extracting the InstallArea directory (assuming all packages are
 	#    under the same main directory--repo dir
-	iadir=cmtdirs[0]
+	iadir=os.path.abspath(cmtdirs[0])
 	found = False
-	while (not found) and (len() != 0):
+	while (not found) and (len(iadir) != 0):
 		for root,dirs,files in os.walk(iadir):
 			if 'InstallArea' not in dirs:
 				iadir='/'.join(iadir.split('/')[:-1])
 			else:
+			    	iadir+='/InstallArea'
 				found=True
 			break
 	if iadir.find('InstallArea') == -1:
@@ -142,6 +137,7 @@ def clean(wd,ncpu,forcedel=False):
 	pkgnames = map(lambda x: x.split('/')[-2], cmtdirs)
 	# Removing the Install area related pkgs
 	for pkg in pkgnames:
+		print "Removing InstallArea related files '%s'" % pkg
 		relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
 		relateddirs+=glob.glob(iadir+"/*/lib/lib"+pkg+"*")
 		for k in relateddirs:
