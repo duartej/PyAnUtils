@@ -90,7 +90,7 @@ def build(wd,ncpu):
 		print "Building directory '%s'" % d
 		sendshellcommand(command,d)
 	
-def clean(wdi,ncpu):
+def clean(wd,ncpu,forcedel=False):
 	"""..function:: clean(wd,ncpu)
 
 	Clean all packages found inside the wd, by searching the cmt directory
@@ -102,6 +102,7 @@ def clean(wdi,ncpu):
 	"""
 	import os 
 	import shutil
+	import glob
 	from subprocess import Popen,PIPE	
 
 	cwd = os.getcwd()
@@ -119,6 +120,33 @@ def clean(wdi,ncpu):
 			rmdir = os.path.join(os.path.join(d,'..'),k)
 			shutil.rmtree(rmdir, ignore_errors=True)
 	os.chdir(cwd)
+	# A proper clean will remove the contents of InstallArea
+	# directory
+
+	# -- Extracting the InstallArea directory (assuming all packages are
+	#    under the same main directory--repo dir
+	iadir=cmtdirs[0]
+	found = False
+	while (not found) and (len() != 0):
+		for root,dirs,files in os.walk(iadir):
+			if 'InstallArea' not in dirs:
+				iadir='/'.join(iadir.split('/')[:-1])
+			else:
+				found=True
+			break
+	if iadir.find('InstallArea') == -1:
+		message = "\033[31mlazycmt.clean ERROR\033[m Problems finding the InstallArea"
+		message+= " directory"
+		raise RuntimeError(message)
+	# -- Assuming that the package name is in the path, just before cmt
+	pkgnames = map(lambda x: x.split('/')[-2], cmtdirs)
+	# Removing the Install area related pkgs
+	for pkg in pkgnames:
+		relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
+		relateddirs+=glob.glob(iadir+"/*/lib/lib"+pkg+"*")
+		for k in relateddirs:
+			shutil.rmtree(k,ignore_errors=True)
+
 
 if __name__ == '__main__':
 	from optparse import OptionParser
