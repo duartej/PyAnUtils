@@ -77,6 +77,8 @@ def drawgraph2d(gdict,dname):
 	diffg.SetTitle()
 	diffg.SetLineColor(1)
 
+	reldiffg = diffg.Clone("reldiff_ETAPHI_2d"+dname)
+
 	# FIXME: Using the distributions with more points as the 
 	#        base to put the other one
 	# Assuming different number of points 
@@ -95,6 +97,10 @@ def drawgraph2d(gdict,dname):
 				continue
 			else:
 				diffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast))
+				try:
+					reldiffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast)/_zfull)
+				except ZeroDivisionError:
+					reldiffg.SetPoint(k,_xfull,_yfull,0.0)
 				k += 1
 	
 	_dummy = diffg.Draw("A")
@@ -113,6 +119,17 @@ def drawgraph2d(gdict,dname):
 	diffg.Draw("COLZ")
 
 	c.SaveAs(dname+"_ETAPHI_2D_diff.png")
+
+	# Relative differences
+	_dummy = reldiffg.Draw("A")
+	hframediff.SetZTitle("Material Lenght (full-fast)/full [%]")
+	if abs(reldiffg.GetZmax()) < abs(reldiffg.GetZmin()):
+		setpalette('darkbody')
+	hframediff.Draw()
+	reldiffg.Draw("COLZ")
+
+	c.SaveAs(dname+"_ETAPHI_2D_reldiff.png")
+	
 	c.Close()
 
 	return diffg
