@@ -10,7 +10,7 @@
               the factor to this module
 .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
                """
-DEBUG=False
+DEBUG=True
 JOBEVT=500
 
 from abc import ABCMeta
@@ -119,7 +119,7 @@ class jobdescription(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    def getnextstatus(self,clusterinst):
+    def getnextstatus(self,clusterinst,checkfinishedjob):
         """..method:: getnextstatus() -> nextstatus
 
         The life of a job follows a clear workflow:
@@ -128,10 +128,12 @@ class jobdescription(object):
                                         |-+ successed -->  Done
         """
         if not self.status:
-            clusterinst.submit()
+            clusterinst.submit()#submit(self)
             self.status = 'submitted'
         elif self.status == 'submitted' or self.status == 'running':
-            self.status=clusterinst.checkstatus()
+            self.status=clusterinst.checkstatus(self)
+        elif self.status == 'finished':
+            self.status = checkfinishedjob(self)
         elif self.status == 'failed':
             self.status = clusterinst.failed()
         elif self.status == 'successed':
@@ -187,7 +189,8 @@ class jobspec(object):
         # Controling that the concrete method set the 'relevantvar'
         # datamember
         notfoundmess = "the __setneedenv__ class implemented in the class"
-        notfoundmess+=" '%s' must inititalize the datamember" % self.__class__.__name__
+        notfoundmess+=" '%s' must inititalize the"
+        notfoundmess+=" datamember" % self.__class__.__name__
         notfoundmess+=" '%s'"
         if not self.relevantvar:
             raise NotImplementedError(notfoundmess % ('relevantvar'))
@@ -197,8 +200,9 @@ class jobspec(object):
         isenvset= self.checkenvironment()
 
         if type(isenvset) is tuple:
-            message = "The environment is not ready for sending an %s" % self.typealias
-            message += " job. The environment variable '%s' is not set." % isenvset[1]
+            message = "The environment is not ready for sending"
+            message +=" an %s job. The environment" % self.typealias
+            message += " variable '%s' is not set." % isenvset[1]
             message += " Do it with the '%s' command." % isenvset[2]
             raise RuntimeError(message)
            
@@ -217,10 +221,21 @@ class jobspec(object):
             if not os.getenv(_var):
                 return False,_com,_var
         return True
+
+    @abstractmethod
+    def checkfinishedjob(self,jobdsc):
+        """..method:: checkfinishedjob(jobdsc) -> status
+        
+        using the datamember 'successjobcode' perform a check
+        to the job (jobdsc) to see if it is found the expected
+        outputs or success codes
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                "checkfinishedjob()" % (self.__class__.__name__))
     
     @abstractmethod
     def __setneedenv__(self):
-        """...method:: __setneedenv__() 
+        """..method:: __setneedenv__() 
 
         method to set the datamember 'relevantvar' and the typealias
         which depends of each job. The 'relevantvar' is a list of 
@@ -273,31 +288,30 @@ class clusterspec(object):
     
     Virtual Methods:
      * getjobidfromcommand
-     * checkstatus 
+     * getstatusfromcommandline
      * done
      * failed
      """
     __metaclass__ = ABCMeta
     
     def __init__(self,joblist,**kw):
-         """ ..class:: jobspec
+        """ ..class:: jobspec
         
-         Class to deal with an specific cluster (cern/tau/...) cluster.
-         This base class serves as placeholder for the concrete implementation
-         of a cluster commands, environments,...
+        Class to deal with an specific cluster (cern/tau/...) cluster.
+        This base class serves as placeholder for the concrete implementation
+        of a cluster commands, environments,...
         
-         Virtual Methods:
-          * getjobidfromcommand    
-          * checkstatus 
-          * failed
-          * done
-         """
-         self.sendcom     = None
-         self.extraopt    = None
-         self.statuscom   = None
-         self.joblist     = joblist
+        Virtual Methods:
+         * getjobidfromcommand    
+         * getstatusfromcommandline
+         * failed
+         * done
+        """
+        self.sendcom     = None
+        self.extraopt    = None
+        self.statuscom   = None
+        self.joblist     = joblist
     
-    @abstractmethod
     def submit(self,jobdsc):
         """...method:: submit()
          
@@ -326,43 +340,58 @@ class clusterspec(object):
         os.chdir(cwd)
      
     @abstractmethod
-    def getjobidfromcommand(self):
-         """..method:: getjobidfromcommand()
-         
-         function to obtain the job-ID from the cluster command
-         when it is sended (using sendcom)
-         """
-         raise NotImplementedError("Class %s doesn't implement "\
-                 "getjobidfromcommand()" % (self.__class__.__name__))
+    def getjobidfromcommand(self,p):
+        """..method:: getjobidfromcommand()
+        
+        function to obtain the job-ID from the cluster command
+        when it is sended (using sendcom)
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                "getjobidfromcommand()" % (self.__class__.__name__))
+    
+    def checkstatus(self,jobdsc):
+        """..method:: checkstatus()
+        
+        function to check the status of a job (running/finalized/
+        aborted-failed,...). 
+        """
+        from subprocess import Popen,PIPE
+        import os
+        if jobdsc.status == 'running' or 'submitted':
+            command = [ self.statuscom, str(jobdsc.ID) ]
+            p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+            return self.getstatusfromcommandline(p)
+        else:
+            return jobdsc.status
+
     @abstractmethod
-    def checkstatus(self):
-         """..method:: checkstatus()
-         
-         function to check the status of a job (running/finalized/
-         aborted-failed,...). Depend on the type of cluster
-         """
-         raise NotImplementedError("Class %s doesn't implement "\
-                 "checkstatus()" % (self.__class__.__name__))
+    def getstatusfromcommandline(self,p):
+        """..method:: getstatusfromcommandline() -> status
+        
+        function to obtain the status of a job. Cluster dependent
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                 "getstatusfromcommandline()" % (self.__class__.__name__))
     
     @abstractmethod
     def failed(self):
-        """..method:: checkstatus()
+        """..method:: failed()
          
         function to check the status of a job (running/finalized/
         aborted-failed,...). Depend on the type of cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
-                 "checkstatus()" % (self.__class__.__name__))
+                 "failed()" % (self.__class__.__name__))
 
     @abstractmethod
     def done(self):
-        """..method:: checkstatus()
+        """..method:: done()
         
         function to check the status of a job (running/finalized/
         aborted-failed,...). Depend on the type of cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
-                 "checkstatus()" % (self.__class__.__name__))
+                 "done()" % (self.__class__.__name__))
 
 
 
@@ -378,10 +407,65 @@ class cerncluster(clusterspec):
         Concrete implementation of the clusterspec class dealing with
         the cluster at cern (usign lxplus as UI)
         """
-        super(cerncluster,self).__init__(joblist,kw)
+        super(cerncluster,self).__init__(joblist,**kw)
         self.sendcom   = 'bsub'
-        self.statuscom = 'bstatus'
+        self.statuscom = 'bjobs'
+    
+    def getjobidfromcommand(self,p):
+        """..method:: getjobidfromcommand()
+        
+        function to obtain the job-ID from the cluster command
+        when it is sended (using sendcom)
+        """
+        pass
+    
+    def getstatusfromcommandline(self,p):
+        """..method:: checkstatus()
+        
+        function to check the status of a job (running/finalized/
+        aborted-failed,...).
+        """
+        # bjobs output
+        # JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME
 
+        isfinished=False
+        if p[0].find('not found') != -1 or \
+                p[1].find('not found') != -1: 
+            return 'finished'
+        elif p[0].find('JOBID') == 0:
+            jobinfoline = p[0].split('\n')[-1]
+            # Third element
+            status = jobinfoline.split()[2]
+            if status == 'PEND':
+                return 'submitted'
+            elif status == 'RUN':
+                return 'running'
+            else:
+                message='I have no idea of the status parsed as "%s"' % status
+                print message
+        else:
+            message='I have no idea of the status parsed as "%s"' % p[1]
+            raise RuntimeError(message)
+    
+    def failed(self):
+        """..method:: checkstatus()
+         
+        function to check the status of a job (running/finalized/
+        aborted-failed,...). Depend on the type of cluster
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                 "checkstatus()" % (self.__class__.__name__))
+
+    def done(self):
+        """..method:: checkstatus()
+        
+        function to check the status of a job (running/finalized/
+        aborted-failed,...). Depend on the type of cluster
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                 "checkstatus()" % (self.__class__.__name__))
+
+clusterspec.register(cerncluster)
 
 
 
@@ -562,14 +646,43 @@ class athenajob(jobspec):
             os.mkdir(foldername)
             os.chdir(foldername)
             # create the local bashscript
-            self.createbashscript(setupfolder=usersetupfolder,version=athenaversion,\
+            self.createbashscript(setupfolder=usersetupfolder,\
+                    version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
             # Registring the jobs in jobdescription class instances
-            self.jobdescription.append( jobdescription.buildfromjob(path=foldername,\
-                    script=self.scriptname) )
+            self.jobdescription.append( jobdescription.buildfromjob(\
+                    path=foldername,\
+                    script=self.scriptname)
+                    )
             os.chdir(cwd)
             i+=1
 
+    @staticmethod
+    def checkfinishedjob(jobdsc):
+        """..method:: checkfinishedjob(jobdsc) -> status
+        
+        using the datamember 'successjobcode' perform a check
+        to the job (jobdsc) to see if it is found the expected
+        outputs or success codes
+        """
+        succesjobcode=['Py:Athena','INFO leaving with code 0: "successful run"']
+        import os
+        # Athena jobs outpus inside folder defined as:
+        folderout = os.path.join(jobdsc.path,'LSFJOB_'+str(jobdsc.ID))
+        # outfile
+        logout = os.path.join(folderout,"STDOUT")
+        if not os.path.isfile(logout):
+            if DEBUG:
+                print "Not found the logout file '%s'" % logout
+            return 'failed'
+
+        f = open(logout)
+        lines = f.readlines()
+        f.close()
+        for i in lines:
+            if i.find(succesjobcode[-1]) != -1:
+                return 'successed'
+        return 'failed' 
 
     def sethowtocheckstatus(self):
         """..method:: sethowtocheckstatus()
@@ -716,3 +829,25 @@ class jobsender(jobspec,clusterspec):
 # jobsender is a mix-in class of jobspec and clusterspec
 jobspec.register(jobsender)
 clusterspec.register(jobsender)
+
+### -FIXME:: PROVISIONAL---
+def buildfromathenacern(pathregex):
+    """
+    """
+    import os
+    import glob
+    jobdscrlist = []
+    lsfpaths = pathregex+"/LSFJOB_*"
+    jobfolders = glob.glob(lsfpaths)
+    for _i in jobfolders:
+        i = os.path.abspath(_i)
+        try:
+            id = int(i.split('_')[-1])
+        except ValueError:
+            raise RuntimeError('The path should contain LSFJOB_*')
+        path=os.path.split(i)[0]
+        scriptname=os.path.basename(path).split('_')[0]
+        jobdscrlist.append(
+                jobdescription(ID=id,status='submitted',\
+                        path=path,script=scriptname) )
+    return jobdscrlist
