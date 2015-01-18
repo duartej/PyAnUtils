@@ -81,6 +81,77 @@ def getevt(filelist,**kw):
     return t.GetEntries()    
 
 
+class jobdescription(object):
+    """..class:: jobdescription
+
+    Class to store all the information relative to a job.
+    This class is used by both jobspec and clusterspec classes,
+    where some datamembers should be filled by one class and
+    others by the other class. The class provides the following
+    information (in parenthesis it is indicated which class is
+    the responsible of filling the datamember):
+     * path: the path where the job has been build (jobspec)
+     * script: the script to be sended to the cluster (jobspec)
+     * ID: job id in the cluster (clusterspec)
+     * status: job status in the cluster (clusterspec)
+    """
+    def __init__(self,**kw):
+        """..class:: jobdescription
+
+        Class to store all the information relative to a job.
+        This class is used by both jobspec and clusterspec classes,
+        where some datamembers should be filled by one class and
+        others by the other class. The class provides the following
+        information (in parenthesis it is indicated which class is
+        the responsible of filling the datamember):
+         * path: the path where the job has been build (jobspec)
+         * script: the script to be sended to the cluster (jobspec)
+         * ID: job id in the cluster (clusterspec)
+         * status: job status in the cluster (clusterspec)
+        """
+        # I would need to check that the instance is build only
+        # throught the buildfromcluster or buildfromjob methods
+        # FIXME
+        self.path   = None
+        self.script = None
+        self.ID     = None
+        self.status = None
+        for _var,_value in kw.iteritems():
+            setattr(self,_var,_value)
+
+    def getnextstatus(self,clusterinst):
+        """..method:: getnextstatus() -> nextstatus
+
+        The life of a job follows a clear workflow:
+        None -> submitted -> running -> |  (finished) 
+                                        |-+ failed    -->  submitted
+                                        |-+ successed -->  Done
+        """
+        if not self.status:
+            clusterinst.submit()
+            self.status = 'submitted'
+        elif self.status == 'submitted' or self.status == 'running':
+            self.status=clusterinst.checkstatus()
+        elif self.status == 'failed':
+            self.status = clusterinst.failed()
+        elif self.status == 'successed':
+            clusterinst.done()
+            self.status = 'done'
+
+    @staticmethod
+    def buildfromjob(path,script):
+        """
+        """
+        return jobdescription(path=path,script=script)
+    
+    @staticmethod
+    def buildfromcluster(ID,status):
+        """
+        """
+        return jobdescription(ID=ID,status=status)
+
+
+
 class jobspec(object):
     """ ..class:: jobspec
     
@@ -109,6 +180,7 @@ class jobspec(object):
         self.relevantvar = None
         self.typealias   = None
         self.scriptname  = bashscriptname
+        self.jobdescription = []
         # set the relevant variables used to check the kind
         # of job is
         self.__setneedenv__()
@@ -181,8 +253,8 @@ class jobspec(object):
                  "createbashscript()" % (self.__class__.__name__))
 
     @abstractmethod
-    def sethowtocheckjobs(self):
-         """...method:: sethowtocheckjobs()
+    def sethowtocheckstatus(self):
+         """...method:: sethowtocheckstatus()
          
          function to implement how to check if a job has
          succesfully finalized (looking at some key works in the output log
@@ -190,7 +262,7 @@ class jobspec(object):
          on the type of job
          """
          raise NotImplementedError("Class %s doesn't implement "\
-                 "sethowtocheckjobs()" % (self.__class__.__name__))
+                 "sethowtocheckstatus()" % (self.__class__.__name__))
 
 class clusterspec(object):
     """ ..class:: jobspec
@@ -200,153 +272,118 @@ class clusterspec(object):
     of a cluster commands, environments,...
     
     Virtual Methods:
-     * sendjobs    
-     * checkjobs 
+     * getjobidfromcommand
+     * checkstatus 
+     * done
+     * failed
      """
     __metaclass__ = ABCMeta
     
-    def __init__(self,**kew):
-        """
-        """
-        pass
+    def __init__(self,joblist,**kw):
+         """ ..class:: jobspec
+        
+         Class to deal with an specific cluster (cern/tau/...) cluster.
+         This base class serves as placeholder for the concrete implementation
+         of a cluster commands, environments,...
+        
+         Virtual Methods:
+          * getjobidfromcommand    
+          * checkstatus 
+          * failed
+          * done
+         """
+         self.sendcom     = None
+         self.extraopt    = None
+         self.statuscom   = None
+         self.joblist     = joblist
     
     @abstractmethod
-    def sendjobs(self):
-         """...method:: sendjobs()
+    def submit(self,jobdsc):
+        """...method:: submit()
          
-         function to send the jobs to the cluster. Depend on the type of cluster 
-         """
-         raise NotImplementedError("Class %s doesn't implement "\
-                 "sendjobs()" % (self.__class__.__name__))
+        function to send the jobs to the cluster.
+        """
+        from subprocessed import Popen,PIPE
+        import os
+        cwd = os.getcwd()
+        # Going to directory of sending
+        os.chdir(jobdsc.path)
+        # Building the command to send to the shell
+        command = [ self.sendcom ]
+        for i in self.extraopt:
+            command.append(i)
+        command.append(self.jobdsc.scriptname)
+        # Send the command
+        p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+        if p[1] != "":
+            message = "ERROR from %i:\n" % self.sendcom
+            message += p[1]+"\n"
+            os.chdir(cwd)
+            raise RuntimeError(message)
+        # The job-id is released in the message:
+        self.ID = self.getjobidfromcommand(p[0])
+        # Coming back to the original folder
+        os.chdir(cwd)
      
     @abstractmethod
-    def checkjobs(self):
-         """..method:: checkjobs()
+    def getjobidfromcommand(self):
+         """..method:: getjobidfromcommand()
+         
+         function to obtain the job-ID from the cluster command
+         when it is sended (using sendcom)
+         """
+         raise NotImplementedError("Class %s doesn't implement "\
+                 "getjobidfromcommand()" % (self.__class__.__name__))
+    @abstractmethod
+    def checkstatus(self):
+         """..method:: checkstatus()
          
          function to check the status of a job (running/finalized/
          aborted-failed,...). Depend on the type of cluster
          """
          raise NotImplementedError("Class %s doesn't implement "\
-                 "checkjobs()" % (self.__class__.__name__))
-
-
-class jobsender(jobspec,clusterspec):
-    """ ..class:: jobsender
+                 "checkstatus()" % (self.__class__.__name__))
     
-    Class to prepare a (athena/generic) job to the (cern) cluster
-    This class has some pure virtual methods lister below, so it
-    is an abstract class to be by a concrete implementation
-    of the cluster (cern/tau/...) and/or the type of job 
-    (Athena/Geant4/generic...)
-    
-    Virtual Methods:
-     * checkenvironment          
-     * preparejobs
-     * createbashscript     
-     * sethowtocheckjobs 
-     * sendjobs    
-     * checkjobs 
-     """
-    __metaclass__ = ABCMeta
-
-    def __init__(self,bashscript,inputfiles=None,**kw):
-        """ ..method:: jobsender(basescript[,inputfiles,maxevts,njobs) ->
-                                                            jobsender instance
-
-        Initialize common datamembers:
-         * bashscript [str]      : bash script name to be send to the cluster
-         * inputfiles [list(str)]: list of the input files names 
-         * outputfiles[list(str)]: list of the output files names (if any)
-         * njobs      [int]      : number of jobs 
-         * maxevts    [int]      : number of events to be processes
-         * jobslist   [lit(int)] : list of the sended jobs (or taks) ID
-
-        :param basescript: the base script from build the jobs
-        :type basescript: str
-        :param inputfiles: str or list of files (can be regex expressions)
-        :type inputfiles: str/list(str)
-        :param maxevts: number of events to process
-        :type maxevts: int
-        :param njobs: number of jobs
-        :type njobs: int
+    @abstractmethod
+    def failed(self):
+        """..method:: checkstatus()
+         
+        function to check the status of a job (running/finalized/
+        aborted-failed,...). Depend on the type of cluster
         """
-        self.bashscript = bashscript
-        self.inputfiles = getrealpath(inputfiles)
-        self.outputfiles= None
-        self.njobs      = None
-        self.maxevts    = None
-        self.jobslist   = None
+        raise NotImplementedError("Class %s doesn't implement "\
+                 "checkstatus()" % (self.__class__.__name__))
 
-        if kw.has_key('maxevts'):
-            self.maxevts = int(kw['maxevts'])
-        if kw.has_key("njobs"):
-            self.njobs = int(kw['njobs'])
-
-        if not self.inputfiles:
-            return self
+    @abstractmethod
+    def done(self):
+        """..method:: checkstatus()
         
-        # consistency
-        if len(self.inputfiles) == 0:
-            message = "Didn't found any root file in the entered"
-            message +=" location: %s" % str(inputfiles)
-            raise RuntimeError(message)
-
-        if not self.maxevts:
-            self.maxevts = self.getevt(self.inputfiles)
-
-        if not self.njobs:
-            self.njobs = self.maxevts/JOBEVT
-
-        # Get the evtperjob
-        evtperjob = self.__evts2proc__/self.__njobs__
-        # First event:0 last: n-1
-        remainevts = (self.__evts2proc__ % self.__njobs__)-1
-        
-        #Build the list of events
-        for i in xrange(self.__njobs__-1):
-            #self.__evtperjob__.append( (i*evtperjob,(i+1)*evtperjob-1) )
-            self.__evtperjob__.append( (i*evtperjob,evtperjob) )
-        # And the remaining
-        self.__evtperjob__.append( ((self.__njobs__-1)*evtperjob,remainevts) ) 
-
-    @staticmethod
-    def getevt(filelist,**kw):
-        """ ..method:: jobsender.getevt(filelist[,treename]) -> totalevts
-        
-        Getting the number of events contained in a list
-        of files
-
-        :param filelist: the files to look into
-        :type filelist: list(str)
-        :param treename: the name of the tree where to check 
-                         [CollectionTree default]
-        :type treename: str
-
-        ;return: number of events contained in the treename Tree 
-        :rtype: int
+        function to check the status of a job (running/finalized/
+        aborted-failed,...). Depend on the type of cluster
         """
-        try:
-            import cppyy
-        except ImportError:
-            pass
-        import ROOT
+        raise NotImplementedError("Class %s doesn't implement "\
+                 "checkstatus()" % (self.__class__.__name__))
 
-        if kw.has_key("treename"):
-            treename=kw["treename"]
-        else:
-            treename="CollectionTree"
 
-        if DEBUG:
-            print "Loading the root files to obtain the N_{evts} "\
-                    "[Tree:%s]: " % treename
-        t = ROOT.TChain(treename)
-        for f in filelist:
-            t.AddFile(f)
-        return t.GetEntries()    
 
-# jobsender is a mix-in class of jobspec and clusterspec
-jobspec.register(jobsender)
-clusterspec.register(jobsender)
+# --- Concrete class for the CERN cluster (using the lxplus UI)
+class cerncluster(clusterspec):
+    """..class:: cerncluster
+
+    Concrete implementation of the clusterspec class dealing with
+    the cluster at cern (usign lxplus as UI)
+    """
+    def __init__(self,joblist=None,**kw):
+        """..class:: cerncluster 
+        Concrete implementation of the clusterspec class dealing with
+        the cluster at cern (usign lxplus as UI)
+        """
+        super(cerncluster,self).__init__(joblist,kw)
+        self.sendcom   = 'bsub'
+        self.statuscom = 'bstatus'
+
+
+
 
 ## -- Concrete implementation: Athena job
 class athenajob(jobspec):
@@ -355,7 +392,10 @@ class athenajob(jobspec):
     Concrete implementation of an athena job. 
     An athena job should contain an jobOption python script which
     feeds the athena.py executable. This jobs needs a list of 
-    input files and the probably a list of output files
+    input files and the probably a list of output files. 
+    TO BE IMPLEMENTED: Any extra configuration variable to be used
+    in the jobOption (via -c), can be introduced with the kw in the
+    construction.
     """
     def __init__(self,bashscriptname,joboptionfile,inputfiles,**kw):
         """..class:: athenajob
@@ -476,8 +516,19 @@ class athenajob(jobspec):
                 self.setupfolder=None
                 self.version=None
                 self.gcc =None
+
+            def haveallvars(self):
+                if not self.setupfolder or not self.version or not self.gcc:
+                    return False
+                return True
         
         ph = placeholder()
+        if not ph.haveallvars():
+            message = "Note that the asetup folder, the Athena version and"
+            message += " the version of the gcc compiler are needed to build the"
+            message += " bashscript"
+            raise RuntimeError(message)
+            
         for var,value in kw.iteritems():
             setattr(ph,var,value)
         
@@ -489,6 +540,7 @@ class athenajob(jobspec):
         bashfile += 'cp %s .\n' % self.joboption
         bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
                 (ph.skipevts,ph.nevents,str(self.inputfiles))
+        # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
         bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
         f=open(self.scriptname,"w")
@@ -512,12 +564,15 @@ class athenajob(jobspec):
             # create the local bashscript
             self.createbashscript(setupfolder=usersetupfolder,version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
+            # Registring the jobs in jobdescription class instances
+            self.jobdescription.append( jobdescription.buildfromjob(path=foldername,\
+                    script=self.scriptname) )
             os.chdir(cwd)
             i+=1
 
 
-    def sethowtocheckjobs(self):
-        """..method:: sethowtocheckjobs()
+    def sethowtocheckstatus(self):
+        """..method:: sethowtocheckstatus()
         
         An Athena job has succesfully finished if there is the line
         'Py:Athena            INFO leaving with code 0: "successful run"'
@@ -529,3 +584,135 @@ class athenajob(jobspec):
 # Concrete jobspec class for athena jobs
 jobspec.register(athenajob)
 
+
+#if __name__ == '__main__':
+#    
+#    jsins = jobsender('testBjetSliceAthenaTrigRDO.py',
+#            '/afs/cern.ch/user/d/duarte/work/public/datasets/mc14_13TeV.177568.'\
+#                    'Pythia_AUET2BCTEQ6L1_RPV_vtx2_LSP100_mujets_filtDL_Rmax300.'\
+#                    'recon.RDO.e3355_s1982_s2008_r5787_tid04569111_00/*.pool.root.*',njobs=30)
+#    
+#    jsins.preparejobs()
+#
+#    print "Send the jobs using this:"
+#    print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
+#	    "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % jsins.__scriptname__
+#	
+
+class jobsender(jobspec,clusterspec):
+    """ ..class:: jobsender
+    
+    Class to prepare a (athena/generic) job to the (cern) cluster
+    This class has some pure virtual methods lister below, so it
+    is an abstract class to be by a concrete implementation
+    of the cluster (cern/tau/...) and/or the type of job 
+    (Athena/Geant4/generic...)
+    
+    Virtual Methods:
+     * checkenvironment          
+     * preparejobs
+     * createbashscript     
+     * sethowtocheckjobs 
+     * sendjobs    
+     * checkjobs 
+     """
+    __metaclass__ = ABCMeta
+
+    def __init__(self,bashscript,inputfiles=None,**kw):
+        """ ..method:: jobsender(basescript[,inputfiles,maxevts,njobs) ->
+                                                            jobsender instance
+
+        Initialize common datamembers:
+         * bashscript [str]      : bash script name to be send to the cluster
+         * inputfiles [list(str)]: list of the input files names 
+         * outputfiles[list(str)]: list of the output files names (if any)
+         * njobs      [int]      : number of jobs 
+         * maxevts    [int]      : number of events to be processes
+         * jobslist   [lit(int)] : list of the sended jobs (or taks) ID
+
+        :param basescript: the base script from build the jobs
+        :type basescript: str
+        :param inputfiles: str or list of files (can be regex expressions)
+        :type inputfiles: str/list(str)
+        :param maxevts: number of events to process
+        :type maxevts: int
+        :param njobs: number of jobs
+        :type njobs: int
+        """
+        self.bashscript = bashscript
+        self.inputfiles = getrealpath(inputfiles)
+        self.outputfiles= None
+        self.njobs      = None
+        self.maxevts    = None
+        self.jobslist   = None
+
+        if kw.has_key('maxevts'):
+            self.maxevts = int(kw['maxevts'])
+        if kw.has_key("njobs"):
+            self.njobs = int(kw['njobs'])
+
+        if not self.inputfiles:
+            return self
+        
+        # consistency
+        if len(self.inputfiles) == 0:
+            message = "Didn't found any root file in the entered"
+            message +=" location: %s" % str(inputfiles)
+            raise RuntimeError(message)
+
+        if not self.maxevts:
+            self.maxevts = self.getevt(self.inputfiles)
+
+        if not self.njobs:
+            self.njobs = self.maxevts/JOBEVT
+
+        # Get the evtperjob
+        evtperjob = self.__evts2proc__/self.__njobs__
+        # First event:0 last: n-1
+        remainevts = (self.__evts2proc__ % self.__njobs__)-1
+        
+        #Build the list of events
+        for i in xrange(self.__njobs__-1):
+            #self.__evtperjob__.append( (i*evtperjob,(i+1)*evtperjob-1) )
+            self.__evtperjob__.append( (i*evtperjob,evtperjob) )
+        # And the remaining
+        self.__evtperjob__.append( ((self.__njobs__-1)*evtperjob,remainevts) ) 
+
+    @staticmethod
+    def getevt(filelist,**kw):
+        """ ..method:: jobsender.getevt(filelist[,treename]) -> totalevts
+        
+        Getting the number of events contained in a list
+        of files
+
+        :param filelist: the files to look into
+        :type filelist: list(str)
+        :param treename: the name of the tree where to check 
+                         [CollectionTree default]
+        :type treename: str
+
+        ;return: number of events contained in the treename Tree 
+        :rtype: int
+        """
+        try:
+            import cppyy
+        except ImportError:
+            pass
+        import ROOT
+
+        if kw.has_key("treename"):
+            treename=kw["treename"]
+        else:
+            treename="CollectionTree"
+
+        if DEBUG:
+            print "Loading the root files to obtain the N_{evts} "\
+                    "[Tree:%s]: " % treename
+        t = ROOT.TChain(treename)
+        for f in filelist:
+            t.AddFile(f)
+        return t.GetEntries()    
+
+# jobsender is a mix-in class of jobspec and clusterspec
+jobspec.register(jobsender)
+clusterspec.register(jobsender)
