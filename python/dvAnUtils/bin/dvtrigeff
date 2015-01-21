@@ -23,17 +23,6 @@ DEBUG=False
 ## no estic segur, pero tens la posicio del vertex on s'ha desintegrat el neutrali...
 ## nota que el vertex primari, on ocurreix la primera interaccio (en el cas de RPV) es a mc_prod_vx_x,y,z[0]
 
-# Pseudo ROOT colors
-kBlack=1
-kRed=632
-kGreen=416
-kAzure=860
-kCyan=432
-kOrange=800
-
-COLORS = [ kBlack, kOrange-2, kRed+2, kAzure+3,kCyan-2,kGreen-2,\
-		kOrange+7, kRed-3, kAzure-3, kCyan+4, kGreen+4 ]
-TEXTSIZE = 0.03
 
 # FIXME:: To be implemented in trigeeffclass
 def getdr(t,i):
@@ -112,6 +101,11 @@ def create(folder,opt):
         message += os.path.basename(_fi)
     # Init the RPVMCInfoTree file
     rpvmc = rpvmcinfo(rfiles)
+    if opt.extraplots:
+        rpvmc.activate_plots()
+        rpvmc.activate_plots( ('eta','betagamma') )
+        rpvmc.activate_plots( ('dv_X','dv_Y') )
+        rpvmc.activate_plots( ('vx_LSP','vy_LSP') )
     trnames = rpvmc.gettriggersnames()
     #trarrays = setuptree(t,trnames)
     #eff = dict(map(lambda x: (x,0),trarrays.keys()))
@@ -137,6 +131,8 @@ def create(folder,opt):
     effwrtsv.showresults()
     # Saving info
     effwrtsv.saverootfile(opt.outputfile)
+    # Do plots if have to
+    rpvmc.plots()
 
 def plot(rootfile,opt):
     """.. function:: plot(opt)
@@ -171,7 +167,8 @@ if __name__ == '__main__':
     usage='usage: %prog <create ROOTFILESPATH|plot FILEROOT.root>  [options]'
     parser = OptionParser(usage)
     parser.set_defaults(outputfile='output.root',\
-            varlist='Dtdv',extracttrlist=False,activatematching=False,suffixplot='.png')
+            varlist='Dtdv',extracttrlist=False,activatematching=False,suffixplot='.png',
+            extraplots=False)
 
     createopt = OptionGroup(parser,"Create options","Options to be used when the program is sent using"\
                " 'create' argument. Note that this arguments needs the ROOTFILESPATH argument, the"\
@@ -181,6 +178,9 @@ if __name__ == '__main__':
     createopt.add_option( '-m', '--matching', action='store_true', \
             dest = 'activatematching',help='The matching between a trigger object and the '\
               'MC-displaced vertex tracks are checked')
+    createopt.add_option( '-e', '--extraplots', action='store_true', \
+            dest = 'extraplots',help='Perform some extra plots related to the events, kinematics and'\
+              ' more')
     parser.add_option_group(createopt)
     
     plotopt = OptionGroup(parser,"Plot options","Options to be used when the program is sent using"\
@@ -211,7 +211,7 @@ if __name__ == '__main__':
             folder=os.getcwd()
         create(folder,opt)
     elif args[0] == 'plot':
-        if len(args) != 2:
+        if len(args) < 2:
             raise RuntimeError('The \'plot\' mode needs another argument: \n'\
                     'plot ROOTFILE.root')
         # Working Mode 2: plotting
