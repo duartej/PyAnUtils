@@ -7,6 +7,7 @@
       :synopsis: Module gathering a bunch of useful analysis-related functions
 	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
+TEXTSIZE=0.03
 
 def graphtohist(graph,binning=1000):
     """.. function:: graphtohist(graph,binning=1000) -> ROOT.TH1F
