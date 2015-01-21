@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""":script:`gettrigeff` -- Extract and build DV trigger efficiencies from ntuple
+""":script:`dvtrigeff` -- Extract and build DV trigger efficiencies from ntuple
 ===================================================
 
 .. script:: gettrigeff [options]    
@@ -36,169 +36,163 @@ COLORS = [ kBlack, kOrange-2, kRed+2, kAzure+3,kCyan-2,kGreen-2,\
 TEXTSIZE = 0.03
 
 
-class effsv(object):
-    """..class:: effsv
-    This class encapsulate a trigger efficiency
-    """
-    def __init__(self,trnameslist=None):
-        """...class:: effsv([trnameslist=None]) 
-        Trigger efficiency obtained from different ntuples (see 
-        ????? method). The efficiency object is stored with respect
-        some variables, which allows to plot the efficiency versus
-        these variables
-        """
-        import ROOT
-
-        self.__var__= [ 'Dtdv', 'Dzdv', 'Drdv',  # SV with respect Primary vertex
-                'tdv', 'zdv', 'rdv' ]             # SV with absolute position
-        self.__histos__ = [ 'eta','phi','betagamma',         # Kinematics of the DVs
-                'nTrk4mm',                       # Number of status-1 genparticles 
-                                                 # decayed from the DVs (in a 4mm radius)
-                ]
-        self.__xtitle__ = { 'Dtdv': 'r_{DV} [mm]' ,\
-                'Dzdv': 'r_{z} [mm]',\
-                'Drdv': 'radial distance [mm]',\
-                'tdv': 'transverse r_{DV} [mm]', 'zdv': 'longitudinal r_{DV} [mm]', 'rdv': 'r_{DV} [mm]',\
-                'eta': '#eta_{DV}', 'phi': '#phi_{DV}', 'betagamma': '#beta#gamma_{DV}',\
-                'nTrk4mm': 'N_{trk}^{4mm}',\
-                }
-        # Efficiencies       
-        self.__effs__ = {}
-        # If there is no list of triggers, there will be set later...
-        if trnameslist: 
-            self.__trgnames__ = trnameslist
-            # Each variable is associated with a dictionary of the trigger chains availables 
-            # { 'var1': { 'trpath1': TEfficiency, 'trpath2': TEfficiency, ....}, ... } 
-            for i in self.__var__:
-                self.__effs__[i] = dict(map(lambda x: (x,ROOT.TEfficiency(geteffname(x,i),'',100,0,300)),
-                    trnameslist))
-                ## -- And the OR key
-                self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',100,0,300)
-        else:
-            self.__trgnames__ = []
-
-    def gettrgnames(self):
-        """.. method:: gettrgnames() -> trgnames
-        The list of the trgnames
-        """
-        return self.__trgnames__
-
-    def fill(self,trname,varname,decission,varvalue):
-        """
-        """
-        self.__effs__[varname][trname].Fill(decission,varvalue)
-
-    def __plot__(self,trname,varname):
-        """
-        """
-        import ROOT
-        from PyAnUtils.plotstyles import atlasStyle
-
-        lstyle = atlasStyle()
-        ROOT.gROOT.SetBatch()
-        
-        c = ROOT.TCanvas()
-        h = c.DrawFrame(0,0,300.0,1.0)
-        h.SetXTitle(self.__xtitle__[varname])
-        h.SetYTitle('#varepsilon_{MC}')
-        h.SetTitle(trname)
-        h.Draw()
-        self.__effs__[varname][trname].Draw("PSAME")
-        c.SaveAs('eff_'+trname+'_'+varname+'.png')
-
-    def __plotsamecanvas__(self,triglist,varname):
-        """
-        """
-        import ROOT
-        from PyAnUtils.plotstyles import atlasStyle
-        from PyAnUtils.pyanfunctions import drawlegend
-        
-        lstyle = atlasStyle()
-        ROOT.gROOT.SetBatch()
-        
-        c = ROOT.TCanvas()
-        h = c.DrawFrame(0,0,300.0,1.0)
-        h.SetXTitle(self.__xtitle__[varname])
-        h.SetYTitle('#varepsilon_{MC}')
-        #h.SetTitle(trname)
-        h.Draw()
-        legend = ROOT.TLegend() 
-        legend.SetBorderSize(0) 
-        legend.SetTextSize(TEXTSIZE) 
-        legend.SetFillColor(10) 
-        legend.SetTextFont(112)
-        _j = 0
-        for trname in triglist:
-            self.__effs__[varname][trname].SetLineColor(COLORS[_j])
-            self.__effs__[varname][trname].SetMarkerStyle(20)
-            self.__effs__[varname][trname].SetMarkerSize(0.5)
-            self.__effs__[varname][trname].SetMarkerColor(COLORS[_j])
-            self.__effs__[varname][trname].SetFillColor(COLORS[_j])
-            legend.AddEntry(self.__effs__[varname][trname],trname,'PL')
-            self.__effs__[varname][trname].Draw("PSAME")
-            _j += 1
-        drawlegend(legend,'CENTER',0.90)
-        c.SaveAs('eff_GroupedTriggers'+'_'+varname+'.png')
-
-
-    def plot(self,trname=None,varname=None):
-    	"""
-    	"""
-    	if trname and varname:
-            if type(trname) is list:
-                self.__plotsamecanvas__(trname,varname)
-            else:
-                self.__plot__(trname,varname)
-        else:
-            for trgname in self.__trgnames__:
-                for varname in self.__var__:
-                    self.__plot__(trgname,varname)
-
-
-    def seteffobj(self,trname,varname,effobject):
-    	"""
-    	"""
-    	if trname not in self.__trgnames__:
-            self.__trgnames__.append(trname)
-        try:
-            self.__effs__[varname][trname] = effobject
-        except KeyError:
-            self.__effs__[varname] = { trname: effobject }
-
-    def saverootfile(self,name):
-    	"""
-    	"""
-    	import ROOT
-    	f = ROOT.TFile.Open(name,'RECREATE')
-    	for effd in self.__effs__.values():
-    		for effroot in effd.values():
-    			effroot.Write()
-    	f.Close()
-
-    def showresults(self):
-        """..method:: showresults
-        print the results of the trigger chains PER OBJECT (DV)
-        """
-        effcalc = {}
-        varname = self.__effs__.keys()[0]
-        for trn,eff in self.__effs__[varname].iteritems():
-            passed = float(eff.GetPassedHistogram().GetEntries())
-            total  = float(eff.GetTotalHistogram().GetEntries())
-            try:
-                effcalc[trn] = float(passed)/float(total)
-            except ZeroDivisionError:
-                effcalc[trn] = 0.0
-        maxlen = max(map(lambda x: len(x),self.__effs__[varname].keys()))
-        pformat = "%"+str(maxlen)+"s:: %.3f%s"
-        for trn,val in sorted(effcalc.iteritems(),key=lambda (x,y): y):
-            print pformat % (trn,val*100,'%')
+#class effsv(object):
+#    """..class:: effsv
+#    This class encapsulate a trigger efficiency
+#    """
+#    def __init__(self,trnameslist=None):
+#        """...class:: effsv([trnameslist=None]) 
+#        Trigger efficiency obtained from different ntuples (see 
+#        ????? method). The efficiency object is stored with respect
+#        some variables, which allows to plot the efficiency versus
+#        these variables
+#        """
+#        import ROOT
+#
+#        self.__var__= [ 'Dtdv', 'Dzdv', 'Drdv',  # SV with respect Primary vertex
+#                'tdv', 'zdv', 'rdv' ]             # SV with absolute position
+#        self.__histos__ = [ 'eta','phi','betagamma',         # Kinematics of the DVs
+#                'nTrk4mm',                       # Number of status-1 genparticles 
+#                                                 # decayed from the DVs (in a 4mm radius)
+#                ]
+#        self.__xtitle__ = { 'Dtdv': 'r_{DV} [mm]' ,\
+#                'Dzdv': 'r_{z} [mm]',\
+#                'Drdv': 'radial distance [mm]',\
+#                'tdv': 'transverse r_{DV} [mm]', 'zdv': 'longitudinal r_{DV} [mm]', 'rdv': 'r_{DV} [mm]',\
+#                'eta': '#eta_{DV}', 'phi': '#phi_{DV}', 'betagamma': '#beta#gamma_{DV}',\
+#                'nTrk4mm': 'N_{trk}^{4mm}',\
+#                }
+#        # Efficiencies       
+#        self.__effs__ = {}
+#        # If there is no list of triggers, there will be set later...
+#        if trnameslist: 
+#            self.__trgnames__ = trnameslist
+#            # Each variable is associated with a dictionary of the trigger chains availables 
+#            # { 'var1': { 'trpath1': TEfficiency, 'trpath2': TEfficiency, ....}, ... } 
+#            for i in self.__var__:
+#                self.__effs__[i] = dict(map(lambda x: (x,ROOT.TEfficiency(geteffname(x,i),'',100,0,300)),
+#                    trnameslist))
+#                ## -- And the OR key
+#                self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',100,0,300)
+#        else:
+#            self.__trgnames__ = []
+#
+#    def gettrgnames(self):
+#        """.. method:: gettrgnames() -> trgnames
+#        The list of the trgnames
+#        """
+#        return self.__trgnames__
+#
+#    def fill(self,trname,varname,decission,varvalue):
+#        """
+#        """
+#        self.__effs__[varname][trname].Fill(decission,varvalue)
+#
+#    def __plot__(self,trname,varname):
+#        """
+#        """
+#        import ROOT
+#        from PyAnUtils.plotstyles import atlasStyle
+#
+#        lstyle = atlasStyle()
+#        ROOT.gROOT.SetBatch()
+#        
+#        c = ROOT.TCanvas()
+#        h = c.DrawFrame(0,0,300.0,1.0)
+#        h.SetXTitle(self.__xtitle__[varname])
+#        h.SetYTitle('#varepsilon_{MC}')
+#        h.SetTitle(trname)
+#        h.Draw()
+#        self.__effs__[varname][trname].Draw("PSAME")
+#        c.SaveAs('eff_'+trname+'_'+varname+'.png')
+#
+#    def __plotsamecanvas__(self,triglist,varname):
+#        """
+#        """
+#        import ROOT
+#        from PyAnUtils.plotstyles import atlasStyle
+#        from PyAnUtils.pyanfunctions import drawlegend
+#        
+#        lstyle = atlasStyle()
+#        ROOT.gROOT.SetBatch()
+#        
+#        c = ROOT.TCanvas()
+#        h = c.DrawFrame(0,0,300.0,1.0)
+#        h.SetXTitle(self.__xtitle__[varname])
+#        h.SetYTitle('#varepsilon_{MC}')
+#        #h.SetTitle(trname)
+#        h.Draw()
+#        legend = ROOT.TLegend() 
+#        legend.SetBorderSize(0) 
+#        legend.SetTextSize(TEXTSIZE) 
+#        legend.SetFillColor(10) 
+#        legend.SetTextFont(112)
+#        _j = 0
+#        for trname in triglist:
+#            self.__effs__[varname][trname].SetLineColor(COLORS[_j])
+#            self.__effs__[varname][trname].SetMarkerStyle(20)
+#            self.__effs__[varname][trname].SetMarkerSize(0.5)
+#            self.__effs__[varname][trname].SetMarkerColor(COLORS[_j])
+#            self.__effs__[varname][trname].SetFillColor(COLORS[_j])
+#            legend.AddEntry(self.__effs__[varname][trname],trname,'PL')
+#            self.__effs__[varname][trname].Draw("PSAME")
+#            _j += 1
+#        drawlegend(legend,'CENTER',0.90)
+#        c.SaveAs('eff_GroupedTriggers'+'_'+varname+'.png')
+#
+#
+#    def plot(self,trname=None,varname=None):
+#    	"""
+#    	"""
+#    	if trname and varname:
+#            if type(trname) is list:
+#                self.__plotsamecanvas__(trname,varname)
+#            else:
+#                self.__plot__(trname,varname)
+#        else:
+#            for trgname in self.__trgnames__:
+#                for varname in self.__var__:
+#                    self.__plot__(trgname,varname)
+#
+#
+#    def seteffobj(self,trname,varname,effobject):
+#    	"""
+#    	"""
+#    	if trname not in self.__trgnames__:
+#            self.__trgnames__.append(trname)
+#        try:
+#            self.__effs__[varname][trname] = effobject
+#        except KeyError:
+#            self.__effs__[varname] = { trname: effobject }
+#
+#    def saverootfile(self,name):
+#    	"""
+#    	"""
+#    	import ROOT
+#    	f = ROOT.TFile.Open(name,'RECREATE')
+#    	for effd in self.__effs__.values():
+#    		for effroot in effd.values():
+#    			effroot.Write()
+#    	f.Close()
+#
+#    def showresults(self):
+#        """..method:: showresults
+#        print the results of the trigger chains PER OBJECT (DV)
+#        """
+#        effcalc = {}
+#        varname = self.__effs__.keys()[0]
+#        for trn,eff in self.__effs__[varname].iteritems():
+#            passed = float(eff.GetPassedHistogram().GetEntries())
+#            total  = float(eff.GetTotalHistogram().GetEntries())
+#            try:
+#                effcalc[trn] = float(passed)/float(total)
+#            except ZeroDivisionError:
+#                effcalc[trn] = 0.0
+#        maxlen = max(map(lambda x: len(x),self.__effs__[varname].keys()))
+#        pformat = "%"+str(maxlen)+"s:: %.3f%s"
+#        for trn,val in sorted(effcalc.iteritems(),key=lambda (x,y): y):
+#            print pformat % (trn,val*100,'%')
     
-
-def geteffname(trname,varname):
-    """
-    """
-    name = 'eff'+varname+'_'+trname
-    return name
 
 def gettriggernamefrom(fullname):
     """
@@ -408,6 +402,8 @@ def geteffinstance(rootfile):
     :type  rootfile: str
     """
     import ROOT
+    from dvAnUtils.trigeffclass import effsv
+
     f = ROOT.TFile.Open(rootfile)
     # Get trigger names from the file in order 
     # to instanciate the eff-class
@@ -423,58 +419,20 @@ def geteffinstance(rootfile):
     f.Close()
     return esv
 
+def create(folder,opt):
+    """.. function::create(opt)
+    create the efficiencies
 
-if __name__ == '__main__':
-    import sys
+    :param opt: the user options
+    :type  opt: optparse.OptionParser
+    """
     import glob
-    import os
-    from optparse import OptionParser,OptionGroup
+    from dvAnUtils.trigeffclass import effsv
 
-    defaultdir = 'user.nimrodta.SignalMC.174280.RPV_sq700_LSP500_ejets.D3PD.Final.07July2014.v1.140710111911'
-    parser = OptionParser()
-    parser.set_defaults(datasetdir=os.path.join('..',defaultdir),outputfile='output.root',\
-            varlist='Dtdv',extracttrlist=False,activatematching=False)
-    parser.add_option( '-d', '--datasetdir', action='store', type='string', dest='datasetdir',\
-            help="Dataset directory")
-    parser.add_option( '-o', '--outputfile', action='store', type='string', dest='outputfile',\
-            help="Dataset directory")
-    parser.add_option( '-p', '--plotlist', action='store', type='string', metavar='TRG1,TRG2[,...]',\
-            dest = 'plotlist',help='List of trigger chain to be plotted in the same canvas')
-    parser.add_option( '-v', '--varlist', action='store', type='string', metavar='VAR1,VAR2[,...]',\
-            dest = 'varlist',help='List of variables to be used by the "-p" option.')
-    parser.add_option( '-l', '--triggerlist', action='store_true', \
-            dest = 'extracttrlist',help='Just show the available triggers in the file and exit')
-    parser.add_option( '-m', '--matching', action='store_true', \
-            dest = 'activatematching',help='The matching between a trigger object and the '\
-              'MC-displaced vertex tracks are checked')
-
-
-    (opt, args)=parser.parse_args()
-
-    # Working Mode 2: plotting trigger efficiencies
-    if len(args) == 1:
-        effwrtsv = geteffinstance(args[0])
-        if opt.extracttrlist:
-            print "Available trigger efficiencies in '%s'" % args[0]
-            for trigname in effwrtsv.gettrgnames():
-                print ":::%s" % trigname
-            sys.exit(0)
-        print "Extracting efficiencies from the '%s' file..." % args[0]
-        print "Plotting efficiencies..."
-        if opt.plotlist:
-            triglist = opt.plotlist.split(',')
-            for varname in opt.varlist.split(','):
-                effwrtsv.__plotsamecanvas__(triglist,varname)
-        else:
-            effwrtsv.plot()
-        # Already done
-        sys.exit(0)
-
-    # Working Mode 1: extracting trigger efficiencies
     print "Creating efficiencies from: "
     ignorematching=not opt.activatematching
     # Called to build the histograms from the n-tuples
-    rfiles = glob.glob(opt.datasetdir+'/*.root')
+    rfiles = glob.glob(folder+'/*.root')
     message =''
     for _fi in rfiles: 
         message += os.path.basename(_fi)
@@ -503,4 +461,80 @@ if __name__ == '__main__':
     
     effwrtsv.showresults()
     effwrtsv.saverootfile(opt.outputfile)
+
+
+def plot(rootfile,opt):
+    """.. function:: plot(opt)
+    ploting efficiencies
+
+    :param opt: the user options
+    :type  opt: optparse.OptionParser
+    """
+    effwrtsv = geteffinstance(rootfile)
+    if opt.extracttrlist:
+        print "Available trigger efficiencies in '%s'" % rootfile
+        for trigname in effwrtsv.gettrgnames():
+            print ":::%s" % trigname
+        sys.exit(0)
+    print "Extracting efficiencies from the '%s' file..." % rootfile
+    print "Plotting efficiencies..."
+    if opt.plotlist:
+        triglist = opt.plotlist.split(',')
+        for varname in opt.varlist.split(','):
+            effwrtsv.plot(triglist,varname)
+    else:
+        effwrtsv.plot()
+
+
+if __name__ == '__main__':
+    import os
+    from optparse import OptionParser,OptionGroup
+
+    usage='usage: %prog <create ROOTFILESPATH|plot FILEROOT.root>  [options]'
+    usage+='\n\nUsing the "create" argument, the path where to find the root files should be'
+    usage+=' also provided. If not the current working directory is used.'
+    usage+='\n\nUsing the "plot" argument, the root file containing the efficiencies'
+    usage+=' (a root file generated with the "create" argument) should be provided'
+    parser = OptionParser(usage)
+    parser.set_defaults(outputfile='output.root',\
+            varlist='Dtdv',extracttrlist=False,activatematching=False)
+
+    createopt = OptionGroup(parser,"Create options","Options to be used when the program is sent using"\
+               " 'create' argument")
+    createopt.add_option( '-m', '--matching', action='store_true', \
+            dest = 'activatematching',help='The matching between a trigger object and the '\
+              'MC-displaced vertex tracks are checked')
+    parser.add_option_group(createopt)
+    
+    plotopt = OptionGroup(parser,"Plot options","Options to be used when the program is sent using"\
+               " 'plot' argument")
+    plotopt.add_option( '-o', '--outputfile', action='store', type='string', dest='outputfile',\
+            help="Dataset directory")
+    plotopt.add_option( '-p', '--plotlist', action='store', type='string', metavar='TRG1,TRG2[,...]',\
+            dest = 'plotlist',help='List of trigger chain to be plotted in the same canvas')
+    plotopt.add_option( '-v', '--varlist', action='store', type='string', metavar='VAR1,VAR2[,...]',\
+            dest = 'varlist',help='List of variables to be used by the "-p" option.')
+    plotopt.add_option( '-l', '--triggerlist', action='store_true', \
+            dest = 'extracttrlist',help='Just show the available triggers in the file and exit')
+    parser.add_option_group(plotopt)
+
+
+    (opt, args)=parser.parse_args()
+
+    # Working Mode 2: plotting trigger efficiencies
+    if len(args) < 2:
+        raise RuntimeError('The script needs either at least two arguments\n:'\
+                '<create ROOTFILEPATHS|plot ROOTFILE.root>')
+    elif args[0] == 'create':
+        # Working Mode 1: extracting trigger efficiencies
+        try:
+            folder=args[1]
+        except IndexError:
+            folder=os.path.join(os.getcwd(),'*.root')
+        create(folder,opt)
+    elif args[0] == 'plot':
+        # Working Mode 2: plotting
+        plot(args[1],opt)
+
+
 
