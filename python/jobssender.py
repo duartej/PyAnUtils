@@ -190,8 +190,7 @@ class jobspec(object):
         # datamember
         notfoundmess = "the __setneedenv__ class implemented in the class"
         notfoundmess+=" '%s' must inititalize the"
-        notfoundmess+=" datamember" % self.__class__.__name__
-        notfoundmess+=" '%s'"
+        notfoundmess+=" datamember '%s'" % self.__class__.__name__
         if not self.relevantvar:
             raise NotImplementedError(notfoundmess % ('relevantvar'))
         if not self.typealias:
@@ -503,7 +502,7 @@ class athenajob(jobspec):
             self.evtmax = getevt(self.inputfiles,treename='CollectionTree')
 
         if kw.has_key('njobs'):
-            self.evtmax = kw['njobs']
+            self.njobs = kw['njobs']
         else:
             self.njobs= self.evtmax/JOBEVT
 
@@ -536,7 +535,8 @@ class athenajob(jobspec):
         import os
         
         localcopy=os.path.join(os.getcwd(),os.path.basename(self.joboption))
-        shutil.copyfile(self.joboption,localcopy)
+        if localcopy != self.joboption:
+            shutil.copyfile(self.joboption,localcopy)
         # And re-point
         self.joboption=localcopy
 
@@ -607,15 +607,15 @@ class athenajob(jobspec):
                 return True
         
         ph = placeholder()
+        for var,value in kw.iteritems():
+            setattr(ph,var,value)
+        
         if not ph.haveallvars():
             message = "Note that the asetup folder, the Athena version and"
             message += " the version of the gcc compiler are needed to build the"
             message += " bashscript"
             raise RuntimeError(message)
             
-        for var,value in kw.iteritems():
-            setattr(ph,var,value)
-        
         bashfile = '#!/bin/bash\n\n'
         bashfile += '# File created by %s class\n\n' % self.__class__.__name__
         bashfile += 'cd '+ph.setupfolder+'\n'
@@ -627,10 +627,10 @@ class athenajob(jobspec):
         # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
         bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
-        f=open(self.scriptname,"w")
+        f=open(self.scriptname+'.sh',"w")
         f.write(bashfile)
         f.close()
-        os.chmod(self.scriptname,0755)
+        os.chmod(self.scriptname+'.sh',0755)
 
     def settingfolders(self,usersetupfolder,athenaversion,gcc):
         """..method:: settingfolders()
