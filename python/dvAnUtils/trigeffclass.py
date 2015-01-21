@@ -8,6 +8,8 @@
       The module also incorporate helper functions to deal with the class
 .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
+from abc import ABCMeta
+from abc import abstractmethod
 
 def geteffname(trname,varname):
     """.. function::  geteffname(trname,varname)
@@ -90,11 +92,59 @@ class effsv(object):
         else:
             self.__trgnames__ = []
 
+        self.plotsuffix = '.png'
+
     def gettrgnames(self):
         """.. method:: gettrgnames() -> trgnames
         The list of the trgnames of this group oef efficiencies
         """
         return self.__trgnames__
+    
+    @staticmethod
+    def geteffname(trname,varname):
+        """.. function:: geteffname(trname,varname) -> effname
+        given a trigger name and a variable name, it returns
+        an standarized efficiency name
+
+        :param trname: the trigger path name
+        :type  trname: str
+        :param varname: the variable name
+        :type  varname: str
+        
+        :return: canonical efficiency name
+        :rtype:  str
+        """
+        name = 'eff%s_%s' % (varname,trname)
+        return name
+    
+    @staticmethod
+    def gettriggernamefrom(fullname):
+        """.. method::  geteffname(fullname) -> triggername
+        from a canonical efficiency name extracts the
+        trigger path name
+
+        :param trname: the canonical trigger efficiency name
+        :type  trname: str
+        
+        :return: the trigger path name
+        :rtype:  str
+        """
+        return fullname.split('eff'+effsv.getvarnamefrom(fullname)+'_')[-1]
+
+    @staticmethod
+    def getvarnamefrom(fullname):
+        """.. method:: getvarnamefrom(fullname) -> varname
+        from a canonical efficiency name extracts the
+        variable name
+
+        :param fullname: the canonical trigger efficiency name
+        :type  fullname: str
+        
+        :return: the variable name
+        :rtype:  str
+        """
+        return fullname.split('eff')[-1].split('_')[0]
+
 
     def fill(self,trname,varname,decission,varvalue):
         """.. method:: fill(trname,varname,decision,varvalue) 
@@ -102,6 +152,14 @@ class effsv(object):
         variable 'varname' using the values 'decision' and 'varvalues'
         """
         self.__effs__[varname][trname].Fill(decission,varvalue)
+    
+    def setplotsuffix(self,suffix):
+        """.. method:: setplotsuffix(suffix) 
+        set the plot output format, which is .png per default
+        """
+        self.plotsuffix = suffix
+        if suffix.find('.') == -1:
+            self.plotsuffix = '.'+suffix
 
     def __plot__(self,trname,varname):
         """.. method:: __plot__(trname,varname)
@@ -123,7 +181,7 @@ class effsv(object):
         h.SetTitle('[%s] %s' % (trname,self.__title__[varname]))
         h.Draw()
         self.__effs__[varname][trname].Draw("PSAME")
-        c.SaveAs('eff_'+trname+'_'+varname+'.png')
+        c.SaveAs('eff_'+trname+'_'+varname+self.plotsuffix)
 
     def __plotsamecanvas__(self,triglist,varname):
         """.. __plotsamecanvas__(triglist,varname)
@@ -161,7 +219,7 @@ class effsv(object):
             self.__effs__[varname][trname].Draw("PSAME")
             _j += 1
         drawlegend(legend,'CENTER',0.90)
-        c.SaveAs('eff_GroupedTriggers'+'_'+varname+'.png')
+        c.SaveAs('eff_GroupedTriggers'+'_'+varname+self.plotsuffix)
 
 
     def plot(self,trname=None,varname=None):
@@ -230,4 +288,189 @@ class effsv(object):
         pformat = "%"+str(maxlen)+"s:: %.3f%s"
         for trn,val in sorted(effcalc.iteritems(),key=lambda (x,y): y):
             print pformat % (trn,val*100,'%')
+
+
+class storedeff(object):
+    """ ..class:: storedeff
+    abstract class to implement the retrieval of a MC-info and trigger root file.
+    The concrete classes should implement the relative methods dependents of the
+    ntuple obtainer (RPVMCInfoTree/RPVMCTruthHist/...)
+    Virtual methods:
+     * gettreechain
+     * getmctruthinfo
+     * setuptree
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self,rootfiles,chainname):
+        """ ..class:: storedeff
+        abstract class to implement the retrieval of a MC-info and trigger root file.
+        The concrete classes should implement the relative methods dependents of the
+        ntuple obtainer (RPVMCInfoTree/RPVMCTruthHist/...)
+        Virtual methods:
+         * gettreechain
+         * getmctruthinfo
+         * setuptree
+        """
+        import ROOT
+        import os
+        
+        self.rootfiles = rootfiles
+        
+        self.tree = ROOT.TChain(chainname)
+        print "TChain '%s' created" % chainname
+        print "Adding %i root files to the tree" % len(self.rootfiles)
+        for i in sorted(self.rootfiles):
+            self.tree.AddFile(i)
+        
+        self.nentries   = self.tree.GetEntries()
+        # Setting up how-many DV are:
+        self.tree.GetEntry(0)
+        self.llpindices = xrange(len(self.tree.dv_X))
+
+    @abstractmethod
+    def gettriggersnames(self):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "gettriggersname()" % (self.__class__.__name__))
+
+    @abstractmethod
+    def setuptree(self,triggerbr):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "setuptree()" % (self.__class__.__name__))
+
+    @abstractmethod
+    def getmctruthinfo(self):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "getmctruthinfo()" % (self.__class__.__name__))
     
+    def get(self,variable):
+        """
+        """
+        return getattr(self.tree,variable)
+
+    def getentry(self,i):
+        """
+        """
+        _d = self.tree.GetEntry(i)
+
+    def getentries(self):
+        """
+        """
+        return self.nentries
+
+    def filleff(self,trgdecdict,effsvinst,ignorematching=False):
+        """..function:: filleff(trgdecdic,effsvinst[,ignoremathcing=True]) 
+
+        The function fills the efficiencies with respect the variables 
+        obtained with the 'getmctruthinfo' method. The datamember 
+        '%TRNAME_isJetRoiMatched' takes into account if any RoI was matched
+        with any MC-Truth particle coming from the DV. The datamember is a
+        vector of ints, where each index corresponds to one DV (MC-Truth).
+        Therefore, efficiencies are calculated as follows:
+          * Check if any MC-particle coming from the DV has matched with
+          the trigger RoI (isJetRoiMatched[i] outcome for the i-DV)  or not.
+          The efficiency is evaluated as an AND (OR) if 'ignorematching'
+          argumetn is set to False (True) of the matching checked and the trigger
+          decision
+    
+        :param trgdecdic: dictionary with the trigger names and trigger 
+                          decision per event
+        :type  trgdecdic: dict(str: bool}
+        :param effsvinst: efficiency class instances
+        :type  effsvinst: class effsv
+        :param ignorematching: argument to control if the matching betweem RoI's 
+                               trigger objects and the MC-Truth info hould be
+                               performed
+        :type  ignorematching: bool                           
+        """
+        # Get the list of MC info related with the DV
+        sv = self.getmctruthinfo()
+        # Getting the OR of all  the triggers
+        trigdecOR = False
+        for (tragname,trgdec) in trgdecdict.iteritems():
+            trigdecOR = (trigdecOR or trgdec)
+        # And adding it to the trgdecdict
+        trgdecdict["OR"] = trigdecOR
+        # Filling the efficiencies
+        matchvar = "%s_isJetRoiMatched"
+        presentvar = "%s_isJetRoiPresent"
+        # obtaining the trigger decision in the event.
+        for trgname,trgdec in trgdecdict.iteritems():
+            i=0
+            # Obtaining the MC-info related with the i-DV
+            for svinfodict in sv:
+                try:
+                    ispresent = bool(getattr(self.tree,presentvar%trgname)[0])
+                except AttributeError:
+                    ## TO BE DEPRECATED: just for backwards compability 
+                    ispresent=True
+                    pass
+                if ispresent:
+                    try:
+                        # Now checking if the i-DV was matched with any TE
+                        # in order to consider not to bias the variable of the
+                        # DV MCTruth. The problem with using non-matching objects
+                        # relies in the fact you're not sure what MC object is the
+                        # responsible of the trigger decision, so you are biasing your 
+                        # efficiency
+                        try:
+                            ismatched = bool(getattr(self.tree,matchvar%trgname)[i])
+                        except AttributeError:
+                            # Backward compatibility
+                            ismatched = True
+                        ismatched = (ismatched or ignorematching)
+                        if not ismatched:
+                            continue
+                    except AttributeError:
+                        # Just controlling the OR-case
+                        ismatched =1
+                else:
+                    # Is not present is going to be considered as a fail decision
+                    ismatched=False
+                # Filling all the variables
+                for varname,val in svinfodict.iteritems():
+                    effsvinst.fill(trgname,varname,(trgdec and ismatched),val)
+                i+=1
+
+class rpvmcinfo(storedeff):
+    """
+    """
+    def __init__(self,rootfiles):
+        """
+        """
+        super(rpvmcinfo,self).__init__(rootfiles,'RPVMCInfoTree')
+
+    def gettriggersnames(self):
+        """
+        """
+        triggersinntuple = []
+        for tbranch in filter(lambda x: x.GetName().find('HLT')==0 and \
+                x.GetName().lower().find('jetroi') == -1,self.tree.GetListOfBranches()):
+            triggersinntuple.append( tbranch.GetName() )
+        return triggersinntuple
+    
+    def setuptree(self,triggerbr):
+        """
+        """
+        pass
+
+    def getmctruthinfo(self):
+        """
+        """
+        from math import sqrt
+        # Just for improve readibility
+        t = self.tree
+        sv = []
+        for i in self.llpindices:
+            sv.append({})
+            # Secondary vertex (displaced) with respect the primary vertex 
+            # (it means with respect # the production vertex 
+            sv[-1]['Dtdv'] = sqrt((t.dv_X[i]-t.vx_LSP[i])**2.0+(t.dv_Y[i]-t.vy_LSP[i])**2.0)
+            sv[-1]['Dzdv'] = t.dv_Z[i]-t.vz_LSP[i]
+            sv[-1]['Drdv'] = sqrt(sv[-1]['Dtdv']**2.+sv[-1]['Dzdv']**2.)
+            # Secondary vertex absolut info
+            sv[-1]['tdv'] = sqrt(t.dv_X[i]**2.0+t.dv_Y[i]**2.0)
+            sv[-1]['zdv'] = t.dv_Z[i]
+            sv[-1]['rdv'] = sqrt(sv[-1]['tdv']**2.+sv[-1]['zdv']**2.)
+        return sv
+
