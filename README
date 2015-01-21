@@ -24,10 +24,16 @@ in order to use the new scripts and modules.
   2.1. Modules
    * PyAnUtils.plotsytyles:   ROOT styles 
    * PyAnUtils.pyanfunctions: bunch of functions
+   * PyAnUtils.jobcluster:    bunch of class related with sending jobs to 
+                              scientific cluster
+   * PyAnUtils.dvAnUtils:     software specific for the displaced vertex
+                              ATLAS' analysis
 
   2.2. Scripts
    * mtgfastfullcmp: plot and show differences between Full (G4) and Fast
    simulation in the MuonTrackingGeometry ATLAS's package
+   * lazycmt:        compiles, config and clean ATLAS packages automaticaly
+   * dvtrigeff:      ---
 
 Use *help* function for detailed information of each module and script.
  

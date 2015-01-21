@@ -8,7 +8,7 @@ setup(name='PyAnUtils',
 		url='https://github.com/',
 		# See https://docs.python.org/2/distutils/setupscript.html#listing-whole-packages
 		# for changes in the package distribution
-		package_dir={'PyAnUtils':'python'},
-		packages = ['PyAnUtils' ],
-		scripts=['bin/mtgfastfullcmp','bin/lazycmt'],
+        package_dir={'PyAnUtils':'python','dvAnUtils':'python/dvAnUtils'},
+		packages = ['PyAnUtils','dvAnUtils' ],
+		scripts=['bin/mtgfastfullcmp','bin/lazycmt','python/dvAnUtils/bin/dvtrigeff'],
 		)
