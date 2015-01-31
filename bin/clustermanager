@@ -51,6 +51,10 @@ if __name__ == '__main__':
                     workingpath='./*')
 
     (opt,args) = parser.parse_args()
+    print "================================================================"
+    print "\033[1;33mWARNING:\033[1;m Some functionalities are not developed yet. The program"
+    print "is just able to send 'athena' jobs in the 'cern' cluster"
+    print "================================================================"
 
     if len(args) != 1:
         raise RuntimeError('%prog must be called either with "send|retrieve"'\
