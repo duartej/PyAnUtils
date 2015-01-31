@@ -1,0 +1,103 @@
+#!/usr/bin/env python
+""":script:`clustermanager` -- Send, check and retrieve jobs to a cluster
+=================================================================================
+
+.. script:: clustermanager <send|retrieve> [OPTIONS]    
+      :platform: Unix
+      :synopsis: Send, check and retrieve jobs to a cluster. 
+.. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+"""
+
+DEBUG=False
+JOBEVT=500
+from PyAnUtils.jobssender import athenajob,cerncluster
+
+if __name__ == '__main__':
+    from optparse import OptionParser,OptionGroup
+    import os
+
+    usage  = "usage: %prog <send|retrieve> [options]"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option('-b','--bashname',action='store',dest='bashname',
+            help='name of the bash script without extension (the script'+\
+                    ' used to send the job, which defines also the name of the job')
+
+    sendopt= OptionGroup(parser,"Send mode options",
+            "Options valid only when it is called with 'send' arg")
+    sendopt.add_option("-j","--jobOption",action="store",dest="joboption",\
+            help="Name of the python jobOption file")
+    sendopt.add_option("-i","--inputfiles",action="store",dest="filenames",\
+            help="Input root files (can be regular expresion)")
+    sendopt.add_option("-n","--njobs",action="store",dest="njobs",\
+            help="Force the number of jobs to be sent")
+    sendopt.add_option("-e","--evtsmax",action="store",dest="evtsmax",\
+            help="Number of events to be processed")
+    parser.add_option_group(sendopt)
+
+    retropt= OptionGroup(parser,"Retrieve mode options",
+            "Options valid only when it is called with 'retrieve' arg")
+    retropt.add_option("-w","--workingpath",action="store",dest="workingpath",\
+            help="Path to the folder where the jobs were sent")
+    parser.add_option_group(retropt)
+
+    parser.set_defaults(bashname='clusterRPVMCInfoDVMuons',
+            joboption='testBjetSliceAthenaTrigRDO.py',
+            filenames = '/afs/cern.ch/user/d/duarte/work/public/datasets/'\
+                    'mc14_13TeV.177568.Pythia_AUET2BCTEQ6L1_RPV_vtx2_LSP100'\
+                    '_mujets_filtDL_Rmax300.recon.RDO.e3355_s1982_s2008_r5787'\
+                    '_tid04569111_00/*.pool.root.*',
+                    njobs=300,
+                    workingpath='./*')
+
+    (opt,args) = parser.parse_args()
+
+    if len(args) != 1:
+        raise RuntimeError('%prog must be called either with "send|retrieve"'\
+                ' arguments')
+    if args[0] == 'send':
+        jobs = athenajob(opt.bashname,opt.joboption,opt.filenames,
+                njobs=opt.njobs)
+        jobs.preparejobs()
+        cern = cerncluster(jobs.getlistofjobs())
+        cern.submit()
+        print "Send the jobs using this:"
+        print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
+                "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % \
+                (jobs.scriptname+'.sh')
+
+    elif args[0] == 'retrieve':
+        import os
+        import glob
+    
+        cern = cerncluster()
+        # This should be done by the cernspec class...: getjobdescription method
+        #  O al menos una funcion en el modulo. Nota que hay dos dependencias:
+        # la forma en que trabaja el cluster (clusterspec), y la forma en que 
+        # fueron guardados los jobs para ser enviados (jobspec)
+        print "Searching jobs..."
+        jobdscrlist = []
+        lsfpaths = opt.workingpath+"/LSFJOB_*"
+        jobfolders = glob.glob(lsfpaths)
+        for i in jobfolders:
+            i = os.path.abspath(i)
+            try:
+                id = int(i.split('_')[-1])
+            except ValueError:
+                raise RuntimeError('The path should contain LSFJOB_*')
+            path = os.path.split(i)[0]
+            scriptname=os.path.basename(path).split('_')[1]
+            jobnumber =os.path.basename(path).split('_')[-1]
+            jobdscrlist.append( jobdescription(ID=id,status='submitted',
+                path=path,script=scriptname) )
+            print ("Checking status %s_%s " % (scriptname,jobnumber)),
+            while jobdscrlist[-1].status == 'submitted' or \
+                    jobdscrlist[-1].status == 'finished':
+                jobdscrlist[-1].getnextstatus(cern,athenajob.checkfinishedjob)
+            print "[%s]" % jobdscrlist[-1].status
+    else:
+        raise RuntimeError('Not valid argument "%s".'\
+                ' Valid args: send|retrieve' % args[0])
+
+
+

@@ -116,6 +116,7 @@ class jobdescription(object):
         self.script = None
         self.ID     = None
         self.status = None
+        self.index  = None
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
@@ -141,10 +142,10 @@ class jobdescription(object):
             self.status = 'done'
 
     @staticmethod
-    def buildfromjob(path,script):
+    def buildfromjob(path,script,index):
         """
         """
-        return jobdescription(path=path,script=script)
+        return jobdescription(path=path,script=script,index=index)
     
     @staticmethod
     def buildfromcluster(ID,status):
@@ -307,16 +308,24 @@ class clusterspec(object):
          * done
         """
         self.sendcom     = None
-        self.extraopt    = None
+        self.extraopt    = []
         self.statuscom   = None
         self.joblist     = joblist
+
+    def submit(self):
+        """..method:: submit()
+        wrapper to submit(jobdsc) function, using all the
+        jobs in the list
+        """
+        for jb in self.joblist:
+            self.submitjob(jb)
     
-    def submit(self,jobdsc):
-        """...method:: submit()
+    def submitjob(self,jobdsc):
+        """...method:: submitjob(jobdsc)
          
         function to send the jobs to the cluster.
         """
-        from subprocessed import Popen,PIPE
+        from subprocess import Popen,PIPE
         import os
         cwd = os.getcwd()
         # Going to directory of sending
@@ -325,7 +334,7 @@ class clusterspec(object):
         command = [ self.sendcom ]
         for i in self.extraopt:
             command.append(i)
-        command.append(self.jobdsc.scriptname)
+        command.append(jobdsc.script+'.sh')
         # Send the command
         p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
         if p[1] != "":
@@ -333,8 +342,11 @@ class clusterspec(object):
             message += p[1]+"\n"
             os.chdir(cwd)
             raise RuntimeError(message)
-        # The job-id is released in the message:
+        ## The job-id is released in the message:
         self.ID = self.getjobidfromcommand(p[0])
+        jobdsc.ID = self.ID
+        print "INFO:"+str(jobdsc.script)+'_'+str(jobdsc.index)+\
+                " submitted with cluster ID:"+str(self.ID)
         # Coming back to the original folder
         os.chdir(cwd)
      
@@ -409,6 +421,7 @@ class cerncluster(clusterspec):
         super(cerncluster,self).__init__(joblist,**kw)
         self.sendcom   = 'bsub'
         self.statuscom = 'bjobs'
+        self.extraopt  += [ '-q','8nh' ]
     
     def getjobidfromcommand(self,p):
         """..method:: getjobidfromcommand()
@@ -416,7 +429,7 @@ class cerncluster(clusterspec):
         function to obtain the job-ID from the cluster command
         when it is sended (using sendcom)
         """
-        pass
+        return p.split('<')[-1].split('>')[0]
     
     def getstatusfromcommandline(self,p):
         """..method:: checkstatus()
@@ -650,12 +663,20 @@ class athenajob(jobspec):
                     version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
             # Registring the jobs in jobdescription class instances
-            self.jobdescription.append( jobdescription.buildfromjob(\
-                    path=foldername,\
-                    script=self.scriptname)
+            self.jobdescription.append( \
+                    jobdescription.buildfromjob(foldername,self.scriptname,i)
                     )
             os.chdir(cwd)
             i+=1
+
+    def getlistofjobs(self):
+        """..method:: getlistofjobs() -> [ listofjobs ]
+        return the list of prepared jobs, if any, None otherwise
+
+        :return: List of jobs prepared
+        :rtype:  list(jobdescription)        
+        """
+        return self.jobdescription
 
     @staticmethod
     def checkfinishedjob(jobdsc):

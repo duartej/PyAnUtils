@@ -10,5 +10,5 @@ setup(name='PyAnUtils',
 		# for changes in the package distribution
         package_dir={'PyAnUtils':'python','dvAnUtils':'python/dvAnUtils'},
 		packages = ['PyAnUtils','dvAnUtils' ],
-		scripts=['bin/mtgfastfullcmp','bin/lazycmt','python/dvAnUtils/bin/dvtrigeff'],
+		scripts=['bin/mtgfastfullcmp','bin/lazycmt','bin/clustermanager','python/dvAnUtils/bin/dvtrigeff'],
 		)
