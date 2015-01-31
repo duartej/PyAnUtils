@@ -497,12 +497,12 @@ class athenajob(jobspec):
         self.makecopyJO()
         
         if kw.has_key('evtmax'):
-            self.evtmax = kw['evtmax']
+            self.evtmax = int(kw['evtmax'])
         else:
             self.evtmax = getevt(self.inputfiles,treename='CollectionTree')
 
         if kw.has_key('njobs'):
-            self.njobs = kw['njobs']
+            self.njobs = int(kw['njobs'])
         else:
             self.njobs= self.evtmax/JOBEVT
 
