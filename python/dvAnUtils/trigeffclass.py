@@ -8,24 +8,71 @@
       The module also incorporate helper functions to deal with the class
 .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
+from abc import ABCMeta
+from abc import abstractmethod
 
-def geteffname(trname,varname):
-    """.. function::  geteffname(trname,varname)
-    given a trigger name and a variable name, it returns
-    an standarized efficiency name
+# DEPRECATED
+#def geteffname(trname,varname):
+#    """.. function::  geteffname(trname,varname)
+#    given a trigger name and a variable name, it returns
+#    an standarized efficiency name
+#
+#    :param trname: the trigger path name
+#    :type  trname: str
+#    :param varname: the variable name
+#    :type  varname: str
+#    
+#    :return: a standar efficiency name
+#    :rtype:  str
+#    """
+#    name = 'eff'+varname+'_'+trname
+#    return name
+# Pseudo ROOT colors
+kBlack=1
+kRed=632
+kGreen=416
+kAzure=860
+kCyan=432
+kOrange=800
 
-    :param trname: the trigger path name
-    :type  trname: str
-    :param varname: the variable name
-    :type  varname: str
-    
-    :return: a standar efficiency name
-    :rtype:  str
-    """
-    name = 'eff'+varname+'_'+trname
-    return name
+COLORS = [ kBlack, kOrange-2, kRed+2, kAzure+3,kCyan-2,kGreen-2,\
+		kOrange+7, kRed-3, kAzure-3, kCyan+4, kGreen+4 ]
+TEXTSIZE = 0.03
 
+DEFAULTBINNING = { 'eta': (100,-5,5), 'phi': (100,-3.1415,3.1415),
+    'betagamma': (100,0,20),
+    'nTrk4mm':   (51,0,50),
+    'genpfromdv_pdgId':   (1000,-2300,2300),
+    'genpfromdv_eta': (100,-5,5), 'genpfromdv_phi': (100,-3.1415,3.1415),
+    'genpfromdv_pt':  (100,0,200),
+    'genpfromdv_vx':  (200,-300,300), 'genpfromdv_vy': (200,-300,300), 'genpfromdv_vz': (200,-1500,1500),
+    'dv_X':  (200,-300,300), 'dv_Y': (200,-300,300), 'dv_Z': (200,-1500,1500),
+    'vx_LSP':  (200,-0.8,0.8), 'vy_LSP': (200,-0.8,0.8), 'vz_LSP': (200,-200,200),
+    'nTrk':  (101,0,100), 
+    }
 
+DEFAULTXTITLE = { 'Dtdv': 'r_{DV} [mm]' ,
+                'Dzdv': 'r_{z} [mm]',
+                'Drdv': 'radial distance [mm]',
+                'tdv': 'transverse r_{DV} [mm]', 'zdv': 'longitudinal r_{DV} [mm]', 'rdv': 'r_{DV} [mm]',
+                'eta': '#eta_{DV}', 'phi': '#phi_{DV}', 'betagamma': '#beta#gamma_{DV}',
+                'dv_X': 'DV v_{x} [mm]', 'dv_Y': 'DV v_{y} [mm]', 'dv_Z': 'DV v_{z} [mm]',
+                'vx_LSP': 'PV v_{x} [mm]', 'vy_LSP': 'PV v_{y} [mm]', 'vz_LSP': 'PV v_{z} [mm]',
+                'nTrk': 'DV N_{trk}', 
+                'nTrk4mm': 'status-1 N_{trk}^{4mm}',
+                'pdgId_g': 'pdgID_{<4mm}',
+                'eta_g': '#eta^{<4mm}', 'phi_g': '#phi^{<4mm}', 'pt_g': 'p_{t}^{<4mm} [GeV]',
+                'vx_g':  'prod v_{x}^{<4mm} [mm]', 
+                'vy_g': 'prod v_{y}^{<4mm} [mm]', 
+                'vz_g': 'prod v_{z}^{<4mm} [mm]', 
+                'genpfromdv_pdgId': 'pdgID_{<4mm}',
+                'genpfromdv_eta': '#eta^{<4mm}', 
+                'genpfromdv_phi': '#phi^{<4mm}', 
+                'genpfromdv_pt':  'p_{t}^{<4mm} [GeV]',
+                'genpfromdv_vx':  'prod v_{x}^{<4mm} [mm]', 
+                'genpfromdv_vy': 'prod v_{y}^{<4mm} [mm]', 
+                'genpfromdv_vz': 'prod v_{z}^{<4mm} [mm]', 
+                }
 
 class effsv(object):
     """.. class:: effsv
@@ -51,22 +98,27 @@ class effsv(object):
             self._xmin = kw['xmin']
         if kw.has_key('xmax'):
             self._xmax = kw['xmax']
+        if kw.has_key('extravareff'):
+            self.extravareff=kw['extravareff']
+        else:
+            self.extravareff=False
 
         self.__var__= [ 'Dtdv', 'Dzdv', 'Drdv',   # SV with respect Primary vertex
                         'tdv', 'zdv', 'rdv'       # SV absolute position
                         ]             
 
-        self.__extravar__ = [ 'eta','phi','betagamma',         # Kinematics of the DVs
+        self.__extravars__ = [ 'eta','phi','betagamma',         # Kinematics of the DVs
                 'nTrk4mm',                       # Number of status-1 genparticles 
                                                  # decayed from the DVs (in a 4mm radius)
+                'pdgId_g',                       # Gen particles inside the 4mm radius
+                'eta_g','phi_g','pt_g',          # Kinematics of these particles
+                'vx_g','vy_g','vz_g',
                 ]
-        self.__xtitle__ = { 'Dtdv': 'r_{DV} [mm]' ,\
-                'Dzdv': 'r_{z} [mm]',\
-                'Drdv': 'radial distance [mm]',\
-                'tdv': 'transverse r_{DV} [mm]', 'zdv': 'longitudinal r_{DV} [mm]', 'rdv': 'r_{DV} [mm]',\
-                'eta': '#eta_{DV}', 'phi': '#phi_{DV}', 'betagamma': '#beta#gamma_{DV}',\
-                'nTrk4mm': 'N_{trk}^{4mm}',\
-                }
+        # bins, xmin,xmax 
+        self.__defaults__ = DEFAULTBINNING
+
+        self.__xtitle__ = DEFAULTXTITLE
+        
         self.__title__ = { 'Dtdv': 'Distance between PV and the DV in the XY plane' ,
                 'Dzdv': 'Distance between PV and the DV in the Z-axis',
                 'Drdv': 'Distance between PV and the DV',
@@ -83,18 +135,77 @@ class effsv(object):
             # { 'var1': { 'trpath1': TEfficiency, 'trpath2': TEfficiency, ....}, ... } 
             for i in self.__var__:
                 self.__effs__[i] = dict(map(lambda x:
-                    (x,ROOT.TEfficiency(geteffname(x,i),'',self._xbins,self._xmin,self._xmax)),
+                    (x,ROOT.TEfficiency(self.geteffname(x,i),'',self._xbins,self._xmin,self._xmax)),
                       trnameslist))
                 ## -- And the OR key
                 self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',self._xbins,self._xmin,self._xmax)
+            if self.extravareff:
+                for i in self.__var__:
+                    _bins = self.__defaults__[i][0]
+                    _xmin = self.__defaults__[i][1]
+                    _xmax = self.__defaults__[i][2]
+                    self.__effs__[i] = dict(map(lambda x:
+                        (x,ROOT.TEfficiency(self.geteffname(x,i),'',_bins,_xmin,_xmax)),
+                        trnameslist))
+                    ## -- And the OR key
+                    self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',_bins,_xmin,_xmax)
         else:
             self.__trgnames__ = []
 
+        self.plotsuffix = '.png'
+
+        
     def gettrgnames(self):
         """.. method:: gettrgnames() -> trgnames
         The list of the trgnames of this group oef efficiencies
         """
         return self.__trgnames__
+    
+    @staticmethod
+    def geteffname(trname,varname):
+        """.. function:: geteffname(trname,varname) -> effname
+        given a trigger name and a variable name, it returns
+        an standarized efficiency name
+
+        :param trname: the trigger path name
+        :type  trname: str
+        :param varname: the variable name
+        :type  varname: str
+        
+        :return: canonical efficiency name
+        :rtype:  str
+        """
+        name = 'eff%s_%s' % (varname,trname)
+        return name
+    
+    @staticmethod
+    def gettriggernamefrom(fullname):
+        """.. method::  gettriggernamefrom(fullname) -> triggername
+        from a canonical efficiency name extracts the
+        trigger path name
+
+        :param trname: the canonical trigger efficiency name
+        :type  trname: str
+        
+        :return: the trigger path name
+        :rtype:  str
+        """
+        return fullname.split('eff'+effsv.getvarnamefrom(fullname)+'_')[-1]
+
+    @staticmethod
+    def getvarnamefrom(fullname):
+        """.. method:: getvarnamefrom(fullname) -> varname
+        from a canonical efficiency name extracts the
+        variable name
+
+        :param fullname: the canonical trigger efficiency name
+        :type  fullname: str
+        
+        :return: the variable name
+        :rtype:  str
+        """
+        return fullname.split('eff')[-1].split('_')[0]
+
 
     def fill(self,trname,varname,decission,varvalue):
         """.. method:: fill(trname,varname,decision,varvalue) 
@@ -102,6 +213,14 @@ class effsv(object):
         variable 'varname' using the values 'decision' and 'varvalues'
         """
         self.__effs__[varname][trname].Fill(decission,varvalue)
+    
+    def setplotsuffix(self,suffix):
+        """.. method:: setplotsuffix(suffix) 
+        set the plot output format, which is .png per default
+        """
+        self.plotsuffix = suffix
+        if suffix.find('.') == -1:
+            self.plotsuffix = '.'+suffix
 
     def __plot__(self,trname,varname):
         """.. method:: __plot__(trname,varname)
@@ -114,6 +233,7 @@ class effsv(object):
         from PyAnUtils.plotstyles import atlasStyle
 
         lstyle = atlasStyle()
+        lstyle.cd()
         ROOT.gROOT.SetBatch()
         
         c = ROOT.TCanvas()
@@ -123,7 +243,7 @@ class effsv(object):
         h.SetTitle('[%s] %s' % (trname,self.__title__[varname]))
         h.Draw()
         self.__effs__[varname][trname].Draw("PSAME")
-        c.SaveAs('eff_'+trname+'_'+varname+'.png')
+        c.SaveAs('eff_'+trname+'_'+varname+self.plotsuffix)
 
     def __plotsamecanvas__(self,triglist,varname):
         """.. __plotsamecanvas__(triglist,varname)
@@ -137,6 +257,7 @@ class effsv(object):
         from PyAnUtils.pyanfunctions import drawlegend
         
         lstyle = atlasStyle()
+        lstyle.cd()
         ROOT.gROOT.SetBatch()
         
         c = ROOT.TCanvas()
@@ -161,7 +282,7 @@ class effsv(object):
             self.__effs__[varname][trname].Draw("PSAME")
             _j += 1
         drawlegend(legend,'CENTER',0.90)
-        c.SaveAs('eff_GroupedTriggers'+'_'+varname+'.png')
+        c.SaveAs('eff_GroupedTriggers'+'_'+varname+self.plotsuffix)
 
 
     def plot(self,trname=None,varname=None):
@@ -230,4 +351,312 @@ class effsv(object):
         pformat = "%"+str(maxlen)+"s:: %.3f%s"
         for trn,val in sorted(effcalc.iteritems(),key=lambda (x,y): y):
             print pformat % (trn,val*100,'%')
+
+
+class storedeff(object):
+    """ ..class:: storedeff
+    abstract class to implement the retrieval of a MC-info and trigger root file.
+    The concrete classes should implement the relative methods dependents of the
+    ntuple obtainer (RPVMCInfoTree/RPVMCTruthHist/...)
+    Virtual methods:
+     * gettreechain
+     * getmctruthinfo
+     * setuptree
+    """
+    __metaclass__ = ABCMeta
+
+    def __init__(self,rootfiles,chainname):
+        """ ..class:: storedeff
+        abstract class to implement the retrieval of a MC-info and trigger root file.
+        The concrete classes should implement the relative methods dependents of the
+        ntuple obtainer (RPVMCInfoTree/RPVMCTruthHist/...)
+        Virtual methods:
+         * gettreechain
+         * getmctruthinfo
+         * setuptree
+        """
+        import ROOT
+        import os
+        
+        self.rootfiles = rootfiles
+        
+        self.tree = ROOT.TChain(chainname)
+        print "TChain '%s' created" % chainname
+        print "Adding %i root files to the tree" % len(self.rootfiles)
+        for i in sorted(self.rootfiles):
+            self.tree.AddFile(i)
+        
+        self.plotsactivated = False
+        self.nentries   = self.tree.GetEntries()
+        # Setting up how-many DV are:
+        self.tree.GetEntry(0)
+        self.llpindices = xrange(len(self.tree.dv_X))
     
+    def activate_plots(self,varname=None,**kw):
+        """.. method:: activate_plots(varname=None[,bins=bins,xmin=xmin,xmax=xmax]) 
+        The varname plot is activated and will be filled in the entry loop
+        of the tree. If there is no varname, it is going to be used all of them 
+        (content of the __vars__ datamember). If varname is a tuple of str, a
+        TH2F is going to be created, while if is a str or a list of str, a TH1F
+        foe each variable is created
+
+        :param varname: the name of the variable(s) to activate
+        :type  varname: str/tuple(str,str)/list(str)
+        :param bins: number of bins
+        :type  bins: int
+        :param xmin: the lower x-range
+        :type  xmin: float
+        :param xmax: the higher x-range
+        :type  xmax: float
+        ...
+        """
+        import ROOT
+
+        try:
+            _d = self._hist2d
+        except AttributeError:
+            self._hist2d = {}
+        try:
+            _dd = self._hist1d
+        except AttributeError:
+            self._hist1d = {}
+        
+        varnamelist = []
+        
+        if not varname:
+            varnamelist = self.__vars__
+        elif type(varname) is str:
+            varnamelist = [varname]
+        elif type(varname) is tuple:
+            self._hist2d[varname[0]+':'+varname[1]] = ROOT.TH2F(varname[0]+'_'+varname[1],
+                    varname[0]+' vs. '+varname[1],DEFAULTBINNING[varname[0]][0],
+                    DEFAULTBINNING[varname[0]][1],DEFAULTBINNING[varname[0]][2],
+                    DEFAULTBINNING[varname[1]][0],
+                    DEFAULTBINNING[varname[1]][1],DEFAULTBINNING[varname[1]][2])
+
+        for var in varnamelist:
+            self._hist1d[var] = ROOT.TH1F(var,var,DEFAULTBINNING[var][0],
+                    DEFAULTBINNING[var][1],DEFAULTBINNING[var][2])
+
+        self.plotsactivated=True
+
+    def plots(self,plotsuffix='.png'):
+        """.. method:: plots()
+        draw the activated plots
+        """
+        if not self.plotsactivated:
+            return
+
+        import ROOT
+        from PyAnUtils.plotstyles import atlasStyle,setpalette
+
+        lstyle = atlasStyle()
+        lstyle.cd()
+        ROOT.gROOT.SetBatch()
+        setpalette('darkbody')
+        
+        for name,th1 in self._hist1d.iteritems():
+            c = ROOT.TCanvas()
+            xtitle = DEFAULTXTITLE[name]
+            th1.SetXTitle(xtitle)
+            width = th1.GetBinWidth(1)
+            if len(xtitle.split('[')) == 1:
+                unit = ''
+            else:
+                unit  = "["+xtitle.split('[')[-1].replace(']','').strip()+"]"
+            th1.SetYTitle('Events/(%.1f %s)' % (width,unit) )
+            th1.Draw()
+            c.SaveAs('extraplot_'+name+plotsuffix)
+        
+        for names,th2 in self._hist2d.iteritems():
+            c = ROOT.TCanvas()
+            name1 = names.split(':')[0]
+            name2 = names.split(':')[1]
+            xtitle = DEFAULTXTITLE[name1]
+            ytitle = DEFAULTXTITLE[name2]
+            th2.SetXTitle(xtitle)
+            th2.SetYTitle(ytitle)
+            th2.Draw("COLZ")
+            c.SaveAs('extraplot_'+name1+'_'+name2+plotsuffix)
+    
+
+    @abstractmethod
+    def gettriggersnames(self):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "gettriggersname()" % (self.__class__.__name__))
+
+    @abstractmethod
+    def setuptree(self,triggerbr):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "setuptree()" % (self.__class__.__name__))
+
+    @abstractmethod
+    def getmctruthinfo(self):
+        raise NotImplementedError("Class %s doesn't implement "\
+                "getmctruthinfo()" % (self.__class__.__name__))
+    
+    def get(self,variable):
+        """
+        """
+        return getattr(self.tree,variable)
+
+    def getentry(self,i):
+        """
+        """
+        _d = self.tree.GetEntry(i)
+        if self.plotsactivated:
+            for name,thf1 in self._hist1d.iteritems():
+                for k in self.llpindices:
+                    thf1.Fill(getattr(self.tree,name)[k])
+
+            for name,thf2 in self._hist2d.iteritems():
+                var1 = name.split(':')[0]
+                var2 = name.split(':')[1]
+                for k in self.llpindices:
+                    thf2.Fill(getattr(self.tree,var1)[k],getattr(self.tree,var2)[k])
+
+
+    def getentries(self):
+        """
+        """
+        return self.nentries
+
+    def filleff(self,trgdecdict,effsvinst,ignorematching=False):
+        """..function:: filleff(trgdecdic,effsvinst[,ignoremathcing=True]) 
+
+        The function fills the efficiencies with respect the variables 
+        obtained with the 'getmctruthinfo' method. The datamember 
+        '%TRNAME_isJetRoiMatched' takes into account if any RoI was matched
+        with any MC-Truth particle coming from the DV. The datamember is a
+        vector of ints, where each index corresponds to one DV (MC-Truth).
+        Therefore, efficiencies are calculated as follows:
+          * Check if any MC-particle coming from the DV has matched with
+          the trigger RoI (isJetRoiMatched[i] outcome for the i-DV)  or not.
+          The efficiency is evaluated as an AND (OR) if 'ignorematching'
+          argumetn is set to False (True) of the matching checked and the trigger
+          decision
+    
+        :param trgdecdic: dictionary with the trigger names and trigger 
+                          decision per event
+        :type  trgdecdic: dict(str: bool}
+        :param effsvinst: efficiency class instances
+        :type  effsvinst: class effsv
+        :param ignorematching: argument to control if the matching betweem RoI's 
+                               trigger objects and the MC-Truth info hould be
+                               performed
+        :type  ignorematching: bool                           
+        """
+        # Get the list of MC info related with the DV
+        sv = self.getmctruthinfo()
+        # Getting the OR of all  the triggers
+        trigdecOR = False
+        for (tragname,trgdec) in trgdecdict.iteritems():
+            trigdecOR = (trigdecOR or trgdec)
+        # And adding it to the trgdecdict
+        trgdecdict["OR"] = trigdecOR
+        # Filling the efficiencies
+        matchvar = "%s_isJetRoiMatched"
+        presentvar = "%s_isJetRoiPresent"
+        # obtaining the trigger decision in the event.
+        for trgname,trgdec in trgdecdict.iteritems():
+            i=0
+            # Obtaining the MC-info related with the i-DV
+            for svinfodict in sv:
+                try:
+                    ispresent = bool(getattr(self.tree,presentvar%trgname)[0])
+                except AttributeError:
+                    ## TO BE DEPRECATED: just for backwards compability 
+                    ispresent=True
+                    pass
+                if ispresent:
+                    try:
+                        # Now checking if the i-DV was matched with any TE
+                        # in order to consider not to bias the variable of the
+                        # DV MCTruth. The problem with using non-matching objects
+                        # relies in the fact you're not sure what MC object is the
+                        # responsible of the trigger decision, so you are biasing your 
+                        # efficiency
+                        try:
+                            ismatched = bool(getattr(self.tree,matchvar%trgname)[i])
+                        except AttributeError:
+                            # Backward compatibility
+                            ismatched = True
+                        ismatched = (ismatched or ignorematching)
+                        if not ismatched:
+                            continue
+                    except AttributeError:
+                        # Just controlling the OR-case
+                        ismatched =1
+                else:
+                    # Is not present is going to be considered as a fail decision
+                    ismatched=False
+                # Filling all the variables
+                for varname,val in svinfodict.iteritems():
+                    effsvinst.fill(trgname,varname,(trgdec and ismatched),val)
+                i+=1
+
+class rpvmcinfo(storedeff):
+    """.. class rpvmcinfo(rootfiles)
+    concrete storedeff class for efficiencies evaluated using the 
+    RPVMCInfoTree ATLAS package 
+    Git repo:
+      https://duartej@bitbucket.org/duartej/rpvmctruthhist.git
+    """
+    def __init__(self,rootfiles):
+        """.. class rpvmcinfo(rootfiles)
+        concrete storedeff class for efficiencies evaluated using the 
+        RPVMCInfoTree ATLAS package 
+        """
+        super(rpvmcinfo,self).__init__(rootfiles,'RPVMCInfoTree')
+
+        self.__vars__ = []
+        for i in filter(lambda x: x.GetName().find('HLT_') == -1, 
+                self.tree.GetListOfBranches()):
+            self.__vars__.append(i.GetName())
+
+    def gettriggersnames(self):
+        """.. method::
+        """
+        triggersinntuple = []
+        for tbranch in filter(lambda x: x.GetName().find('HLT')==0 and \
+                x.GetName().lower().find('jetroi') == -1,self.tree.GetListOfBranches()):
+            triggersinntuple.append( tbranch.GetName() )
+        return triggersinntuple
+    
+    def setuptree(self,triggerbr):
+        """
+        """
+        pass
+
+    def getmctruthinfo(self,extra=False):
+        """
+        """
+        from math import sqrt
+        # Just for improve readibility
+        t = self.tree
+        sv = []
+        for i in self.llpindices:
+            sv.append({})
+            # Secondary vertex (displaced) with respect the primary vertex 
+            # (it means with respect # the production vertex 
+            sv[-1]['Dtdv'] = sqrt((t.dv_X[i]-t.vx_LSP[i])**2.0+(t.dv_Y[i]-t.vy_LSP[i])**2.0)
+            sv[-1]['Dzdv'] = t.dv_Z[i]-t.vz_LSP[i]
+            sv[-1]['Drdv'] = sqrt(sv[-1]['Dtdv']**2.+sv[-1]['Dzdv']**2.)
+            # Secondary vertex absolut info
+            sv[-1]['tdv'] = sqrt(t.dv_X[i]**2.0+t.dv_Y[i]**2.0)
+            sv[-1]['zdv'] = t.dv_Z[i]
+            sv[-1]['rdv'] = sqrt(sv[-1]['tdv']**2.+sv[-1]['zdv']**2.)
+            if extra:
+                sv[-1]['eta'] = t.eta[i]
+                sv[-1]['phi'] = t.phi[i]
+                sv[-1]['betagamma'] = t.betagamma[i]
+                sv[-1]['nTrk4mm_g'] = t.nTrk4mm[i]
+                sv[-1]['pdgId_g'] = t.genfromdv_pdgId[i]
+                sv[-1]['eta_g']   = t.genfromdv_eta[i]
+                sv[-1]['phi_g']   = t.genfromdv_phi[i]
+                sv[-1]['pt_g']    = t.genfromdv_pt[i]
+                sv[-1]['vx_g']    = t.genfromdv_vx[i]
+                sv[-1]['vy_g']    = t.genfromdv_vy[i]
+                sv[-1]['vz_g']    = t.genfromdv_vz[i]
+        return sv
+
