@@ -5,9 +5,9 @@
 .. module:: jobsender
    :platform: Unix
    :synopsis: Module gathering utilities to deal with sending 
-              jobs to a cluster. The utilities of this module
-              are used by the script 'sendjobs', the interface
-              the factor to this module
+        jobs to a cluster. The utilities of this module are 
+        used by the script 'clustermanager', the interface to
+        this module.
 .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
                """
 DEBUG=True
@@ -45,6 +45,54 @@ def getrealpaths(inputfiles):
     
     return map(lambda x: os.path.realpath(x),set(__preinputfiles__))
 
+def getremotepaths(remoteinputfiles):
+    """..function:: getremotepaths(remoteinputfiles) -> nevents
+    
+    Given the names of a files in a remote filesystem (EOS), 
+    the function return the complete path of all the files
+    matching the regular expresion. This function mount the eos
+    file as local filesystem and then check for the files. It
+    could be convenient to use the pyxrootd library?
+
+    :param inputfiles: a str or list of str with regular expressions
+                       to match files
+    :type inputfiles: str or list(str)
+
+    :return: the real paths or an empty list if no match
+    :rtype: list(str)
+
+    """
+    if not remoteinputfiles:
+        return None
+
+    from subprocess import Popen,PIPE
+    import os
+    import glob
+    # Substitute root://remoteserver//path_blabla -> /path_blablaa
+    protocol = remoteinputfiles.split('//')[0]
+    remoteserver = remoteinputfiles.split('//')[1]
+    inputfiles = remoteinputfiles.replace(protocol+'//'+remoteserver+'//','')
+    mountpoint = inputfiles.split('/')[0]
+    os.mkdir('eos')
+    # Note that eosmount is an alias (don't like too much this... but)
+    # Anyway it's needed the shell
+    eosmount = '/afs/cern.ch/project/eos/installation/0.3.84-aquamarine/'\
+            'bin/eos.select -b fuse mount'
+    command = eosmount+' '+mountpoint+'/' 
+    p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+
+    localfiles = getrealpaths(inputfiles)
+    nevents = getevt(localfiles,treename='CollectionTree')
+
+    # Umounting the eos filesystem
+    eosumount = eosmount.replace('mount','umount')
+    command2 = eosumount+' '+mountpoint+'/' 
+    p2 = Popen(command2,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+    os.rmdir('eos')
+    # Remote files
+    remotefiles = map(lambda x: protocol+'//'+remoteserver+'//'+\
+            os.path.relpath(x),localfiles)
+    return remotefiles,nevents
 
 def getevt(filelist,**kw):
     """ ..function:: getevt(filelist[,treename]) -> totalevts
@@ -80,6 +128,36 @@ def getevt(filelist,**kw):
         t.AddFile(f)
     return t.GetEntries()    
 
+def storejobs(jobinstance,clusterinstance):
+    """.. function::storelist(listjobs) 
+    stores  the list of the jobdescription instances found in 'listjobs' and 
+    which can be accessed using the retrievejobs functions. 
+    The function is useful to snapshot the status of the jobs
+    amongst other information
+    """
+    import shelve
+    d = shelve.open(".presentjobs",writeback=True)
+    #d['joblist'] = listjobs
+    d['jobspecinstance'] = jobinstance
+    d['clusterspecinstance'] = clusterinstance
+
+    d.close()
+
+def retrievejobs(filename='.presentjobs'):
+    """.. function::retrievelist(filename) 
+    retrieve a shelve object containing jobdescription objects
+    """
+    import shelve
+    d = shelve.open(filename)
+    #joblist = d['joblist'] 
+    jobspecinstance = d['jobspecinstance']
+    clusterinstance = d['clusterspecinstance'] 
+
+    d.close()
+    
+    return jobspecinstance,clusterinstance
+    
+
 
 class jobdescription(object):
     """..class:: jobdescription
@@ -94,6 +172,8 @@ class jobdescription(object):
      * script: the script to be sended to the cluster (jobspec)
      * ID: job id in the cluster (clusterspec)
      * status: job status in the cluster (clusterspec)
+    
+    TODO:  jobspec and clusterspec related instances??
     """
     def __init__(self,**kw):
         """..class:: jobdescription
@@ -108,6 +188,7 @@ class jobdescription(object):
          * script: the script to be sended to the cluster (jobspec)
          * ID: job id in the cluster (clusterspec)
          * status: job status in the cluster (clusterspec)
+         * index: index of the job (regarding jobspec class)
         """
         # I would need to check that the instance is build only
         # throught the buildfromcluster or buildfromjob methods
@@ -116,30 +197,38 @@ class jobdescription(object):
         self.script = None
         self.ID     = None
         self.status = None
+        self.state  = None
         self.index  = None
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    def getnextstatus(self,clusterinst,checkfinishedjob):
+    def getnextstate(self,clusterinst,checkfinishedjob):
         """..method:: getnextstatus() -> nextstatus
 
         The life of a job follows a clear workflow:
         None -> submitted -> running -> |  (finished) 
                                         |-+ failed    -->  submitted
                                         |-+ successed -->  Done
+        Better::: using states and status
+        |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
+
+        status: OK (no problems), Failed (any problem found)
+        
         """
-        if not self.status:
-            clusterinst.submit()#submit(self)
-            self.status = 'submitted'
-        elif self.status == 'submitted' or self.status == 'running':
-            self.status=clusterinst.checkstatus(self)
-        elif self.status == 'finished':
+        # Sure, do I want to submit it without asking?
+        if not self.state:
+            clusterinst.submit()
+            self.state  = 'submitted'
+            self.status = 'ok'
+        elif self.state == 'submitted' or self.state == 'running':
+            self.state,self.status=clusterinst.checkstate(self)
+        elif self.state == 'finished':
             self.status = checkfinishedjob(self)
-        elif self.status == 'failed':
-            self.status = clusterinst.failed()
-        elif self.status == 'successed':
-            clusterinst.done()
-            self.status = 'done'
+            if self.status == 'failed':
+                self.state = clusterinst.failed()
+                self.status= 'ok'
+            else:
+                self.state,self.status = clusterinst.done()
 
     @staticmethod
     def buildfromjob(path,script,index):
@@ -152,7 +241,6 @@ class jobdescription(object):
         """
         """
         return jobdescription(ID=ID,status=status)
-
 
 
 class jobspec(object):
@@ -180,25 +268,36 @@ class jobspec(object):
         concrete classes:
           * __setneedenv__
         """
+        # List of enviroment variables that should be defined in the shell
+        # relevants to the job [ (environment_var,command_who_set_this_env), 
+        # .. ]
         self.relevantvar = None
+        # Name of the job type (Athena, ...) similar or probably the same 
+        # as the base class
         self.typealias   = None
-        self.scriptname  = bashscriptname
-        self.jobdescription = []
+        # Name of the job
+        self.jobname     = bashscriptname
+        # Name of the script to be used to send jobs including the suffix 
+        self.scriptname  = bashscriptname+'.sh'
+        # List of jobdescription instances
+        self.joblist     = []
+
         # set the relevant variables used to check the kind
         # of job is
         self.__setneedenv__()
         # Controling that the concrete method set the 'relevantvar'
         # datamember
         notfoundmess = "the __setneedenv__ class implemented in the class"
-        notfoundmess+=" '%s' must inititalize the"
-        notfoundmess+=" datamember '%s'" % self.__class__.__name__
+        notfoundmess+=" '%s' must inititalize the" % self.__class__.__name__
+        notfoundmess+=" datamembers '%s'" 
         if not self.relevantvar:
             raise NotImplementedError(notfoundmess % ('relevantvar'))
         if not self.typealias:
             raise NotImplementedError(notfoundmess % ('typealias'))
         # Check if the enviroment is ok
         isenvset= self.checkenvironment()
-
+        
+        # Just error, send it and exit
         if type(isenvset) is tuple:
             message = "The environment is not ready for sending"
             message +=" an %s job. The environment" % self.typealias
@@ -288,7 +387,7 @@ class clusterspec(object):
     
     Virtual Methods:
      * getjobidfromcommand
-     * getstatusfromcommandline
+     * getstatefromcommandline
      * done
      * failed
      """
@@ -303,13 +402,19 @@ class clusterspec(object):
         
         Virtual Methods:
          * getjobidfromcommand    
-         * getstatusfromcommandline
+         * getstatefromcommandline
          * failed
          * done
         """
+        # Actual command to send jobs to the cluster
         self.sendcom     = None
+        # Extra parameters/option to the command 
         self.extraopt    = []
+        # Actual command to obtain the state of a job
+        # in the cluster
+        self.statecom    = None
         self.statuscom   = None
+        # List of jobdescription instances
         self.joblist     = joblist
 
     def submit(self):
@@ -330,7 +435,8 @@ class clusterspec(object):
         cwd = os.getcwd()
         # Going to directory of sending
         os.chdir(jobdsc.path)
-        # Building the command to send to the shell
+        # Building the command to send to the shell:
+        # which is equivalent to all the cluster job managers
         command = [ self.sendcom ]
         for i in self.extraopt:
             command.append(i)
@@ -347,6 +453,9 @@ class clusterspec(object):
         jobdsc.ID = self.ID
         print "INFO:"+str(jobdsc.script)+'_'+str(jobdsc.index)+\
                 " submitted with cluster ID:"+str(self.ID)
+        # Updating the state and status of the job
+        jobdsc.state  = 'submitted'
+        jobdsc.status = 'ok'
         # Coming back to the original folder
         os.chdir(cwd)
      
@@ -360,29 +469,30 @@ class clusterspec(object):
         raise NotImplementedError("Class %s doesn't implement "\
                 "getjobidfromcommand()" % (self.__class__.__name__))
     
-    def checkstatus(self,jobdsc):
-        """..method:: checkstatus()
+    
+    def checkstate(self,jobdsc):
+        """..method:: checkstate()
         
         function to check the status of a job (running/finalized/
         aborted-failed,...). 
         """
         from subprocess import Popen,PIPE
         import os
-        if jobdsc.status == 'running' or 'submitted':
+        if jobdsc.state == 'running' or 'submitted':
             command = [ self.statuscom, str(jobdsc.ID) ]
             p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
-            return self.getstatusfromcommandline(p)
+            return self.getstatefromcommandline(p)
         else:
-            return jobdsc.status
+            return jobdsc.state,jobdsc.status
 
     @abstractmethod
-    def getstatusfromcommandline(self,p):
-        """..method:: getstatusfromcommandline() -> status
+    def getstatefromcommandline(self,p):
+        """..method:: getstatefromcommandline() -> status
         
         function to obtain the status of a job. Cluster dependent
         """
         raise NotImplementedError("Class %s doesn't implement "\
-                 "getstatusfromcommandline()" % (self.__class__.__name__))
+                 "getstatefromcommandline()" % (self.__class__.__name__))
     
     @abstractmethod
     def failed(self):
@@ -431,10 +541,10 @@ class cerncluster(clusterspec):
         """
         return p.split('<')[-1].split('>')[0]
     
-    def getstatusfromcommandline(self,p):
-        """..method:: checkstatus()
+    def getstatefromcommandline(self,p):
+        """..method:: checkstatus() -> state,status
         
-        function to check the status of a job (running/finalized/
+        function to check the state and status of a job (running/finalized/
         aborted-failed,...).
         """
         # bjobs output
@@ -443,18 +553,19 @@ class cerncluster(clusterspec):
         isfinished=False
         if p[0].find('not found') != -1 or \
                 p[1].find('not found') != -1: 
-            return 'finished'
+            return 'finished','ok'
         elif p[0].find('JOBID') == 0:
             jobinfoline = p[0].split('\n')[-1]
             # Third element
             status = jobinfoline.split()[2]
             if status == 'PEND':
-                return 'submitted'
+                return 'submitted','ok'
             elif status == 'RUN':
-                return 'running'
+                return 'running','ok'
             else:
                 message='I have no idea of the status parsed as "%s"' % status
                 print message
+                return None,'fail'
         else:
             message='I have no idea of the status parsed as "%s"' % p[1]
             raise RuntimeError(message)
@@ -476,7 +587,7 @@ class cerncluster(clusterspec):
         """
         raise NotImplementedError("Class %s doesn't implement "\
                  "checkstatus()" % (self.__class__.__name__))
-
+    
 clusterspec.register(cerncluster)
 
 
@@ -503,16 +614,27 @@ class athenajob(jobspec):
             self.joboption=getrealpaths(joboptionfile)[0]
         except IndexError:
             raise RuntimeError('jobOption file not found %s' % joboptionfile)
-        self.inputfiles=getrealpaths(inputfiles)
+        
+        # JobOptions file
+        self.makecopyJO()
+        
+        # Allowing EOS remote files
+        self.remotefiles=False
+        if inputfiles.find('root://') == -1:
+            self.inputfiles=getrealpaths(inputfiles)
+        else:
+            self.remotefiles=True
+            self.inputfiles,self.evtmax = getremotepaths(inputfiles)
+
         if len(self.inputfiles) == 0:
             raise RuntimeError('Not found the Athena inputfiles: %s' \
                     % inputfiles)
-        self.makecopyJO()
         
         if kw.has_key('evtmax'):
             self.evtmax = int(kw['evtmax'])
         else:
-            self.evtmax = getevt(self.inputfiles,treename='CollectionTree')
+            if not self.remotefiles:
+                self.evtmax = getevt(self.inputfiles,treename='CollectionTree')
 
         if kw.has_key('njobs'):
             self.njobs = int(kw['njobs'])
@@ -561,7 +683,7 @@ class athenajob(jobspec):
         sent to the cluster
         """
         import os
-        # Obtained some previous info 
+        # Obtaining some Athena related-info (asetup,release,...)
         usersetupfolder = self.getuserasetupfolder()
         athenaversion = os.getenv('AtlasVersion')
         compiler      = self.getcompiler()
@@ -573,7 +695,7 @@ class athenajob(jobspec):
 
     def getuserasetupfolder(self):
         """..method:: getuserasetupfolder() -> fullnameuser
-
+        get the asetup folder (where the asetup was launch)
         """
         import os
 
@@ -640,13 +762,17 @@ class athenajob(jobspec):
         # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
         bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
-        f=open(self.scriptname+'.sh',"w")
+        f=open(self.scriptname,"w")
         f.write(bashfile)
         f.close()
-        os.chmod(self.scriptname+'.sh',0755)
+        os.chmod(self.scriptname,0755)
 
     def settingfolders(self,usersetupfolder,athenaversion,gcc):
         """..method:: settingfolders()
+        create the folder structure to launch the jobs: for each job
+        a folder is created following the notation:
+          * AthenaJob_self.jobname_jobdsc.index
+          
         """
         import os
 
@@ -655,7 +781,7 @@ class athenajob(jobspec):
         i=0
         for (skipevts,nevents) in self.skipandperform:
             # create a folder
-            foldername = "%sJob_%s_%i" % (self.typealias,self.scriptname,i)
+            foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
             os.mkdir(foldername)
             os.chdir(foldername)
             # create the local bashscript
@@ -663,9 +789,11 @@ class athenajob(jobspec):
                     version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
             # Registring the jobs in jobdescription class instances
-            self.jobdescription.append( \
-                    jobdescription.buildfromjob(foldername,self.scriptname,i)
+            self.joblist.append( \
+                    jobdescription.buildfromjob(foldername,self.jobname,i)
                     )
+            self.joblist[-1].state = 'configured'
+            self.joblist[-1].status= 'ok'
             os.chdir(cwd)
             i+=1
 
@@ -676,7 +804,7 @@ class athenajob(jobspec):
         :return: List of jobs prepared
         :rtype:  list(jobdescription)        
         """
-        return self.jobdescription
+        return self.joblist
 
     @staticmethod
     def checkfinishedjob(jobdsc):
@@ -695,15 +823,15 @@ class athenajob(jobspec):
         if not os.path.isfile(logout):
             if DEBUG:
                 print "Not found the logout file '%s'" % logout
-            return 'failed'
+            return 'fail'
 
         f = open(logout)
         lines = f.readlines()
         f.close()
         for i in lines:
             if i.find(succesjobcode[-1]) != -1:
-                return 'successed'
-        return 'failed' 
+                return 'ok'
+        return 'fail' 
 
     def sethowtocheckstatus(self):
         """..method:: sethowtocheckstatus()
@@ -852,23 +980,3 @@ jobspec.register(jobsender)
 clusterspec.register(jobsender)
 
 ### -FIXME:: PROVISIONAL---
-def buildfromathenacern(pathregex):
-    """
-    """
-    import os
-    import glob
-    jobdscrlist = []
-    lsfpaths = pathregex+"/LSFJOB_*"
-    jobfolders = glob.glob(lsfpaths)
-    for _i in jobfolders:
-        i = os.path.abspath(_i)
-        try:
-            id = int(i.split('_')[-1])
-        except ValueError:
-            raise RuntimeError('The path should contain LSFJOB_*')
-        path=os.path.split(i)[0]
-        scriptname=os.path.basename(path).split('_')[0]
-        jobdscrlist.append(
-                jobdescription(ID=id,status='submitted',\
-                        path=path,script=scriptname) )
-    return jobdscrlist

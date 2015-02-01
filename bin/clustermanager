@@ -8,9 +8,9 @@
 .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
-DEBUG=False
+DEBUG=True
 JOBEVT=500
-from PyAnUtils.jobssender import athenajob,cerncluster
+from PyAnUtils.jobssender import athenajob,cerncluster,storejobs,retrievejobs
 
 if __name__ == '__main__':
     from optparse import OptionParser,OptionGroup
@@ -48,7 +48,7 @@ if __name__ == '__main__':
                     '_mujets_filtDL_Rmax300.recon.RDO.e3355_s1982_s2008_r5787'\
                     '_tid04569111_00/*.pool.root.*',
                     njobs=300,
-                    workingpath='./*')
+                    workingpath='./')
 
     (opt,args) = parser.parse_args()
     print "================================================================"
@@ -65,40 +65,34 @@ if __name__ == '__main__':
         jobs.preparejobs()
         cern = cerncluster(jobs.getlistofjobs())
         cern.submit()
-        print "Send the jobs using this:"
-        print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
-                "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % \
-                (jobs.scriptname+'.sh')
+        storejobs(jobs,cern)
+
+        #print "Send the jobs using this:"
+        #print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
+        #        "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % \
+        #        (jobs.scriptname+'.sh')
 
     elif args[0] == 'retrieve':
         import os
         import glob
     
-        cern = cerncluster()
+        #cern = cerncluster()
         # This should be done by the cernspec class...: getjobdescription method
         #  O al menos una funcion en el modulo. Nota que hay dos dependencias:
         # la forma en que trabaja el cluster (clusterspec), y la forma en que 
         # fueron guardados los jobs para ser enviados (jobspec)
         print "Searching jobs..."
-        jobdscrlist = []
-        lsfpaths = opt.workingpath+"/LSFJOB_*"
-        jobfolders = glob.glob(lsfpaths)
-        for i in jobfolders:
-            i = os.path.abspath(i)
-            try:
-                id = int(i.split('_')[-1])
-            except ValueError:
-                raise RuntimeError('The path should contain LSFJOB_*')
-            path = os.path.split(i)[0]
-            scriptname=os.path.basename(path).split('_')[1]
-            jobnumber =os.path.basename(path).split('_')[-1]
-            jobdscrlist.append( jobdescription(ID=id,status='submitted',
-                path=path,script=scriptname) )
-            print ("Checking status %s_%s " % (scriptname,jobnumber)),
-            while jobdscrlist[-1].status == 'submitted' or \
-                    jobdscrlist[-1].status == 'finished':
-                jobdscrlist[-1].getnextstatus(cern,athenajob.checkfinishedjob)
-            print "[%s]" % jobdscrlist[-1].status
+        try:
+            shfile = glob.glob(opt.workingpath+'.presentjobs')[0]
+        except IndexError:
+            raise RuntimeError('Not found jobs in the folder "%s"(, '\
+                ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
+        jspec,clspec = retrievejobs(shfile)
+        for jdsc in jspec.getlistofjobs():
+            if DEBUG:
+                print "--Job [%s]::State: %s, Status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
+            jdsc.getnextstate(clspec,jspec.checkfinishedjob)
+        storejobs(jspec,clspec)
     else:
         raise RuntimeError('Not valid argument "%s".'\
                 ' Valid args: send|retrieve' % args[0])
