@@ -539,7 +539,7 @@ class cerncluster(clusterspec):
         function to obtain the job-ID from the cluster command
         when it is sended (using sendcom)
         """
-        return p.split('<')[-1].split('>')[0]
+        return int(p.split('Job')[-1].split('<')[1].split('>')[0])
     
     def getstatefromcommandline(self,p):
         """..method:: checkstatus() -> state,status
@@ -555,7 +555,7 @@ class cerncluster(clusterspec):
                 p[1].find('not found') != -1: 
             return 'finished','ok'
         elif p[0].find('JOBID') == 0:
-            jobinfoline = p[0].split('\n')[-1]
+            jobinfoline = p[0].split('\n')[1]
             # Third element
             status = jobinfoline.split()[2]
             if status == 'PEND':
