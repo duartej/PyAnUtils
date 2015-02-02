@@ -76,11 +76,6 @@ if __name__ == '__main__':
         import os
         import glob
     
-        #cern = cerncluster()
-        # This should be done by the cernspec class...: getjobdescription method
-        #  O al menos una funcion en el modulo. Nota que hay dos dependencias:
-        # la forma en que trabaja el cluster (clusterspec), y la forma en que 
-        # fueron guardados los jobs para ser enviados (jobspec)
         print "Searching jobs..."
         try:
             shfile = glob.glob(opt.workingpath+'.presentjobs')[0]
@@ -93,6 +88,18 @@ if __name__ == '__main__':
                 print "--Job [%s]::State: %s, Status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
             jdsc.getnextstate(clspec,jspec.checkfinishedjob)
         storejobs(jspec,clspec)
+    #elif args[0] == 'kill':
+    #    print "Searching jobs..."
+    #    try:
+    #        shfile = glob.glob(opt.workingpath+'.presentjobs')[0]
+    #    except IndexError:
+    #        raise RuntimeError('Not found jobs in the folder "%s"(, '\
+    #            ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
+    #    jspec,clspec = retrievejobs(shfile)
+    #    for jdsc in jspec.getlistofjobs():
+    #        if DEBUG:
+    #            print "--Job [%s]::Killing it..." % (str(jdsc.index))
+    #        clspec.kill(jdsc)
     else:
         raise RuntimeError('Not valid argument "%s".'\
                 ' Valid args: send|retrieve' % args[0])
