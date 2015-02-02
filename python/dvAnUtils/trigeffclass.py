@@ -41,7 +41,7 @@ TEXTSIZE = 0.03
 
 DEFAULTBINNING = { 'eta': (100,-5,5), 'phi': (100,-3.1415,3.1415),
     'betagamma': (100,0,20),
-    'nTrk4mm':   (51,0,50),
+    'nTrk4mm':   (41,0,40),
     'genpfromdv_pdgId':   (1000,-2300,2300),
     'genpfromdv_eta': (100,-5,5), 'genpfromdv_phi': (100,-3.1415,3.1415),
     'genpfromdv_pt':  (100,0,200),
@@ -49,10 +49,16 @@ DEFAULTBINNING = { 'eta': (100,-5,5), 'phi': (100,-3.1415,3.1415),
     'dv_X':  (200,-300,300), 'dv_Y': (200,-300,300), 'dv_Z': (200,-1500,1500),
     'vx_LSP':  (200,-0.8,0.8), 'vy_LSP': (200,-0.8,0.8), 'vz_LSP': (200,-200,200),
     'nTrk':  (101,0,100), 
+    'Dtdv': (50,0,300),
+    'Drdv': (50,0,300),
+    'Dzdv': (50,0,300),
+    'tdv': (50,0,300),
+    'zdv': (50,0,300),
+    'rdv': (50,0,300),
     }
 
-DEFAULTXTITLE = { 'Dtdv': 'r_{DV} [mm]' ,
-                'Dzdv': 'r_{z} [mm]',
+DEFAULTXTITLE = { 'Dtdv': 'XY_{DV} [mm]' ,
+                'Dzdv': 'z_{DV} [mm]',
                 'Drdv': 'radial distance [mm]',
                 'tdv': 'transverse r_{DV} [mm]', 'zdv': 'longitudinal r_{DV} [mm]', 'rdv': 'r_{DV} [mm]',
                 'eta': '#eta_{DV}', 'phi': '#phi_{DV}', 'betagamma': '#beta#gamma_{DV}',
@@ -108,12 +114,12 @@ class effsv(object):
                         ]             
 
         self.__extravars__ = [ 'eta','phi','betagamma',         # Kinematics of the DVs
-                'nTrk4mm',                       # Number of status-1 genparticles 
+                'nTrk4mm']#,                       # Number of status-1 genparticles 
                                                  # decayed from the DVs (in a 4mm radius)
-                'pdgId_g',                       # Gen particles inside the 4mm radius
-                'eta_g','phi_g','pt_g',          # Kinematics of these particles
-                'vx_g','vy_g','vz_g',
-                ]
+                #'pdgId_g',                       # Gen particles inside the 4mm radius
+                #'eta_g','phi_g','pt_g',          # Kinematics of these particles
+                #'vx_g','vy_g','vz_g',
+                #]
         # bins, xmin,xmax 
         self.__defaults__ = DEFAULTBINNING
 
@@ -125,6 +131,10 @@ class effsv(object):
                 'tdv': 'Distance of the DV in the XY plane', 
                 'zdv': 'Distance of the DV in the Z-axis',
                 'rdv': 'Distance of the DV',
+                'eta': 'pseudo-rapidity of LSP',
+                'phi': 'azimuthal angle of LSP',
+                'betagamma': '#beta#gamma of LSP',
+                'nTrk4mm': 'number of tracks (undecayed status-1) around < 4mm of DV',
                 }
         # Efficiencies       
         self.__effs__ = {}
@@ -134,13 +144,17 @@ class effsv(object):
             # Each variable is associated with a dictionary of the trigger chains availables 
             # { 'var1': { 'trpath1': TEfficiency, 'trpath2': TEfficiency, ....}, ... } 
             for i in self.__var__:
+                _xbins= self.__defaults__[i][0]
+                _xmin = self.__defaults__[i][1]
+                _xmax = self.__defaults__[i][2]
                 self.__effs__[i] = dict(map(lambda x:
-                    (x,ROOT.TEfficiency(self.geteffname(x,i),'',self._xbins,self._xmin,self._xmax)),
-                      trnameslist))
+                    (x,ROOT.TEfficiency(self.geteffname(x,i),'',_xbins,_xmin,_xmax)),
+                            trnameslist))
                 ## -- And the OR key
-                self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',self._xbins,self._xmin,self._xmax)
+                self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',_xbins,_xmin,_xmax)
+            # Could be put in the previous for
             if self.extravareff:
-                for i in self.__var__:
+                for i in self.__extravars__:
                     _bins = self.__defaults__[i][0]
                     _xmin = self.__defaults__[i][1]
                     _xmax = self.__defaults__[i][2]
@@ -212,6 +226,9 @@ class effsv(object):
         Fill the efficiency object defined by the 'trname' and the 
         variable 'varname' using the values 'decision' and 'varvalues'
         """
+        # Just filling variables pre-defined
+        if varname not in self.__effs__.keys():
+            return
         self.__effs__[varname][trname].Fill(decission,varvalue)
     
     def setplotsuffix(self,suffix):
@@ -236,8 +253,10 @@ class effsv(object):
         lstyle.cd()
         ROOT.gROOT.SetBatch()
         
+        _xmin=self.__defaults__[varname][1]
+        _xmax=self.__defaults__[varname][2]
         c = ROOT.TCanvas()
-        h = c.DrawFrame(self._xmin,0.0,self._xmax,1.0)
+        h = c.DrawFrame(_xmin,0.0,_xmax,1.0)
         h.SetXTitle(self.__xtitle__[varname])
         h.SetYTitle('#varepsilon_{MC}')
         h.SetTitle('[%s] %s' % (trname,self.__title__[varname]))
@@ -260,8 +279,10 @@ class effsv(object):
         lstyle.cd()
         ROOT.gROOT.SetBatch()
         
+        _xmin=self.__defaults__[varname][1]
+        _xmax=self.__defaults__[varname][2]
         c = ROOT.TCanvas()
-        h = c.DrawFrame(self._xmin,0,self._xmax,1.0)
+        h = c.DrawFrame(_xmin,0,_xmax,1.0)
         h.SetXTitle(self.__xtitle__[varname])
         h.SetYTitle('#varepsilon_{MC}')
         #h.SetTitle(trname)
@@ -281,7 +302,7 @@ class effsv(object):
             legend.AddEntry(self.__effs__[varname][trname],trname,'PL')
             self.__effs__[varname][trname].Draw("PSAME")
             _j += 1
-        drawlegend(legend,'CENTER',0.90)
+        drawlegend(legend,'RIGHT',0.40)
         c.SaveAs('eff_GroupedTriggers'+'_'+varname+self.plotsuffix)
 
 
@@ -521,7 +542,7 @@ class storedeff(object):
         """
         return self.nentries
 
-    def filleff(self,trgdecdict,effsvinst,ignorematching=False):
+    def filleff(self,trgdecdict,effsvinst,ignorematching=False,**kw):
         """..function:: filleff(trgdecdic,effsvinst[,ignoremathcing=True]) 
 
         The function fills the efficiencies with respect the variables 
@@ -546,8 +567,12 @@ class storedeff(object):
                                performed
         :type  ignorematching: bool                           
         """
+        if kw.has_key('extra'):
+            extra = True
+        else:
+            extra = False
         # Get the list of MC info related with the DV
-        sv = self.getmctruthinfo()
+        sv = self.getmctruthinfo(extra)
         # Getting the OR of all  the triggers
         trigdecOR = False
         for (tragname,trgdec) in trgdecdict.iteritems():
@@ -650,13 +675,13 @@ class rpvmcinfo(storedeff):
                 sv[-1]['eta'] = t.eta[i]
                 sv[-1]['phi'] = t.phi[i]
                 sv[-1]['betagamma'] = t.betagamma[i]
-                sv[-1]['nTrk4mm_g'] = t.nTrk4mm[i]
-                sv[-1]['pdgId_g'] = t.genfromdv_pdgId[i]
-                sv[-1]['eta_g']   = t.genfromdv_eta[i]
-                sv[-1]['phi_g']   = t.genfromdv_phi[i]
-                sv[-1]['pt_g']    = t.genfromdv_pt[i]
-                sv[-1]['vx_g']    = t.genfromdv_vx[i]
-                sv[-1]['vy_g']    = t.genfromdv_vy[i]
-                sv[-1]['vz_g']    = t.genfromdv_vz[i]
+                sv[-1]['nTrk4mm'] = t.nTrk4mm[i]
+                sv[-1]['pdgId_g'] = t.genpfromdv_pdgId[i]
+                sv[-1]['eta_g']   = t.genpfromdv_eta[i]
+                sv[-1]['phi_g']   = t.genpfromdv_phi[i]
+                sv[-1]['pt_g']    = t.genpfromdv_pt[i]
+                sv[-1]['vx_g']    = t.genpfromdv_vx[i]
+                sv[-1]['vy_g']    = t.genpfromdv_vy[i]
+                sv[-1]['vz_g']    = t.genpfromdv_vz[i]
         return sv
 

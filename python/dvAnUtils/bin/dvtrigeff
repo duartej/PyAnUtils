@@ -110,7 +110,7 @@ def create(folder,opt):
     #trarrays = setuptree(t,trnames)
     #eff = dict(map(lambda x: (x,0),trarrays.keys()))
     # Init efficiencies instance
-    effwrtsv = effsv(trnames)
+    effwrtsv = effsv(trnames,extravareff=opt.extravars)
     # loop over the entries
     nentries = rpvmc.getentries()
     print "Processing %i events" % nentries
@@ -126,7 +126,7 @@ def create(folder,opt):
         for trname in trnames:
             trgdecisions[trname] = rpvmc.get(trname)
         # Do it once per event, not re-looping for each trigger
-        rpvmc.filleff(trgdecisions,effwrtsv,ignorematching)
+        rpvmc.filleff(trgdecisions,effwrtsv,ignorematching,extra=opt.extravars)
     # Some summary statistics
     effwrtsv.showresults()
     # Saving info
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     parser = OptionParser(usage)
     parser.set_defaults(outputfile='output.root',\
             varlist='Dtdv',extracttrlist=False,activatematching=False,suffixplot='.png',
-            extraplots=False)
+            extraplots=False,extravars=False,kinvar=False)
 
     createopt = OptionGroup(parser,"Create options","Options to be used when the program is sent using"\
                " 'create' argument. Note that this arguments needs the ROOTFILESPATH argument, the"\
@@ -178,6 +178,8 @@ if __name__ == '__main__':
     createopt.add_option( '-m', '--matching', action='store_true', \
             dest = 'activatematching',help='The matching between a trigger object and the '\
               'MC-displaced vertex tracks are checked')
+    createopt.add_option( '-x', '--extravars', action='store_true', \
+            dest = 'extravars',help='Includes efficiencies with respect extravariables')
     createopt.add_option( '-e', '--extraplots', action='store_true', \
             dest = 'extraplots',help='Perform some extra plots related to the events, kinematics and'\
               ' more')
@@ -192,6 +194,8 @@ if __name__ == '__main__':
             dest = 'varlist',help='List of variables to be used by the "-p" option.')
     plotopt.add_option( '-l', '--triggerlist', action='store_true', \
             dest = 'extracttrlist',help='Just show the available triggers in the file and exit')
+    plotopt.add_option( '-k', '--kinvar', action='store_true', \
+            dest = 'kinvar',help='Perform also efficiencies w.r.t. kinematic variables from DV')
     plotopt.add_option( '-s', '--suffixplot', action='store', \
             dest = 'suffixplot',help='Format to used in the plots')
     parser.add_option_group(plotopt)
