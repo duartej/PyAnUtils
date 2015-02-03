@@ -73,9 +73,17 @@ def getremotepaths(remoteinputfiles):
     remoteserver = remoteinputfiles.split('//')[1]
     inputfiles = remoteinputfiles.replace(protocol+'//'+remoteserver+'//','')
     mountpoint = inputfiles.split('/')[0]
-    os.mkdir('eos')
+    if mountpoint.find('/') != -1:
+        # SANITY CHECK
+        raise RuntimeError('Probably problem with the input files. If you'\
+                ' are using a EOS sample, the format is:\n'\
+                '     root://eosserver//whateverpath\n'\
+                'NOTE the double slash!! (//)')
+
+    #os.mkdir('eos') -- Not needed eosmount takes care of it
     # Note that eosmount is an alias (don't like too much this... but)
     # Anyway it's needed the shell
+    # FIXME:: NOTE THAT IS DEPENDENT OF THE EOS CLIENT VERSION!!
     eosmount = '/afs/cern.ch/project/eos/installation/0.3.84-aquamarine/'\
             'bin/eos.select -b fuse mount'
     command = eosmount+' '+mountpoint+'/' 
@@ -203,7 +211,7 @@ class jobdescription(object):
             setattr(self,_var,_value)
 
     def getnextstate(self,clusterinst,checkfinishedjob):
-        """..method:: getnextstatus() -> nextstatus
+        """..method:: getnextstate() -> nextstate
 
         The life of a job follows a clear workflow:
         None -> submitted -> running -> |  (finished) 
@@ -386,6 +394,7 @@ class clusterspec(object):
     of a cluster commands, environments,...
     
     Virtual Methods:
+     * simulatedresponse (debugging method)
      * getjobidfromcommand
      * getstatefromcommandline
      * done
@@ -401,11 +410,16 @@ class clusterspec(object):
         of a cluster commands, environments,...
         
         Virtual Methods:
+         * simulatedresponse (debugging method)
          * getjobidfromcommand    
          * getstatefromcommandline
          * failed
          * done
         """
+        # If true, do not interact with the cluster, just for debugging
+        self.simulate = False
+        if kw.has_key('simulate'):
+            self.simulate=kw['simulate']
         # Actual command to send jobs to the cluster
         self.sendcom     = None
         # Extra parameters/option to the command 
@@ -442,7 +456,11 @@ class clusterspec(object):
             command.append(i)
         command.append(jobdsc.script+'.sh')
         # Send the command
-        p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+        if self.simulate:
+            p = self.simulatedresponse('submit')
+        else:
+            p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+
         if p[1] != "":
             message = "ERROR from %i:\n" % self.sendcom
             message += p[1]+"\n"
@@ -458,7 +476,48 @@ class clusterspec(object):
         jobdsc.status = 'ok'
         # Coming back to the original folder
         os.chdir(cwd)
-     
+    
+    def getnextstate(self,jobdsc,checkfinishedjob):
+        """..method:: getnextstate() -> nextstate
+
+        The life of a job follows a clear workflow:
+        None -> submitted -> running -> |  (finished) 
+                                        |-+ failed    -->  submitted
+                                        |-+ successed -->  Done
+        Better::: using states and status
+        |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
+
+        status: OK (no problems), Failed (any problem found)
+        
+        """
+        # Sure, do I want to submit it without asking?
+
+        # Not configured yet, do nothing explicitly, 
+        if not jobdsc.state:
+            print "Job not configured yet, you should call the"\
+                    " jobspec.preparejobs method"            
+        elif self.state == 'submitted' or self.state == 'running':
+            jobdsc.state,jobdsc.status=self.checkstate(jobdsc)
+        elif self.state == 'finished':
+            self.status = checkfinishedjob(self)
+            if self.status == 'failed':
+                self.state = clusterinst.failed()
+                self.status= 'ok'
+            else:
+                self.state,self.status = clusterinst.done()
+
+    
+    @abstractmethod
+    def simulatedresponse(self,action):
+        """..method:: simulatedresponse() -> clusterresponse
+        DO NOT USE this function, just for debugging proporses
+        method used to simulate the cluster response when an
+        action command is sent to the cluster, in order to 
+        proper progate the subsequent code.
+        """
+        raise NotImplementedError("Class %s doesn't implement "\
+                "simulatedresponse()" % (self.__class__.__name__))
+    
     @abstractmethod
     def getjobidfromcommand(self,p):
         """..method:: getjobidfromcommand()
@@ -478,9 +537,12 @@ class clusterspec(object):
         """
         from subprocess import Popen,PIPE
         import os
-        if jobdsc.state == 'running' or 'submitted':
+        if 'submitted' or 'running':
             command = [ self.statuscom, str(jobdsc.ID) ]
-            p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+            if self.simulate:
+                p = self.simulatedresponse('check')
+            else:
+                p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
             return self.getstatefromcommandline(p)
         else:
             return jobdsc.state,jobdsc.status
@@ -533,6 +595,41 @@ class cerncluster(clusterspec):
         self.statuscom = 'bjobs'
         self.extraopt  += [ '-q','8nh' ]
     
+    def simulatedresponse(self,action):
+        """..method:: simulatedresponse() -> clusterresponse
+        DO NOT USE this function, just for debugging proporses
+        method used to simulate the cluster response when an
+        action command is sent to the cluster, in order to 
+        proper progate the subsequent code.
+        """
+        import random
+
+        if action == 'submit':
+            i=xrange(0,9)
+            z=''
+            for j in random.sample(i,len(i)):
+                z+=str(j)
+            return ("Job SIMULATED-RESPONSE <%s>" % (z),"")
+        elif action == 'check':
+            potentialstate = [ 'submitted', 'running', 'finished', 'aborted',
+                    'submitted','running','finished', 'running', 'finished',
+                    'running', 'finished', 'finished', 'finished' ]
+            # using random to choose which one is currently the job, biasing
+            # to finished and trying to keep aborted less probable
+            simstate = random.choice(potentialstate)
+            if simstate == 'submitted':
+                mess = ("JOBID <123456789>:\njob status PEND","")
+            elif simstate == 'running':
+                mess = ("JOBID <123456789>:\njob status RUN","")
+            elif simstate == 'finished':
+                mess =  ("Job <123456789> is not found","Job <123456789> is not found")
+            elif simstate = 'aborted':
+                mess ("","")
+            return mess
+        else:
+            raise RuntimeError('Undefined action "%s"' % action)
+
+
     def getjobidfromcommand(self,p):
         """..method:: getjobidfromcommand()
         
@@ -563,12 +660,34 @@ class cerncluster(clusterspec):
             elif status == 'RUN':
                 return 'running','ok'
             else:
-                message='I have no idea of the status parsed as "%s"' % status
+                message='I have no idea of the state parsed in the cluster"\
+                        " as "%s". Parser should be updated' % status
+                message+='WARNING: forcing "None" state'
                 print message
                 return None,'fail'
         else:
-            message='I have no idea of the status parsed as "%s"' % p[1]
-            raise RuntimeError(message)
+            message='No interpretation yet of the message (%s,%s).' % (p[0],p[1])
+            message+='Cluster message parser needs to be updated'
+            message+='(athenajob.getstatefromcommandline method).'
+            message+='\nWARNING: forcing "aborted" state'
+            print message
+            return 'aborted','fail'
+
+    def setjobstate(self,jobds,command):
+        """..method:: setjobstate(jobds,action) 
+        establish the state (and status) of the jobds ('jobdescription' 
+        instance) associated to this clusterspec instance, depending
+        of the 'command' being executed
+        """
+        if commad == 'configuring':
+            self.joblist[-1].state   = 'configured'
+            self.joblist[-1].status  = 'ok'
+            self.joblist[-1].jobspec = self
+        elif command == 'submitting':
+            self.joblist[-1].state   = 'submit'
+            self.joblist[-1].status  = 'ok'
+        else:
+            raise RuntimeError('Unrecognized command "%s"' % command)
     
     def failed(self):
         """..method:: checkstatus()
@@ -580,10 +699,8 @@ class cerncluster(clusterspec):
                  "checkstatus()" % (self.__class__.__name__))
 
     def done(self):
-        """..method:: checkstatus()
-        
-        function to check the status of a job (running/finalized/
-        aborted-failed,...). Depend on the type of cluster
+        """..method:: done()
+        steering the actions to be done when
         """
         raise NotImplementedError("Class %s doesn't implement "\
                  "checkstatus()" % (self.__class__.__name__))
@@ -792,8 +909,7 @@ class athenajob(jobspec):
             self.joblist.append( \
                     jobdescription.buildfromjob(foldername,self.jobname,i)
                     )
-            self.joblist[-1].state = 'configured'
-            self.joblist[-1].status= 'ok'
+            self.setjobstate(self.joblist[-1],'configuring')
             os.chdir(cwd)
             i+=1
 

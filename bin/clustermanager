@@ -22,6 +22,8 @@ if __name__ == '__main__':
     parser.add_option('-b','--bashname',action='store',dest='bashname',
             help='name of the bash script without extension (the script'+\
                     ' used to send the job, which defines also the name of the job')
+    parser.add_option('-s','--dry-run',action='store_true',dest='dryrun',
+            help='Simulate the action but does not send the commands to the cluster')
 
     sendopt= OptionGroup(parser,"Send mode options",
             "Options valid only when it is called with 'send' arg")
@@ -41,7 +43,7 @@ if __name__ == '__main__':
             help="Path to the folder where the jobs were sent")
     parser.add_option_group(retropt)
 
-    parser.set_defaults(bashname='clusterRPVMCInfoDVMuons',
+    parser.set_defaults(bashname='clusterRPVMCInfoDVMuons',dryrun=False,
             joboption='testBjetSliceAthenaTrigRDO.py',
             filenames = '/afs/cern.ch/user/d/duarte/work/public/datasets/'\
                     'mc14_13TeV.177568.Pythia_AUET2BCTEQ6L1_RPV_vtx2_LSP100'\
@@ -63,7 +65,7 @@ if __name__ == '__main__':
         jobs = athenajob(opt.bashname,opt.joboption,opt.filenames,
                 njobs=opt.njobs)
         jobs.preparejobs()
-        cern = cerncluster(jobs.getlistofjobs())
+        cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun)
         cern.submit()
         storejobs(jobs,cern)
 
