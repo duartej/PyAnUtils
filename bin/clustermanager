@@ -80,7 +80,7 @@ if __name__ == '__main__':
     
         print "Searching jobs..."
         try:
-            shfile = glob.glob(opt.workingpath+'.presentjobs')[0]
+            shfile = glob.glob(os.path.join(opt.workingpath,'.presentjobs'))[0]
         except IndexError:
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
