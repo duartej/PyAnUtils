@@ -112,12 +112,11 @@ if __name__ == '__main__':
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
         jspec,clspec = accessingjobsinfo(shfile)
         if not opt.joblisttokill:
-            indexjobstobekilled = jspec.getlistofjobs()
+            indexjobstobekilled = map(lambda x: x.index,jspec.getlistofjobs())
         else:
-            indexjobstobekilled  = opt.joblisttokill
-
+            indexjobstobekilled  = map(lambda x: int(x),opt.joblisttokill.split(','))
         jobstobekill = filter(lambda x: x.index in indexjobstobekilled,jspec.getlistofjobs())
-        print "%s" % str(jobstobekill)
+        print "%s" % str(map(lambda x: x.index,jobstobekill))
         for jdsc in jobstobekill:
             clspec.kill(jdsc)
         bookeepingjobs(jspec,clspec)

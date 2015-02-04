@@ -539,7 +539,7 @@ class clusterspec(object):
             jobdsc.state  = 'configured'
             jobdsc.status = 'ok'
         else:
-            print "WARNING::JOB [%s] not in running state, kill has no sense" % jobdsc.ID
+            print "WARNING::JOB [%s] not in running state, kill has no sense" % jobdsc.index
 
 
     @abstractmethod
