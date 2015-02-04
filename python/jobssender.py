@@ -210,34 +210,6 @@ class jobdescription(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    #def getnextstate(self,clusterinst,checkfinishedjob):
-    #    """..method:: getnextstate() -> nextstate
-
-    #    The life of a job follows a clear workflow:
-    #    None -> submitted -> running -> |  (finished) 
-    #                                    |-+ failed    -->  submitted
-    #                                    |-+ successed -->  Done
-    #    Better::: using states and status
-    #    |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
-
-    #    status: OK (no problems), Failed (any problem found)
-    #    
-    #    """
-    #    # Sure, do I want to submit it without asking?
-    #    if not self.state:
-    #        clusterinst.submit()
-    #        self.state  = 'submitted'
-    #        self.status = 'ok'
-    #    elif self.state == 'submitted' or self.state == 'running':
-    #        self.state,self.status=clusterinst.checkstate(self)
-    #    elif self.state == 'finished':
-    #        self.status = checkfinishedjob(self)
-    #        if self.status == 'failed':
-    #            self.state = clusterinst.failed()
-    #            self.status= 'ok'
-    #        else:
-    #            self.state,self.status = clusterinst.done()
-
     @staticmethod
     def buildfromjob(path,script,index):
         """
@@ -497,8 +469,8 @@ class clusterspec(object):
                     self.status = self.simulatedresponse('finishing')
                 else:
                     jobdsc.status = checkfinishedjob(jobdsc)
-        elif jobdsc.state == 'finished':
-            print '  Job[%s] Finished with status %s' % (jobdsc.index,jobdsc.status)
+        #elif jobdsc.state == 'finished':
+        #    print '   Finished with status %s' % (jobdsc.status)
         #elif jobdsc.state == 'finished':
         #    jobdsc.status = checkfinishedjob(jobdsc)
         #    if jobdsc.status == 'ok':

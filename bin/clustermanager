@@ -86,9 +86,8 @@ if __name__ == '__main__':
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
         jspec,clspec = accessingjobsinfo(shfile)
         for jdsc in jspec.getlistofjobs():
-            if DEBUG:
-                print "--Job [%s]::State: %s, Status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
             clspec.getnextstate(jdsc,jspec.checkfinishedjob)
+            print "INFO::JOB [%s] state: %s, status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
             # Check the state and status and act as consequence
             #clspec.gonextstate(jdsc)
         bookeepingjobs(jspec,clspec)
