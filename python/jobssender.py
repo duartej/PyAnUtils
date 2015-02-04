@@ -399,7 +399,7 @@ class clusterspec(object):
         # Actual command to obtain the state of a job
         # in the cluster
         self.statecom    = None
-        self.statuscom   = None
+        self.killcom     = None
         # List of jobdescription instances
         self.joblist     = joblist
 
@@ -505,10 +505,10 @@ class clusterspec(object):
         """
         from subprocess import Popen,PIPE
         import os
-        if 'submitted' or 'running':
-            command = [ self.statuscom, str(jobdsc.ID) ]
+        if jobdsc.state == 'submitted' or jobdsc.state == 'running':
+            command = [ self.statecom, str(jobdsc.ID) ]
             if self.simulate:
-                p = self.simulatedresponse('check')
+                p = self.simulatedresponse('checking')
             else:
                 p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
             return self.getstatefromcommandline(p)
@@ -524,6 +524,24 @@ class clusterspec(object):
         raise NotImplementedError("Class %s doesn't implement "\
                  "getstatefromcommandline()" % (self.__class__.__name__))
     
+    def kill(self,jobdsc):
+        """..method:: kill()
+        method to kill running-state jobs.
+        """
+        from subprocess import Popen,PIPE
+        import os
+        if jobdsc.state == 'running':
+            command = [ self.killcom, str(jobdsc.ID) ]
+            if self.simulate:
+                p = self.simulatedresponse('killing')
+            else:
+                p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+            jobdsc.state  = 'configured'
+            jobdsc.status = 'ok'
+        else:
+            print "WARNING::JOB [%s] not in running state, kill has no sense" % jobdsc.ID
+
+
     @abstractmethod
     def failed(self):
         """..method:: failed()
@@ -558,7 +576,8 @@ class cerncluster(clusterspec):
         """
         super(cerncluster,self).__init__(joblist,**kw)
         self.sendcom   = 'bsub'
-        self.statuscom = 'bjobs'
+        self.statecom  = 'bjobs'
+        self.statuskill= 'bkill'
         self.extraopt  += [ '-q','8nh' ]
     
     def simulatedresponse(self,action):
@@ -576,7 +595,7 @@ class cerncluster(clusterspec):
             for j in random.sample(i,len(i)):
                 z+=str(j)
             return ("Job SIMULATED-RESPONSE <%s>" % (z),"")
-        elif action == 'check':
+        elif action == 'checking':
             potentialstate = [ 'submitted', 'running', 'finished', 'aborted',
                     'submitted','running','finished', 'running', 'finished',
                     'running', 'finished', 'finished', 'finished' ]
@@ -595,6 +614,8 @@ class cerncluster(clusterspec):
         elif action == 'finishing':
             simstatus = [ 'ok','ok','ok','fail','ok','ok','ok']
             return random.choice(simstatus)
+        elif action == 'killing':
+            return 'configured','ok'
         else:
             raise RuntimeError('Undefined action "%s"' % action)
 

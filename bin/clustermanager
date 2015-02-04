@@ -39,9 +39,9 @@ if __name__ == '__main__':
             help="Number of events to be processed")
     parser.add_option_group(sendopt)
 
-    retropt= OptionGroup(parser,"Retrieve mode options",
-            "Options valid only when it is called with 'retrieve' arg")
-    parser.add_option_group(retropt)
+    #retropt= OptionGroup(parser,"Retrieve mode options",
+    #        "Options valid only when it is called with 'retrieve' arg")
+    #parser.add_option_group(retropt)
     
     killopt= OptionGroup(parser,"Kill job mode options",
             "Options valid only when it is called with 'kill' arg")
@@ -102,23 +102,24 @@ if __name__ == '__main__':
         bookeepingjobs(jspec,clspec)
         
     elif args[0] == 'kill':
-        try:
-            jobstobekilled=args[1].split(',')
-        except IndexError:
-            #taking all available jobs
-            jobstobekilled=None
-        print "Searching jobs..."
+        import glob
+
+        print "Searching jobs to be killed...",
         try:
             shfile = glob.glob(os.path.join(opt.workingpath,'.presentjobs'))[0]
         except IndexError:
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
         jspec,clspec = accessingjobsinfo(shfile)
-        if not jobstobekilled:
-            jobstobekilled = jspec.getlistofjobs()
-        for jdsc in jspec.getlistofjobs():
+        if not opt.joblisttokill:
+            indexjobstobekilled = jspec.getlistofjobs()
+        else:
+            indexjobstobekilled  = opt.joblisttokill
+
+        jobstobekill = filter(lambda x: x.index in indexjobstobekilled,jspec.getlistofjobs())
+        print "%s" % str(jobstobekill)
+        for jdsc in jobstobekill:
             clspec.kill(jdsc)
-            print "INFO::JOB [%s] state: %s, status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
         bookeepingjobs(jspec,clspec)
     else:
         raise RuntimeError('Not valid argument "%s".'\
