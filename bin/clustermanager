@@ -16,9 +16,11 @@ if __name__ == '__main__':
     from optparse import OptionParser,OptionGroup
     import os
 
-    usage  = "usage: %prog <send|retrieve> [options]"
+    usage  = "usage: %prog <send|retrieve|kill> [options]"
     parser = OptionParser(usage=usage)
 
+    parser.add_option("-w","--workingpath",action="store",dest="workingpath",\
+            help="Prepare/send the jobs in this path")
     parser.add_option('-b','--bashname',action='store',dest='bashname',
             help='name of the bash script without extension (the script'+\
                     ' used to send the job, which defines also the name of the job')
@@ -39,9 +41,14 @@ if __name__ == '__main__':
 
     retropt= OptionGroup(parser,"Retrieve mode options",
             "Options valid only when it is called with 'retrieve' arg")
-    retropt.add_option("-w","--workingpath",action="store",dest="workingpath",\
-            help="Path to the folder where the jobs were sent")
     parser.add_option_group(retropt)
+    
+    killopt= OptionGroup(parser,"Kill job mode options",
+            "Options valid only when it is called with 'kill' arg")
+    killopt.add_option("-l","--list",action="store",dest="joblisttokill",\
+            help="List of jobs to be killed, if this option is not activated"\
+                " all running jobs will be killed")
+    parser.add_option_group(killopt)
 
     parser.set_defaults(bashname='clusterRPVMCInfoDVMuons',dryrun=False,
             joboption='testBjetSliceAthenaTrigRDO.py',
@@ -62,20 +69,22 @@ if __name__ == '__main__':
         raise RuntimeError('%prog must be called either with "send|retrieve"'\
                 ' arguments')
     if args[0] == 'send':
+        cwd = os.getcwd()
+        os.chdir(os.path.abspath(opt.workingpath))
+
         jobs = athenajob(opt.bashname,opt.joboption,opt.filenames,
                 njobs=opt.njobs)
         jobs.preparejobs()
         cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun)
         cern.submit()
         bookeepingjobs(jobs,cern)
-
         #print "Send the jobs using this:"
         #print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
         #        "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % \
-        #        (jobs.scriptname+'.sh')
+        #        (jobs.scriptname+'.sh')a
+        os.chdir(cwd)
 
     elif args[0] == 'retrieve':
-        import os
         import glob
     
         print "Searching jobs..."
@@ -92,18 +101,25 @@ if __name__ == '__main__':
             #clspec.gonextstate(jdsc)
         bookeepingjobs(jspec,clspec)
         
-    #elif args[0] == 'kill':
-    #    print "Searching jobs..."
-    #    try:
-    #        shfile = glob.glob(opt.workingpath+'.presentjobs')[0]
-    #    except IndexError:
-    #        raise RuntimeError('Not found jobs in the folder "%s"(, '\
-    #            ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
-    #    jspec,clspec = accesingjobsinfo(shfile)
-    #    for jdsc in jspec.getlistofjobs():
-    #        if DEBUG:
-    #            print "--Job [%s]::Killing it..." % (str(jdsc.index))
-    #        clspec.kill(jdsc)
+    elif args[0] == 'kill':
+        try:
+            jobstobekilled=args[1].split(',')
+        except IndexError:
+            #taking all available jobs
+            jobstobekilled=None
+        print "Searching jobs..."
+        try:
+            shfile = glob.glob(os.path.join(opt.workingpath,'.presentjobs'))[0]
+        except IndexError:
+            raise RuntimeError('Not found jobs in the folder "%s"(, '\
+                ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
+        jspec,clspec = accessingjobsinfo(shfile)
+        if not jobstobekilled:
+            jobstobekilled = jspec.getlistofjobs()
+        for jdsc in jspec.getlistofjobs():
+            clspec.kill(jdsc)
+            print "INFO::JOB [%s] state: %s, status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
+        bookeepingjobs(jspec,clspec)
     else:
         raise RuntimeError('Not valid argument "%s".'\
                 ' Valid args: send|aretrieve' % args[0])
