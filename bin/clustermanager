@@ -10,7 +10,7 @@
 
 DEBUG=True
 JOBEVT=500
-from PyAnUtils.jobssender import athenajob,cerncluster,storejobs,retrievejobs
+from PyAnUtils.jobssender import athenajob,cerncluster,bookeepingjobs,accessingjobsinfo
 
 if __name__ == '__main__':
     from optparse import OptionParser,OptionGroup
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         jobs.preparejobs()
         cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun)
         cern.submit()
-        storejobs(jobs,cern)
+        bookeepingjobs(jobs,cern)
 
         #print "Send the jobs using this:"
         #print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
@@ -84,12 +84,15 @@ if __name__ == '__main__':
         except IndexError:
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
-        jspec,clspec = retrievejobs(shfile)
+        jspec,clspec = accessingjobsinfo(shfile)
         for jdsc in jspec.getlistofjobs():
             if DEBUG:
                 print "--Job [%s]::State: %s, Status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
-            jdsc.getnextstate(clspec,jspec.checkfinishedjob)
-        storejobs(jspec,clspec)
+            clspec.getnextstate(jdsc,jspec.checkfinishedjob)
+            # Check the state and status and act as consequence
+            #clspec.gonextstate(jdsc)
+        bookeepingjobs(jspec,clspec)
+        
     #elif args[0] == 'kill':
     #    print "Searching jobs..."
     #    try:
@@ -97,14 +100,14 @@ if __name__ == '__main__':
     #    except IndexError:
     #        raise RuntimeError('Not found jobs in the folder "%s"(, '\
     #            ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
-    #    jspec,clspec = retrievejobs(shfile)
+    #    jspec,clspec = accesingjobsinfo(shfile)
     #    for jdsc in jspec.getlistofjobs():
     #        if DEBUG:
     #            print "--Job [%s]::Killing it..." % (str(jdsc.index))
     #        clspec.kill(jdsc)
     else:
         raise RuntimeError('Not valid argument "%s".'\
-                ' Valid args: send|retrieve' % args[0])
+                ' Valid args: send|aretrieve' % args[0])
 
 
 

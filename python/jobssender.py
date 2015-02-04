@@ -136,10 +136,10 @@ def getevt(filelist,**kw):
         t.AddFile(f)
     return t.GetEntries()    
 
-def storejobs(jobinstance,clusterinstance):
-    """.. function::storelist(listjobs) 
+def bookeepingjobs(jobinstance,clusterinstance):
+    """.. function::bookeepingjobs(listjobs) 
     stores  the list of the jobdescription instances found in 'listjobs' and 
-    which can be accessed using the retrievejobs functions. 
+    which can be accessed using the accesingjobsinfo functions. 
     The function is useful to snapshot the status of the jobs
     amongst other information
     """
@@ -151,8 +151,8 @@ def storejobs(jobinstance,clusterinstance):
 
     d.close()
 
-def retrievejobs(filename='.presentjobs'):
-    """.. function::retrievelist(filename) 
+def accessingjobsinfo(filename='.presentjobs'):
+    """.. function::accessingjobsinfo(filename) 
     retrieve a shelve object containing jobdescription objects
     """
     import shelve
@@ -210,33 +210,33 @@ class jobdescription(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    def getnextstate(self,clusterinst,checkfinishedjob):
-        """..method:: getnextstate() -> nextstate
+    #def getnextstate(self,clusterinst,checkfinishedjob):
+    #    """..method:: getnextstate() -> nextstate
 
-        The life of a job follows a clear workflow:
-        None -> submitted -> running -> |  (finished) 
-                                        |-+ failed    -->  submitted
-                                        |-+ successed -->  Done
-        Better::: using states and status
-        |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
+    #    The life of a job follows a clear workflow:
+    #    None -> submitted -> running -> |  (finished) 
+    #                                    |-+ failed    -->  submitted
+    #                                    |-+ successed -->  Done
+    #    Better::: using states and status
+    #    |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
 
-        status: OK (no problems), Failed (any problem found)
-        
-        """
-        # Sure, do I want to submit it without asking?
-        if not self.state:
-            clusterinst.submit()
-            self.state  = 'submitted'
-            self.status = 'ok'
-        elif self.state == 'submitted' or self.state == 'running':
-            self.state,self.status=clusterinst.checkstate(self)
-        elif self.state == 'finished':
-            self.status = checkfinishedjob(self)
-            if self.status == 'failed':
-                self.state = clusterinst.failed()
-                self.status= 'ok'
-            else:
-                self.state,self.status = clusterinst.done()
+    #    status: OK (no problems), Failed (any problem found)
+    #    
+    #    """
+    #    # Sure, do I want to submit it without asking?
+    #    if not self.state:
+    #        clusterinst.submit()
+    #        self.state  = 'submitted'
+    #        self.status = 'ok'
+    #    elif self.state == 'submitted' or self.state == 'running':
+    #        self.state,self.status=clusterinst.checkstate(self)
+    #    elif self.state == 'finished':
+    #        self.status = checkfinishedjob(self)
+    #        if self.status == 'failed':
+    #            self.state = clusterinst.failed()
+    #            self.status= 'ok'
+    #        else:
+    #            self.state,self.status = clusterinst.done()
 
     @staticmethod
     def buildfromjob(path,script,index):
@@ -328,7 +328,7 @@ class jobspec(object):
             if not os.getenv(_var):
                 return False,_com,_var
         return True
-
+    
     @abstractmethod
     def checkfinishedjob(self,jobdsc):
         """..method:: checkfinishedjob(jobdsc) -> status
@@ -478,35 +478,31 @@ class clusterspec(object):
         os.chdir(cwd)
     
     def getnextstate(self,jobdsc,checkfinishedjob):
-        """..method:: getnextstate() -> nextstate
+        """..method:: getnextstate() -> nextstate,nextstatus
+        check the state and status of the job.
 
-        The life of a job follows a clear workflow:
-        None -> submitted -> running -> |  (finished) 
-                                        |-+ failed    -->  submitted
-                                        |-+ successed -->  Done
-        Better::: using states and status
-        |NONE| -> |CONFIGURED| -> |RUNNING| -> |FINISHED|
-
-        status: OK (no problems), Failed (any problem found)
+        The life of a job follows the state workflow
+        None -> configured -> submitted -> running -> finished
+        Per each possible state (and status), just a few commands
+        can be used:
         
         """
-        # Sure, do I want to submit it without asking?
-
-        # Not configured yet, do nothing explicitly, 
         if not jobdsc.state:
             print "Job not configured yet, you should call the"\
                     " jobspec.preparejobs method"            
-        elif self.state == 'submitted' or self.state == 'running':
+        elif jobdsc.state == 'submitted' or jobdsc.state == 'running':
             jobdsc.state,jobdsc.status=self.checkstate(jobdsc)
-        elif self.state == 'finished':
-            self.status = checkfinishedjob(self)
-            if self.status == 'failed':
-                self.state = clusterinst.failed()
-                self.status= 'ok'
-            else:
-                self.state,self.status = clusterinst.done()
+            if jobdsc.state == 'finished':
+                if self.simulate:
+                    self.status = self.simulatedresponse('finishing')
+                else:
+                    jobdsc.status = checkfinishedjob(jobdsc)
+        elif jobdsc.state == 'finished':
+            print '  Job[%s] Finished with status %s' % (jobdsc.index,jobdsc.status)
+        #elif jobdsc.state == 'finished':
+        #    jobdsc.status = checkfinishedjob(jobdsc)
+        #    if jobdsc.status == 'ok':
 
-    
     @abstractmethod
     def simulatedresponse(self,action):
         """..method:: simulatedresponse() -> clusterresponse
@@ -560,8 +556,8 @@ class clusterspec(object):
     def failed(self):
         """..method:: failed()
          
-        function to check the status of a job (running/finalized/
-        aborted-failed,...). Depend on the type of cluster
+        steering the actions to proceed when a job has failed.
+        Depend on the type of cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
                  "failed()" % (self.__class__.__name__))
@@ -569,13 +565,11 @@ class clusterspec(object):
     @abstractmethod
     def done(self):
         """..method:: done()
-        
-        function to check the status of a job (running/finalized/
-        aborted-failed,...). Depend on the type of cluster
+        steering the actions to be done when the job has been complete
+        and done. Depend on the type of the cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
                  "done()" % (self.__class__.__name__))
-
 
 
 # --- Concrete class for the CERN cluster (using the lxplus UI)
@@ -623,9 +617,12 @@ class cerncluster(clusterspec):
                 mess = ("JOBID <123456789>:\njob status RUN","")
             elif simstate == 'finished':
                 mess =  ("Job <123456789> is not found","Job <123456789> is not found")
-            elif simstate = 'aborted':
-                mess ("","")
+            elif simstate == 'aborted':
+                mess = ("","")
             return mess
+        elif action == 'finishing':
+            simstatus = [ 'ok','ok','ok','fail','ok','ok','ok']
+            return random.choice(simstatus)
         else:
             raise RuntimeError('Undefined action "%s"' % action)
 
@@ -639,10 +636,9 @@ class cerncluster(clusterspec):
         return int(p.split('Job')[-1].split('<')[1].split('>')[0])
     
     def getstatefromcommandline(self,p):
-        """..method:: checkstatus() -> state,status
+        """..method:: getstatefromcommandline() -> state,status
         
-        function to check the state and status of a job (running/finalized/
-        aborted-failed,...).
+        function to parse the state of a job
         """
         # bjobs output
         # JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME
@@ -690,20 +686,21 @@ class cerncluster(clusterspec):
             raise RuntimeError('Unrecognized command "%s"' % command)
     
     def failed(self):
-        """..method:: checkstatus()
+        """..method:: failed()
          
-        function to check the status of a job (running/finalized/
-        aborted-failed,...). Depend on the type of cluster
+        steering the actions to proceed when a job has failed.
+        Depend on the type of cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
-                 "checkstatus()" % (self.__class__.__name__))
+                 "failed()" % (self.__class__.__name__))
 
     def done(self):
         """..method:: done()
-        steering the actions to be done when
+        steering the actions to be done when the job has been complete
+        and done. Depend on the type of the cluster
         """
         raise NotImplementedError("Class %s doesn't implement "\
-                 "checkstatus()" % (self.__class__.__name__))
+                 "done()" % (self.__class__.__name__))
     
 clusterspec.register(cerncluster)
 
@@ -909,7 +906,10 @@ class athenajob(jobspec):
             self.joblist.append( \
                     jobdescription.buildfromjob(foldername,self.jobname,i)
                     )
-            self.setjobstate(self.joblist[-1],'configuring')
+            self.joblist[-1].state   = 'configured'
+            self.joblist[-1].status  = 'ok'
+            self.joblist[-1].jobspec = self
+            #self.setjobstate(self.joblist[-1],'configuring') ---> Should I define one?
             os.chdir(cwd)
             i+=1
 
@@ -932,7 +932,7 @@ class athenajob(jobspec):
         """
         succesjobcode=['Py:Athena','INFO leaving with code 0: "successful run"']
         import os
-        # Athena jobs outpus inside folder defined as:
+        # Athena jobs outputs inside folder defined as:
         folderout = os.path.join(jobdsc.path,'LSFJOB_'+str(jobdsc.ID))
         # outfile
         logout = os.path.join(folderout,"STDOUT")
@@ -950,7 +950,8 @@ class athenajob(jobspec):
         return 'fail' 
 
     def sethowtocheckstatus(self):
-        """..method:: sethowtocheckstatus()
+        """TO BE DEPRECATED!!!
+        ..method:: sethowtocheckstatus()
         
         An Athena job has succesfully finished if there is the line
         'Py:Athena            INFO leaving with code 0: "successful run"'
