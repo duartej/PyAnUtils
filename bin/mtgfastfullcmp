@@ -3,446 +3,446 @@
 NBINS=500
 
 def printdiff(g,xvar,dim2=False):
-	"""
-	Just print values of the TGraph
-	"""
-	from array import array
-	tolerance=1e-1
-	npoints = g.GetN()
-	x = g.GetX()
-	_y = g.GetY()
-	if dim2:
-		z = g.GetZ()
-		y = z
-	else:
-		y = _y
-	print "============================================"
-	print " Muon Spectrometer Differences w.r.t. %s" % xvar
-	print " -- Just showing diff. greater than %.3f -- " % tolerance
-	print "============================================"
-	print "%6s || FullSim-FastSim [X_{0}]" % "x"
-	for i in xrange(npoints):
-		if abs(y[i]) > tolerance:
-			if dim2:
-				print "%6s%.3f,%.3f) || %.3f" % ("(",x[i],_y[i],z[i])
-			else:
-				print "%6.3f || %.3f" % (x[i],y[i])
-t sta	print "============================================"
+    """
+    Just print values of the TGraph
+    """
+    from array import array
+    tolerance=1e-1
+    npoints = g.GetN()
+    x = g.GetX()
+    _y = g.GetY()
+    if dim2:
+        z = g.GetZ()
+        y = z
+    else:
+        y = _y
+    print "============================================"
+    print " Muon Spectrometer Differences w.r.t. %s" % xvar
+    print " -- Just showing diff. greater than %.3f -- " % tolerance
+    print "============================================"
+    print "%6s || FullSim-FastSim [X_{0}]" % "x"
+    for i in xrange(npoints):
+        if abs(y[i]) > tolerance:
+            if dim2:
+                print "%6s%.3f,%.3f) || %.3f" % ("(",x[i],_y[i],z[i])
+            else:
+                print "%6.3f || %.3f" % (x[i],y[i])
+    print "============================================"
 
 
 def drawgraph2d(gdict,dname):
-	"""
-	"""
-	import ROOT
-	from math import sqrt
-	from PyAnUtils.plotstyles import squaredStyle as dfStyle
-	from PyAnUtils.plotstyles import setpalette
-
+    """
+    """
+    import ROOT
+    from math import sqrt
+    from PyAnUtils.plotstyles import squaredStyle as dfStyle
+    from PyAnUtils.plotstyles import setpalette
+    
     # Avoiding the canvas creation in X
-	ROOT.gROOT.SetBatch(1)
-
-	TOLERANCE = 1e-6
-	
-	ROOT.gStyle.SetLegendBorderSize(0)
-	lstyle = dfStyle()
-	setpalette('inv_darkbody')
-	lstyle.cd()
-	ROOT.gROOT.ForceStyle()
-	ROOT.gStyle.SetOptStat(0)
-
-	ymax = max(map(lambda x: x.GetYmax(),gdict.values()))
-	ymin = min(map(lambda x: x.GetYmin(),gdict.values()))
-	xmax = max(map(lambda x: x.GetXmax(),gdict.values()))
-	xmin = min(map(lambda x: x.GetXmin(),gdict.values()))
-	#zmax = max(map(lambda x: 1.01*x.GetZmax(),gdict.values()))
-	#zmin = 0.0
-	
-	c = ROOT.TCanvas()
-	## Differences (Full-fast)
-	## Full 
-	npointsfullsim = gdict['fullsim'].GetN()
-	xfullsim = gdict['fullsim'].GetX()
-	yfullsim = gdict['fullsim'].GetY()
-	zfullsim = gdict['fullsim'].GetZ()
-	# Fast
-	npointsfastsim = gdict['fastsim'].GetN()
-	xfastsim = gdict['fastsim'].GetX()
-	yfastsim = gdict['fastsim'].GetY()
-	zfastsim = gdict['fastsim'].GetZ()
-	#if npointsfastsim != npointsfullsim:
-	#	raise RuntimeError("Number of fast-sim points differ of full-sim")
-
-	diffg = gdict['fastsim'].Clone('diff_ETAPHI_2d_'+dname)
-	diffg.Set(0)
-	diffg.SetTitle()
-	diffg.SetLineColor(1)
-
-	reldiffg = diffg.Clone("reldiff_ETAPHI_2d"+dname)
-
-	# FIXME: Using the distributions with more points as the 
-	#        base to put the other one
-	# Assuming different number of points 
-	TOLERANCE = abs(xfullsim[0]-xfullsim[1])
-	k = 0
-	j_k = 0
-	for i in xrange(npointsfullsim):
-		_xfull = xfullsim[i]
-		_yfull = yfullsim[i]
-		_zfull = zfullsim[i]
-		for j in xrange(j_k,npointsfastsim):
-			_xfast = xfastsim[j]
-			_yfast = yfastsim[j]
-			_zfast = zfastsim[j]
-			if sqrt((_xfull-_xfast)**2.0+(_yfull-_yfast)**2.) > TOLERANCE :
-				continue
-			else:
-				diffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast))
-				try:
-					reldiffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast)/_zfull*100.0)
-				except ZeroDivisionError:
-					reldiffg.SetPoint(k,_xfull,_yfull,0.0)
-				k += 1
-	
-	_dummy = diffg.Draw("A")
-	hframediff = diffg.GetHistogram()
-	hframediff.SetZTitle("Rel. Material Lenght (fullsim-fastsim) [X_{0}]")
-        hframediff.GetZaxis().SetTitleOffset(2.2)
-	hframediff.SetYTitle("#phi")
-	hframediff.SetXTitle("#eta")
-	hframediff.SetLineColor(0)
-
-	hframediff.Draw()
-	# Allowing root to put the Z-title
-	c.SetRightMargin(0.3)
-	c.SetLeftMargin(0.14)
-	if abs(diffg.GetZmax()) < abs(diffg.GetZmin()):
-		setpalette('darkbody')
-	diffg.Draw("COLZ")
-
-	c.SaveAs(dname+"_ETAPHI_2D_diff.png")
-
-	# Relative differences
-	_dummy = reldiffg.Draw("A")
-	hframediff = reldiffg.GetHistogram()
-	hframediff.SetZTitle("Material Lenght (full-fast)/full [%]")
-        hframediff.GetZaxis().SetTitleOffset(2.2)
-	hframediff.SetYTitle("#phi")
-	hframediff.SetXTitle("#eta")
-	hframediff.SetLineColor(0)
-	if abs(reldiffg.GetZmax()) < abs(reldiffg.GetZmin()):
-		setpalette('darkbody')
-	hframediff.Draw()
-	reldiffg.Draw("COLZ")
-
-	c.SaveAs(dname+"_ETAPHI_2D_reldiff.png")
-	
-	c.Close()
-
-	return diffg
+    ROOT.gROOT.SetBatch(1)
+    
+    TOLERANCE = 1e-6
+    
+    ROOT.gStyle.SetLegendBorderSize(0)
+    lstyle = dfStyle()
+    setpalette('inv_darkbody')
+    lstyle.cd()
+    ROOT.gROOT.ForceStyle()
+    ROOT.gStyle.SetOptStat(0)
+    
+    ymax = max(map(lambda x: x.GetYmax(),gdict.values()))
+    ymin = min(map(lambda x: x.GetYmin(),gdict.values()))
+    xmax = max(map(lambda x: x.GetXmax(),gdict.values()))
+    xmin = min(map(lambda x: x.GetXmin(),gdict.values()))
+    #zmax = max(map(lambda x: 1.01*x.GetZmax(),gdict.values()))
+    #zmin = 0.0
+    
+    c = ROOT.TCanvas()
+    ## Differences (Full-fast)
+    ## Full 
+    npointsfullsim = gdict['fullsim'].GetN()
+    xfullsim = gdict['fullsim'].GetX()
+    yfullsim = gdict['fullsim'].GetY()
+    zfullsim = gdict['fullsim'].GetZ()
+    # Fast
+    npointsfastsim = gdict['fastsim'].GetN()
+    xfastsim = gdict['fastsim'].GetX()
+    yfastsim = gdict['fastsim'].GetY()
+    zfastsim = gdict['fastsim'].GetZ()
+    #if npointsfastsim != npointsfullsim:
+    #	raise RuntimeError("Number of fast-sim points differ of full-sim")
+    
+    diffg = gdict['fastsim'].Clone('diff_ETAPHI_2d_'+dname)
+    diffg.Set(0)
+    diffg.SetTitle()
+    diffg.SetLineColor(1)
+    
+    reldiffg = diffg.Clone("reldiff_ETAPHI_2d"+dname)
+    
+    # FIXME: Using the distributions with more points as the 
+    #        base to put the other one
+    # Assuming different number of points 
+    TOLERANCE = abs(xfullsim[0]-xfullsim[1])
+    k = 0
+    j_k = 0
+    for i in xrange(npointsfullsim):
+        _xfull = xfullsim[i]
+        _yfull = yfullsim[i]
+        _zfull = zfullsim[i]
+        for j in xrange(j_k,npointsfastsim):
+            _xfast = xfastsim[j]
+            _yfast = yfastsim[j]
+            _zfast = zfastsim[j]
+            if sqrt((_xfull-_xfast)**2.0+(_yfull-_yfast)**2.) > TOLERANCE :
+                continue
+            else:
+                diffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast))
+                try:
+                    reldiffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast)/_zfull*100.0)
+                except ZeroDivisionError:
+                    reldiffg.SetPoint(k,_xfull,_yfull,0.0)
+                k += 1
+    
+    _dummy = diffg.Draw("A")
+    hframediff = diffg.GetHistogram()
+    hframediff.SetZTitle("Material Lenght (fullsim-fastsim) [X_{0}]")
+    hframediff.GetZaxis().SetTitleOffset(2.2)
+    hframediff.SetYTitle("#phi")
+    hframediff.SetXTitle("#eta")
+    hframediff.SetLineColor(0)
+    
+    hframediff.Draw()
+    # Allowing root to put the Z-title
+    c.SetRightMargin(0.3)
+    c.SetLeftMargin(0.14)
+    if abs(diffg.GetZmax()) < abs(diffg.GetZmin()):
+        setpalette('darkbody')
+    diffg.Draw("COLZ")
+    
+    c.SaveAs(dname+"_ETAPHI_2D_diff.png")
+    
+    # Relative differences
+    _dummy = reldiffg.Draw("A")
+    hframediff = reldiffg.GetHistogram()
+    hframediff.SetZTitle("Material Lenght (full-fast)/full [%]")
+    hframediff.GetZaxis().SetTitleOffset(2.2)
+    hframediff.SetYTitle("#phi")
+    hframediff.SetXTitle("#eta")
+    hframediff.SetLineColor(0)
+    if abs(reldiffg.GetZmax()) < abs(reldiffg.GetZmin()):
+        setpalette('darkbody')
+    hframediff.Draw()
+    reldiffg.Draw("COLZ")
+    
+    c.SaveAs(dname+"_ETAPHI_2D_reldiff.png")
+    
+    c.Close()
+    
+    return diffg
 
 
 def drawgraph(gdict,dname,xtitle):
-	"""
-	"""
-	import ROOT
-	from PyAnUtils.plotstyles import squaredStyle as dfStyle
+    """
+    """
+    import ROOT
+    from PyAnUtils.plotstyles import squaredStyle as dfStyle
     # Avoiding the canvas creation in the X
-	ROOT.gROOT.SetBatch(1)
-
-	TOLERANCE = 1e-6
-	
-	ROOT.gStyle.SetLegendBorderSize(0)
-	lstyle = dfStyle()
-	lstyle.cd()
-	ROOT.gROOT.ForceStyle()
-	ROOT.gStyle.SetOptStat(0)
-
-	ymax = max(map(lambda x: 1.01*x.GetYaxis().GetBinUpEdge(x.GetYaxis().GetLast()),
-		gdict.values()))
-	ymin = 0.0
-	xmax = max(map(lambda x: x.GetXaxis().GetBinUpEdge(x.GetXaxis().GetLast()),
-		gdict.values()))
-	xmin = -xmax
-	if xtitle == 'theta':
-		xmin = 0.0
-	
-	c = ROOT.TCanvas()
-	hframe = c.DrawFrame(xmin,ymin,xmax,ymax)
-	hframe.SetYTitle("Material Length [X_{0}]")
-	hframe.SetXTitle("#"+xtitle)
+    ROOT.gROOT.SetBatch(1)
     
-	legend = ROOT.TLegend(0.45,0.85,0.75,0.9)
-	legend.SetBorderSize(0)
-	legend.SetTextSize(0.03)
-	legend.SetFillColor(10)
-	legend.SetTextFont(112)
-
-	hframe.Draw()
-	for simtype,f in gdict.iteritems():
-		if simtype == 'fastsim':
-			f.SetLineColor(39)
-		else:
-			f.SetLineColor(1)
-		f.Draw("LSAME")
-		f.SetFillColor(f.GetLineColor())
-		legend.AddEntry(f,simtype,"FL")
-	legend.Draw()
-	c.SaveAs(dname+"_"+xtitle+".png")
-
-	# Differences (Full-fast)
-	# Full 
-	npointsfullsim = gdict['fullsim'].GetN()
-	xfullsim = gdict['fullsim'].GetX()
-	yfullsim = gdict['fullsim'].GetY()
-	# Fast
-	npointsfastsim = gdict['fastsim'].GetN()
-	xfastsim = gdict['fastsim'].GetX()
-	yfastsim = gdict['fastsim'].GetY()
-	#if npointsfastsim != npointsfullsim:
-	#	raise RuntimeError("Number of fast-sim points differ of full-sim")
-
-	diffg = gdict['fastsim'].Clone('diff_'+xtitle+'_'+dname)
-	diffg.Set(0)
-	diffg.SetLineColor(1)
-
-	# Assuming different number of points
-	k = 0
-	j_k = 0
-	for i in xrange(npointsfullsim):
-		_xfull = xfullsim[i]
-		_yfull = yfullsim[i]
-		for j in xrange(j_k,npointsfastsim):
-			_xfast = xfastsim[j]
-			_yfast = yfastsim[j]
-			if abs(_xfull-_xfast) > TOLERANCE:
-				continue
-			else:
-				diffg.SetPoint(k,_xfull,(_yfull-_yfast))
-				k += 1
-	
-	_dummy = diffg.Draw("A")
-	hframediff = diffg.GetHistogram()
-	hframediff.SetYTitle("Material Lenght(fullsim-fastsim) [X_{0}]")
-	hframediff.SetXTitle("#"+xtitle)
-	hframediff.SetLineColor(0)
-
-	hframediff.Draw()
-	diffg.Draw("LSAME")
-
-	c.SaveAs(dname+"_"+xtitle+"_diff.png")
-	c.Close()
-
-	return diffg
+    TOLERANCE = 1e-6
+    
+    ROOT.gStyle.SetLegendBorderSize(0)
+    lstyle = dfStyle()
+    lstyle.cd()
+    ROOT.gROOT.ForceStyle()
+    ROOT.gStyle.SetOptStat(0)
+    
+    ymax = max(map(lambda x: 1.01*x.GetYaxis().GetBinUpEdge(x.GetYaxis().GetLast()),
+        gdict.values()))
+    ymin = 0.0
+    xmax = max(map(lambda x: x.GetXaxis().GetBinUpEdge(x.GetXaxis().GetLast()),
+        gdict.values()))
+    xmin = -xmax
+    if xtitle == 'theta':
+        xmin = 0.0
+    
+    c = ROOT.TCanvas()
+    hframe = c.DrawFrame(xmin,ymin,xmax,ymax)
+    hframe.SetYTitle("Material Length [X_{0}]")
+    hframe.SetXTitle("#"+xtitle)
+    
+    legend = ROOT.TLegend(0.45,0.85,0.75,0.9)
+    legend.SetBorderSize(0)
+    legend.SetTextSize(0.03)
+    legend.SetFillColor(10)
+    legend.SetTextFont(112)
+    
+    hframe.Draw()
+    for simtype,f in gdict.iteritems():
+        if simtype == 'fastsim':
+            f.SetLineColor(39)
+        else:
+            f.SetLineColor(1)
+        f.Draw("LSAME")
+        f.SetFillColor(f.GetLineColor())
+        legend.AddEntry(f,simtype,"FL")
+    legend.Draw()
+    c.SaveAs(dname+"_"+xtitle+".png")
+    
+    # Differences (Full-fast)
+    # Full 
+    npointsfullsim = gdict['fullsim'].GetN()
+    xfullsim = gdict['fullsim'].GetX()
+    yfullsim = gdict['fullsim'].GetY()
+    # Fast
+    npointsfastsim = gdict['fastsim'].GetN()
+    xfastsim = gdict['fastsim'].GetX()
+    yfastsim = gdict['fastsim'].GetY()
+    #if npointsfastsim != npointsfullsim:
+    #	raise RuntimeError("Number of fast-sim points differ of full-sim")
+    
+    diffg = gdict['fastsim'].Clone('diff_'+xtitle+'_'+dname)
+    diffg.Set(0)
+    diffg.SetLineColor(1)
+    
+    # Assuming different number of points
+    k = 0
+    j_k = 0
+    for i in xrange(npointsfullsim):
+        _xfull = xfullsim[i]
+        _yfull = yfullsim[i]
+        for j in xrange(j_k,npointsfastsim):
+            _xfast = xfastsim[j]
+            _yfast = yfastsim[j]
+            if abs(_xfull-_xfast) > TOLERANCE:
+                continue
+            else:
+                diffg.SetPoint(k,_xfull,(_yfull-_yfast))
+                k += 1
+    
+    _dummy = diffg.Draw("A")
+    hframediff = diffg.GetHistogram()
+    hframediff.SetYTitle("Material Lenght(fullsim-fastsim) [X_{0}]")
+    hframediff.SetXTitle("#"+xtitle)
+    hframediff.SetLineColor(0)
+    
+    hframediff.Draw()
+    diffg.Draw("LSAME")
+    
+    c.SaveAs(dname+"_"+xtitle+"_diff.png")
+    c.Close()
+    
+    return diffg
 
 
 def drawstacked(indet,cadet,msdet,xvar,simtype):
-	"""
-	"""
-	import ROOT
-	from PyAnUtils.pyanfunctions import graphtohist
-
-	legend = ROOT.TLegend(0.45,0.85,0.75,0.9)
-	legend.SetBorderSize(0)
-	legend.SetTextSize(0.03)
-	legend.SetFillColor(10)
-	legend.SetTextFont(112)
-	# Making histograms from TGraphs
-	# and setting up attributes and
-	# associating a legend entry
-	hindet = graphtohist(indet,100)
-	hindet.SetLineColor(38)
-	hindet.SetMarkerColor(38)
-	hindet.SetFillColor(38)
-	legend.AddEntry(hindet,'Inner Detector','F')
-
-	cadet  = graphtohist(cadet,100)
-	cadet.SetLineColor(30)
-	cadet.SetMarkerColor(30)
-	cadet.SetFillColor(30)
-	legend.AddEntry(cadet,'Calorimeters','F')
-	
-	msdet  = graphtohist(msdet,100)
-	msdet.SetLineColor(46)
-	msdet.SetMarkerColor(46)
-	msdet.SetFillColor(46)
-	legend.AddEntry(msdet,'Muon Spectrometer','F')
-
-	hstack = ROOT.THStack('hs','hstack')
-	hstack.SetTitle()
-	hstack.Add(hindet)
-	hstack.Add(cadet)
-	hstack.Add(msdet)
-
-	c =ROOT.TCanvas()
-	hstack.Draw("HIST")
-	hframe = hstack.GetHistogram()
-	hframe.SetTitle(simtype)
-	hframe.SetXTitle('#'+xvar)
-	hframe.SetYTitle('Material Length [X_{0}]')
-	hframe.Draw("SAME")
-	legend.Draw()
-	c.SaveAs('stacked_'+xvar+'_'+simtype+'.png')
-	c.SetLogy()
-	c.SaveAs('stacked_log_'+xvar+'_'+simtype+'.png')
-	c.Close()
+    """
+    """
+    import ROOT
+    from PyAnUtils.pyanfunctions import graphtohist
+    
+    legend = ROOT.TLegend(0.45,0.85,0.75,0.9)
+    legend.SetBorderSize(0)
+    legend.SetTextSize(0.03)
+    legend.SetFillColor(10)
+    legend.SetTextFont(112)
+    # Making histograms from TGraphs
+    # and setting up attributes and
+    # associating a legend entry
+    hindet = graphtohist(indet,100)
+    hindet.SetLineColor(38)
+    hindet.SetMarkerColor(38)
+    hindet.SetFillColor(38)
+    legend.AddEntry(hindet,'Inner Detector','F')
+    
+    cadet  = graphtohist(cadet,100)
+    cadet.SetLineColor(30)
+    cadet.SetMarkerColor(30)
+    cadet.SetFillColor(30)
+    legend.AddEntry(cadet,'Calorimeters','F')
+    
+    msdet  = graphtohist(msdet,100)
+    msdet.SetLineColor(46)
+    msdet.SetMarkerColor(46)
+    msdet.SetFillColor(46)
+    legend.AddEntry(msdet,'Muon Spectrometer','F')
+    
+    hstack = ROOT.THStack('hs','hstack')
+    hstack.SetTitle()
+    hstack.Add(hindet)
+    hstack.Add(cadet)
+    hstack.Add(msdet)
+    
+    c =ROOT.TCanvas()
+    hstack.Draw("HIST")
+    hframe = hstack.GetHistogram()
+    hframe.SetTitle(simtype)
+    hframe.SetXTitle('#'+xvar)
+    hframe.SetYTitle('Material Length [X_{0}]')
+    hframe.Draw("SAME")
+    legend.Draw()
+    c.SaveAs('stacked_'+xvar+'_'+simtype+'.png')
+    c.SetLogy()
+    c.SaveAs('stacked_log_'+xvar+'_'+simtype+'.png')
+    c.Close()
 
 def reordergraph(f):
-	"""
-	"""
-	nentries = f.GetN()
-	xbuffer = f.GetX()
-	x = [xbuffer[i] for i in xrange(nentries)]
-	ybuffer = f.GetY()
-	y = [ybuffer[i] for i in xrange(nentries)]
-	xy = zip(x,y)
-	f.Set(0)
-	k1 = 0 
-	for phi,x0 in sorted(xy):
-		f.SetPoint(k1,phi,x0)
-		k1+=1
+    """
+    """
+    nentries = f.GetN()
+    xbuffer = f.GetX()
+    x = [xbuffer[i] for i in xrange(nentries)]
+    ybuffer = f.GetY()
+    y = [ybuffer[i] for i in xrange(nentries)]
+    xy = zip(x,y)
+    f.Set(0)
+    k1 = 0 
+    for phi,x0 in sorted(xy):
+        f.SetPoint(k1,phi,x0)
+        k1+=1
 
 def filldict(geoid,phi,theta,x0,fdict):
-	from math import pi,log,tan
-	eta = -log(tan(theta/2.0))
-	fdict[(eta,geoid)] = (x0,phi,theta)
+    from math import pi,log,tan
+    eta = -log(tan(theta/2.0))
+    fdict[(eta,geoid)] = (x0,phi,theta)
 	
 def main(ffullname,ffastname):
-	"""
-	"""
-	import ROOT
-	from array import array
-	
-	TVAR = [ 'eta', 'phi', 'theta']
-
-	ffull  = ROOT.TFile.Open(ffullname)
-	ffast  = ROOT.TFile.Open(ffastname)
-	# Files and trees associated to full and fast
-	cfiles = { 'fullsim': ffull, 'fastsim': ffast }	
-	ctrees = dict(map(lambda (t,x): (t,x.Get("particles")),cfiles.iteritems()))
-	#
-	hd = dict(map(lambda t: (t,{}),ctrees.keys()))
-	
-	# Getting quantities of interest and setting the branch
-	x0_a   = array('f',[0.0])
-	phi_a  = array('f',[0.0])
-	theta_a= array('f',[0.0])
-	geoID_a= array('i',[0])
-	# looping for the fast and full simulation
-	for simtype,t in ctrees.iteritems():
-	    # Number of entries in each bin
-	    t.SetBranchAddress("X0",x0_a)
-	    t.SetBranchAddress("pph",phi_a)
-	    t.SetBranchAddress("pth",theta_a)
-	    t.SetBranchAddress('geoID',geoID_a)
-	    _entries = t.GetEntries()
-	    for i in xrange(_entries):
-			_dummy = t.GetEntry(i)
-			_x0 = x0_a[0]
-			_phi= phi_a[0]
-			_theta=theta_a[0]
-			filldict(geoID_a[0],phi_a[0],theta_a[0],_x0,hd[simtype])
-	
-	# Building aux. dicts (eta,phi) maps of Inner Detector, calos and MS
-	tid2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
-	for n,f in tid2d.iteritems():
-		f.SetName('id2d_'+n)
-		f.SetMarkerStyle(20)
-		f.SetLineWidth(1)
-	cad2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
-	for n,f in cad2d.iteritems():
-		f.SetName('cad2d_'+n)
-		f.SetMarkerStyle(20)
-		f.SetLineWidth(1)
-	ms2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
-	for n,f in ms2d.iteritems():
-		f.SetName('ms2d_'+n)
-		f.SetMarkerStyle(20)
-		f.SetLineWidth(1)
-	# Building auxiliar dicts (1d), variable dependent
-	tid = {} ;	cad = {} ; 	msd = {}
-	for xvariable in TVAR: 
-		# Inner Detector
-		tid[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
-		for n,f in tid[xvariable].iteritems():
-			f.SetName('id_'+xvariable+'_'+n)
-			f.SetMarkerStyle(20)
-			f.SetLineWidth(1)
-		# Calorimeters
-		cad[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
-		for n,f in cad[xvariable].iteritems():
-			f.SetName('ca_'+xvariable+'_'+n)
-			f.SetMarkerStyle(20)
-			f.SetLineWidth(1)
-		# Muon Spectrometer
-		msd[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
-		for n,f in msd[xvariable].iteritems():
-			f.SetName('ms_'+xvariable+'_'+n)
-			f.SetMarkerStyle(20)
-			f.SetLineWidth(1)
-		
-	# Fill the TGraph's
-	# Mapping geoID type with the (1d,2d) dict 
-	geoIDmap = { 1: ('tid','tid2d'), 3: ('cad','cad2d'), 4:('msd','ms2d')}
-	for simtype,etax0dict in hd.iteritems():
-		k = {1:0, 3:0, 4:0}
-		activef1d = { }
-		for (eta,geoID),(x0,phi,theta) in sorted(etax0dict.iteritems()):
-			for xvar in TVAR:
-				try:
-					activef1d[xvar] = eval(geoIDmap[geoID][0]+"[xvar][simtype]")
-				except KeyError:
-					continue
-			# Be prepared to deprecated below lines and put the eval
-			try:
-				activef = eval(geoIDmap[geoID][1]+"[simtype]")
-			except KeyError:
-				continue
-			# actually fill (with the current angular variable)
-			activef.SetPoint(k[geoID],eta,phi,x0)
-			for xvarname in TVAR:
-				numericval = eval(xvarname)
-				activef1d[xvarname].SetPoint(k[geoID],numericval,x0)
-			k[geoID] += 1
-		# Re-ordering in the phi case
-		for simtype,f in tid['phi'].iteritems():
-			reordergraph(f)
-		for simtype,f in cad['phi'].iteritems():
-			reordergraph(f)
-		for simtype,f in msd['phi'].iteritems():
-			reordergraph(f)
-	#-- Drawing the graph
-	diffgraph2d = {}
-	for detname2d,grdict2d in [('innerdetector',tid2d), ('calorimeter',cad2d),('muonspectrometer',ms2d)]:
-		diffgraph2d[detname2d] = drawgraph2d(grdict2d,detname2d)
-	# Print differences in the muon spectrometer (between full-fast)
-	printdiff(diffgraph2d['muonspectrometer'],"(eta,phi)",True)
-	# -- 1dim
-	for xvar in TVAR:
-		diffgraph ={}
-		for detname,grdict in [('innerdetector',tid), ('calorimeter',cad),('muonspectrometer',msd)]:
-			diffgraph[detname] = drawgraph(grdict[xvar],detname,xvar)
-		# Draw a stacked graph with all the detectors: 
-		# FIXME: TESTING... To be decided if it's included or not
-		drawstacked(tid[xvar]['fullsim'],cad[xvar]['fullsim'],msd[xvar]['fullsim'],xvar,'fullsim')
-		drawstacked(tid[xvar]['fastsim'],cad[xvar]['fastsim'],msd[xvar]['fastsim'],xvar,'fastsim')
-
-	ffull.Close()
-	ffast.Close()
+    """
+    """
+    import ROOT
+    from array import array
+    
+    TVAR = [ 'eta', 'phi', 'theta']
+    
+    ffull  = ROOT.TFile.Open(ffullname)
+    ffast  = ROOT.TFile.Open(ffastname)
+    # Files and trees associated to full and fast
+    cfiles = { 'fullsim': ffull, 'fastsim': ffast }	
+    ctrees = dict(map(lambda (t,x): (t,x.Get("particles")),cfiles.iteritems()))
+    #
+    hd = dict(map(lambda t: (t,{}),ctrees.keys()))
+    
+    # Getting quantities of interest and setting the branch
+    x0_a   = array('f',[0.0])
+    phi_a  = array('f',[0.0])
+    theta_a= array('f',[0.0])
+    geoID_a= array('i',[0])
+    # looping for the fast and full simulation
+    for simtype,t in ctrees.iteritems():
+        # Number of entries in each bin
+        t.SetBranchAddress("X0",x0_a)
+        t.SetBranchAddress("pph",phi_a)
+        t.SetBranchAddress("pth",theta_a)
+        t.SetBranchAddress('geoID',geoID_a)
+        _entries = t.GetEntries()
+        for i in xrange(_entries):
+            _dummy = t.GetEntry(i)
+            _x0 = x0_a[0]
+            _phi= phi_a[0]
+            _theta=theta_a[0]
+            filldict(geoID_a[0],phi_a[0],theta_a[0],_x0,hd[simtype])
+    
+    # Building aux. dicts (eta,phi) maps of Inner Detector, calos and MS
+    tid2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
+    for n,f in tid2d.iteritems():
+        f.SetName('id2d_'+n)
+        f.SetMarkerStyle(20)
+        f.SetLineWidth(1)
+    cad2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
+    for n,f in cad2d.iteritems():
+        f.SetName('cad2d_'+n)
+        f.SetMarkerStyle(20)
+        f.SetLineWidth(1)
+    ms2d = dict(map(lambda x: (x,ROOT.TGraph2D()), cfiles.keys()))
+    for n,f in ms2d.iteritems():
+        f.SetName('ms2d_'+n)
+        f.SetMarkerStyle(20)
+        f.SetLineWidth(1)
+    # Building auxiliar dicts (1d), variable dependent
+    tid = {} ;	cad = {} ; 	msd = {}
+    for xvariable in TVAR: 
+        # Inner Detector
+        tid[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
+        for n,f in tid[xvariable].iteritems():
+            f.SetName('id_'+xvariable+'_'+n)
+            f.SetMarkerStyle(20)
+            f.SetLineWidth(1)
+        # Calorimeters
+        cad[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
+        for n,f in cad[xvariable].iteritems():
+            f.SetName('ca_'+xvariable+'_'+n)
+            f.SetMarkerStyle(20)
+            f.SetLineWidth(1)
+        # Muon Spectrometer
+        msd[xvariable] = dict(map(lambda x: (x,ROOT.TGraph()), cfiles.keys()))
+        for n,f in msd[xvariable].iteritems():
+            f.SetName('ms_'+xvariable+'_'+n)
+            f.SetMarkerStyle(20)
+            f.SetLineWidth(1)
+    	
+    # Fill the TGraph's
+    # Mapping geoID type with the (1d,2d) dict 
+    geoIDmap = { 1: ('tid','tid2d'), 3: ('cad','cad2d'), 4:('msd','ms2d')}
+    for simtype,etax0dict in hd.iteritems():
+        k = {1:0, 3:0, 4:0}
+        activef1d = { }
+        for (eta,geoID),(x0,phi,theta) in sorted(etax0dict.iteritems()):
+            for xvar in TVAR:
+                try:
+                    activef1d[xvar] = eval(geoIDmap[geoID][0]+"[xvar][simtype]")
+                except KeyError:
+                   continue
+        	# Be prepared to deprecated below lines and put the eval
+            try:
+                activef = eval(geoIDmap[geoID][1]+"[simtype]")
+            except KeyError:
+                continue
+            # actually fill (with the current angular variable)
+            activef.SetPoint(k[geoID],eta,phi,x0)
+            for xvarname in TVAR:
+                numericval = eval(xvarname)
+                activef1d[xvarname].SetPoint(k[geoID],numericval,x0)
+            k[geoID] += 1
+        # Re-ordering in the phi case
+        for simtype,f in tid['phi'].iteritems():
+            reordergraph(f)
+        for simtype,f in cad['phi'].iteritems():
+            reordergraph(f)
+        for simtype,f in msd['phi'].iteritems():
+            reordergraph(f)
+    #-- Drawing the graph
+    diffgraph2d = {}
+    for detname2d,grdict2d in [('innerdetector',tid2d), ('calorimeter',cad2d),('muonspectrometer',ms2d)]:
+        diffgraph2d[detname2d] = drawgraph2d(grdict2d,detname2d)
+    # Print differences in the muon spectrometer (between full-fast)
+    printdiff(diffgraph2d['muonspectrometer'],"(eta,phi)",True)
+    # -- 1dim
+    for xvar in TVAR:
+        diffgraph ={}
+        for detname,grdict in [('innerdetector',tid), ('calorimeter',cad),('muonspectrometer',msd)]:
+            diffgraph[detname] = drawgraph(grdict[xvar],detname,xvar)
+        # Draw a stacked graph with all the detectors: 
+        # FIXME: TESTING... To be decided if it's included or not
+        drawstacked(tid[xvar]['fullsim'],cad[xvar]['fullsim'],msd[xvar]['fullsim'],xvar,'fullsim')
+        drawstacked(tid[xvar]['fastsim'],cad[xvar]['fastsim'],msd[xvar]['fastsim'],xvar,'fastsim')
+    
+    ffull.Close()
+    ffast.Close()
 
 if __name__ == '__main__':
-	import os
-	from optparse import OptionParser,OptionGroup
-	
-	cwd = os.getcwd()
-	parser = OptionParser()
-	parser.set_defaults(fullsim=os.path.join(cwd,'ISFG4SimKernel.root'),\
-			fastsim=os.path.join(cwd,'ISFFatras.root'))
-
-	parser.add_option( '--full', action='store', type='string', dest='fullsim',\
-			help="Full (Geant4) simulation root file [ISFG4SimKernel.root]")
-	parser.add_option( '--fast', action='store', type='string', dest='fastsim',\
-			help="Fast simulation root file [ISFFatras.root]")
-
-	(opt, args)=parser.parse_args()	
-	# See main function
-	main(opt.fullsim,opt.fastsim)
+    import os
+    from optparse import OptionParser,OptionGroup
+    
+    cwd = os.getcwd()
+    parser = OptionParser()
+    parser.set_defaults(fullsim=os.path.join(cwd,'ISFG4SimKernel.root'),\
+    		fastsim=os.path.join(cwd,'ISFFatras.root'))
+    
+    parser.add_option( '--full', action='store', type='string', dest='fullsim',\
+    		help="Full (Geant4) simulation root file [ISFG4SimKernel.root]")
+    parser.add_option( '--fast', action='store', type='string', dest='fastsim',\
+    		help="Fast simulation root file [ISFFatras.root]")
+    
+    (opt, args)=parser.parse_args()	
+    # See main function
+    main(opt.fullsim,opt.fastsim)
