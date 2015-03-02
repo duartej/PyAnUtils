@@ -27,7 +27,7 @@ def printdiff(g,xvar,dim2=False):
 				print "%6s%.3f,%.3f) || %.3f" % ("(",x[i],_y[i],z[i])
 			else:
 				print "%6.3f || %.3f" % (x[i],y[i])
-	print "============================================"
+t sta	print "============================================"
 
 
 def drawgraph2d(gdict,dname):
@@ -98,21 +98,22 @@ def drawgraph2d(gdict,dname):
 			else:
 				diffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast))
 				try:
-					reldiffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast)/_zfull)
+					reldiffg.SetPoint(k,_xfull,_yfull,(_zfull-_zfast)/_zfull*100.0)
 				except ZeroDivisionError:
 					reldiffg.SetPoint(k,_xfull,_yfull,0.0)
 				k += 1
 	
 	_dummy = diffg.Draw("A")
 	hframediff = diffg.GetHistogram()
-	hframediff.SetZTitle("Material Lenght(fullsim-fastsim) [X_{0}]")
+	hframediff.SetZTitle("Rel. Material Lenght (fullsim-fastsim) [X_{0}]")
+        hframediff.GetZaxis().SetTitleOffset(2.2)
 	hframediff.SetYTitle("#phi")
 	hframediff.SetXTitle("#eta")
 	hframediff.SetLineColor(0)
 
 	hframediff.Draw()
 	# Allowing root to put the Z-title
-	c.SetRightMargin(0.2)
+	c.SetRightMargin(0.3)
 	c.SetLeftMargin(0.14)
 	if abs(diffg.GetZmax()) < abs(diffg.GetZmin()):
 		setpalette('darkbody')
@@ -122,7 +123,12 @@ def drawgraph2d(gdict,dname):
 
 	# Relative differences
 	_dummy = reldiffg.Draw("A")
+	hframediff = reldiffg.GetHistogram()
 	hframediff.SetZTitle("Material Lenght (full-fast)/full [%]")
+        hframediff.GetZaxis().SetTitleOffset(2.2)
+	hframediff.SetYTitle("#phi")
+	hframediff.SetXTitle("#eta")
+	hframediff.SetLineColor(0)
 	if abs(reldiffg.GetZmax()) < abs(reldiffg.GetZmin()):
 		setpalette('darkbody')
 	hframediff.Draw()
