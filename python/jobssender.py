@@ -573,7 +573,11 @@ class cerncluster(clusterspec):
         self.sendcom   = 'bsub'
         self.statecom  = 'bjobs'
         self.statuskill= 'bkill'
-        self.extraopt  += [ '-q','8nh' ]
+        if kw.has_key('queue'):
+            queue = kw['queue']
+        else:
+            queue = '8nh'
+        self.extraopt  += [ '-q', queue ]
     
     def simulatedresponse(self,action):
         """..method:: simulatedresponse() -> clusterresponse

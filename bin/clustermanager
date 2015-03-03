@@ -31,6 +31,8 @@ if __name__ == '__main__':
             "Options valid only when it is called with 'send' arg")
     sendopt.add_option("-j","--jobOption",action="store",dest="joboption",\
             help="Name of the python jobOption file")
+    sendopt.add_option("-q","--queue",action="store",dest="queue",\
+            help="Name of the queue to be send the job [Default: 8nh]")
     sendopt.add_option("-i","--inputfiles",action="store",dest="filenames",\
             help="Input root files (can be regular expresion)")
     sendopt.add_option("-n","--njobs",action="store",dest="njobs",\
@@ -57,6 +59,7 @@ if __name__ == '__main__':
                     '_mujets_filtDL_Rmax300.recon.RDO.e3355_s1982_s2008_r5787'\
                     '_tid04569111_00/*.pool.root.*',
                     njobs=300,
+                    queue='8nh',
                     workingpath='./')
 
     (opt,args) = parser.parse_args()
@@ -75,7 +78,7 @@ if __name__ == '__main__':
         jobs = athenajob(opt.bashname,opt.joboption,opt.filenames,
                 njobs=opt.njobs)
         jobs.preparejobs()
-        cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun)
+        cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun,queue=opt.queue)
         cern.submit()
         bookeepingjobs(jobs,cern)
         #print "Send the jobs using this:"
