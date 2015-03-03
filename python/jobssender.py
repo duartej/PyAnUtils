@@ -50,9 +50,8 @@ def getremotepaths(remoteinputfiles):
     
     Given the names of a files in a remote filesystem (EOS), 
     the function return the complete path of all the files
-    matching the regular expresion. This function mount the eos
-    file as local filesystem and then check for the files. It
-    could be convenient to use the pyxrootd library?
+    matching the regular expresion. This function list the available
+    files inside a folder using the eos command. 
 
     :param inputfiles: a str or list of str with regular expressions
                        to match files
@@ -72,6 +71,7 @@ def getremotepaths(remoteinputfiles):
     protocol = remoteinputfiles.split('//')[0]
     remoteserver = remoteinputfiles.split('//')[1]
     inputfiles = remoteinputfiles.replace(protocol+'//'+remoteserver+'//','')
+    parentfolder= os.path.dirname(inputfiles)
     mountpoint = inputfiles.split('/')[0]
     if mountpoint.find('/') != -1:
         # SANITY CHECK
@@ -80,26 +80,21 @@ def getremotepaths(remoteinputfiles):
                 '     root://eosserver//whateverpath\n'\
                 'NOTE the double slash!! (//)')
 
-    #os.mkdir('eos') -- Not needed eosmount takes care of it
-    # Note that eosmount is an alias (don't like too much this... but)
+    # Note that eos is an alias (don't like too much this... but)
     # Anyway it's needed the shell
     # FIXME:: NOTE THAT IS DEPENDENT OF THE EOS CLIENT VERSION!!
-    eosmount = '/afs/cern.ch/project/eos/installation/0.3.84-aquamarine/'\
-            'bin/eos.select -b fuse mount'
-    command = eosmount+' '+mountpoint+'/' 
+    eos = '/afs/cern.ch/project/eos/installation/0.3.84-aquamarine/bin/eos.select'
+    command = eos+' ls '+parentfolder
     p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
 
-    localfiles = getrealpaths(inputfiles)
-    nevents = getevt(localfiles,treename='CollectionTree')
+    if len(p[1]) != 0:
+        raise RuntimeError('Problem with the EOS path, didn\'t find any file in'\
+                ' "%s"' % parentfolder)
+    # fetch the files from the string p[0] (note that the last element is empty)
+    remotefiles = map(lambda x: protocol+'//'+remoteserver+'//'+parentfolder+'/'+x,
+            p[0].split('\n')[:-1])
+    nevents = getevt(remotefiles,treename='CollectionTree')
 
-    # Umounting the eos filesystem
-    eosumount = eosmount.replace('mount','umount')
-    command2 = eosumount+' '+mountpoint+'/' 
-    p2 = Popen(command2,stdout=PIPE,stderr=PIPE,shell=True).communicate()
-    os.rmdir('eos')
-    # Remote files
-    remotefiles = map(lambda x: protocol+'//'+remoteserver+'//'+\
-            os.path.relpath(x),localfiles)
     return remotefiles,nevents
 
 def getevt(filelist,**kw):
