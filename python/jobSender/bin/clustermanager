@@ -98,8 +98,8 @@ if __name__ == '__main__':
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
         js = accessingjobsinfo(shfile)
-        js.states  = { None: [], 'configured': [], 'submitted': [],
-                'running': [], 'finished': [], 'aborted': []}
+        #js.states  = { None: [], 'configured': [], 'submitted': [],
+        #        'running': [], 'finished': [], 'aborted': []}
         js.update()                                                               
         js.showstates()
 
@@ -121,8 +121,7 @@ if __name__ == '__main__':
             indexjobstobekilled  = map(lambda x: int(x),opt.joblisttokill.split(','))
         jobstobekill = filter(lambda x: x.index in indexjobstobekilled,js.getlistoftasks())
         print "%s" % str(map(lambda x: x.index,jobstobekill))
-        for jdsc in jobstobekill:
-            clspec.kill(jdsc)
+        js.kill(jobstobekill)
         bookeepingjobs(js)
     else:
         raise RuntimeError('Not valid argument "%s".'\

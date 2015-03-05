@@ -195,6 +195,13 @@ class jobdescription(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
+    def __str__(self):
+        """..method ::__str__(self)
+        representation of a jobdescription
+        """
+        repr = "<jobdescription instance>: Index:%i, ID:%i, state:%s (%s)" % \
+                (self.index,self.ID,self.state,self.status)
+        return repr
 
 
 STATUSCODE  = { 'fail': 31, 'ok': 32}
@@ -224,13 +231,16 @@ class job(object):
         self.cluster = cluster
         self.weinst  = we
         self.tasklist= None
+        # Dict with keys are ID of the tasks, given the state and 
+        # status, therefore no possibility to any task to be with 
+        # two different states
+        self.taskstates  = {}
         # Dict with the different states of the tasks. Each
-        # possible state is populated with a list of tuples
-        # containing the index and the status of the tasks
-        self.states  = { None: [], 'configured': [], 'submitted': [], 
-                         'running': [], 'finished': [], 'aborted': [] 
+        # possible state is populated with a dicts being the
+        # keys the index and the values its status
+        self.states  = { None: {}, 'configured': {}, 'submitted': {}, 
+                         'running': {}, 'finished': {}, 'aborted': {}
                          }
-        
         # Any extra?
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
@@ -251,6 +261,40 @@ class job(object):
         for jb in self.tasklist:
             self.cluster.submit(jb)
 
+    def kill(self,joblist):
+        """..method ::kill(joblist) 
+
+        wrapper to the clusterspec kill method.
+        Note that only 'submitted' and 'running'
+        states are sensitives to killing
+        """
+        # Get the list of jobs-to-be-killed (jtbk) from the submitted ones
+        jobindexlist = map(lambda x: x.index,joblist)
+        sbindexlist  = map(lambda x: x,self.states['submitted'].keys())
+        tokillsb = list(set(jobindexlist).intersection(sbindexlist))
+        # Eliminated from the jtbk list the submitted ones (picked them up above)
+        remaining = set(jobindexlist).difference(tokillsb)
+        # Get the list of jtbk from the running ones
+        runindexlist = map(lambda x: x,self.states['running'].keys())
+        tokillrn = list(remaining.intersection(runindexlist))
+        # Eliminated from the jtbk list the running ones (picked them up above)
+        renmant = list(remaining.difference(tokillrn))
+        if len(renmant) != 0:
+            premessage = "\033[1;33mWARNING\033[1;m JOBS ["
+            for i in sorted(renmant):
+                premessage+='%i,' % i
+            message =  premessage[:-1]
+            message += "] are not in 'SUBMITTED' nor 'RUNNING' state, kill has"
+            message += " no sense in them, so they're ignored..."
+            print message
+
+        tokillindices = tokillsb+tokillrn
+        tokill = filter(lambda x: x.index in tokillindices,joblist)
+        print tokill
+        for ik in tokill:
+            self.cluster.kill(ik)
+
+
     def getlistoftasks(self):
         """..method ::getlistoftasks() -> jobdescriptionlist
 
@@ -258,12 +302,22 @@ class job(object):
         """
         return self.tasklist
 
+    def __cacheupdate__(self):
+        """..method ::__cacheupdate__() 
+        update the self.state internal dict by checking the current
+        state and status of the jobs
+        """
+        self.states = dict( [(x,{}) for x in STATESORDER] )
+        for (index,(state,status)) in self.taskstates.iteritems():
+            self.states[state][index] = status
+
     def update(self):
         """..method ::update() 
         update the state and status of the job by looking at
         the state of its tasks
         """
         import sys
+
         i=0
         point = float(len(self.tasklist))/100.0
         # Just checking in those with possible changing of state
@@ -277,13 +331,15 @@ class job(object):
             sys.stdout.flush()
             # end progress bar
             self.cluster.getnextstate(jdsc,self.weinst.checkfinishedjob)
-            self.states[jdsc.state].append( (jdsc.index,jdsc.status) )
+            self.taskstates[jdsc.index] = (jdsc.state,jdsc.status)
+            self.states[jdsc.state][jdsc.index] = jdsc.status
         print
 
     def showstates(self):
         """..method ::showstates()
         print a summary of the states and status of the tasks
         """
+        self.__cacheupdate__()
         message = "\033[1;34mINFO\033[1;m List of tasks with state:\n"
         for state in STATESORDER:
             listof = self.getlistof(state)
@@ -302,11 +358,15 @@ class job(object):
         if len(self.states[state]) == 0:
             return None
         # Obtaining a list of paired values. The edge are defining intervals
-        # of numbers with the same state
-        currentinit = sorted(self.states[state])[0] 
-        currentlast = currentinit 
+        # of numbers with the same state, note that all the operations are
+        # done with the tuples (id,status)
+        idinit = sorted(self.states[state].keys())[0]
+        stinit = self.states[state][idinit]
+        currentinit = (idinit,stinit)
+        currentlast = currentinit
         compactlist = []
-        for (id,status) in sorted(self.states[state])[1:]:
+        for id in sorted(self.states[state].keys())[1:]:
+            status = self.states[state][id]
             if id-1 != currentlast[0] or status != currentlast[1]:
                 compactlist.append( (currentinit,currentlast) )
                 currentinit = (id,status)
