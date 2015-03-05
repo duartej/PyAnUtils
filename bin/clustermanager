@@ -10,7 +10,9 @@
 
 DEBUG=True
 JOBEVT=500
-from PyAnUtils.jobssender import athenajob,cerncluster,bookeepingjobs,accessingjobsinfo
+from PyAnUtils.workenvfactory import athenajob
+from PyAnUtils.clusterfactory import cerncluster
+from PyAnUtils.jobssender     import bookeepingjobs,accessingjobsinfo
 
 if __name__ == '__main__':
     from optparse import OptionParser,OptionGroup
