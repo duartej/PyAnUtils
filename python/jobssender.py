@@ -128,7 +128,7 @@ def getevt(filelist,**kw):
         t.AddFile(f)
     return t.GetEntries()    
 
-def bookeepingjobs(jobinstance,clusterinstance):
+def bookeepingjobs(jobinstance):
     """.. function::bookeepingjobs(listjobs) 
     stores  the list of the jobdescription instances found in 'listjobs' and 
     which can be accessed using the accesingjobsinfo functions. 
@@ -138,8 +138,7 @@ def bookeepingjobs(jobinstance,clusterinstance):
     import shelve
     d = shelve.open(".presentjobs",writeback=True)
     #d['joblist'] = listjobs
-    d['jobspecinstance'] = jobinstance
-    d['clusterspecinstance'] = clusterinstance
+    d['jobinstance'] = jobinstance
 
     d.close()
 
@@ -150,40 +149,34 @@ def accessingjobsinfo(filename='.presentjobs'):
     import shelve
     d = shelve.open(filename)
     #joblist = d['joblist'] 
-    jobspecinstance = d['jobspecinstance']
-    clusterinstance = d['clusterspecinstance'] 
+    jobinstance = d['jobinstance']
 
     d.close()
     
-    return jobspecinstance,clusterinstance
-    
-
+    return jobinstance
 
 class jobdescription(object):
     """..class:: jobdescription
 
     Class to store all the information relative to a job.
-    This class is used by both jobspec and clusterspec classes,
-    where some datamembers should be filled by one class and
-    others by the other class. The class provides the following
-    information (in parenthesis it is indicated which class is
-    the responsible of filling the datamember):
+    This class is used by the "job" class, which keep a list
+    of the tasks (jobdescription instances). The class provides 
+    the following information (in parenthesis it is indicated 
+    which class is the responsible of filling the datamember):
      * path: the path where the job has been build (jobspec)
      * script: the script to be sended to the cluster (jobspec)
      * ID: job id in the cluster (clusterspec)
      * status: job status in the cluster (clusterspec)
-    
-    TODO:  jobspec and clusterspec related instances??
+     * index: index of the job (regarding jobspec class)
     """
     def __init__(self,**kw):
         """..class:: jobdescription
 
         Class to store all the information relative to a job.
-        This class is used by both jobspec and clusterspec classes,
-        where some datamembers should be filled by one class and
-        others by the other class. The class provides the following
-        information (in parenthesis it is indicated which class is
-        the responsible of filling the datamember):
+        This class is used by the "job" class, which keep a list
+        of the tasks (jobdescription instances). The class provides 
+        the following information (in parenthesis it is indicated 
+        which class is the responsible of filling the datamember):
          * path: the path where the job has been build (jobspec)
          * script: the script to be sended to the cluster (jobspec)
          * ID: job id in the cluster (clusterspec)
@@ -215,112 +208,135 @@ class jobdescription(object):
         return jobdescription(ID=ID,status=status)
 
 
-#from clusterfactory import clusterspec
-#from workenvfactory import workenv
-#
-#class jobsender(clusterspec,workenv):
-#    """ ..class:: jobsender
-#    
-#    """
-#    __metaclass__ = ABCMeta
-#
-#    def __init__(self,bashscript,inputfiles=None,**kw):
-#        """ ..method:: jobsender(basescript[,inputfiles,maxevts,njobs) ->
-#                                                            jobsender instance
-#
-#        Initialize common datamembers:
-#         * bashscript [str]      : bash script name to be send to the cluster
-#         * inputfiles [list(str)]: list of the input files names 
-#         * outputfiles[list(str)]: list of the output files names (if any)
-#         * njobs      [int]      : number of jobs 
-#         * maxevts    [int]      : number of events to be processes
-#         * jobslist   [lit(int)] : list of the sended jobs (or taks) ID
-#
-#        :param basescript: the base script from build the jobs
-#        :type basescript: str
-#        :param inputfiles: str or list of files (can be regex expressions)
-#        :type inputfiles: str/list(str)
-#        :param maxevts: number of events to process
-#        :type maxevts: int
-#        :param njobs: number of jobs
-#        :type njobs: int
-#        """
-#        self.bashscript = bashscript
-#        self.inputfiles = getrealpath(inputfiles)
-#        self.outputfiles= None
-#        self.njobs      = None
-#        self.maxevts    = None
-#        self.jobslist   = None
-#
-#        if kw.has_key('maxevts'):
-#            self.maxevts = int(kw['maxevts'])
-#        if kw.has_key("njobs"):
-#            self.njobs = int(kw['njobs'])
-#
-#        if not self.inputfiles:
-#            return self
-#        
-#        # consistency
-#        if len(self.inputfiles) == 0:
-#            message = "Didn't found any root file in the entered"
-#            message +=" location: %s" % str(inputfiles)
-#            raise RuntimeError(message)
-#
-#        if not self.maxevts:
-#            self.maxevts = self.getevt(self.inputfiles)
-#
-#        if not self.njobs:
-#            self.njobs = self.maxevts/JOBEVT
-#
-#        # Get the evtperjob
-#        evtperjob = self.__evts2proc__/self.__njobs__
-#        # First event:0 last: n-1
-#        remainevts = (self.__evts2proc__ % self.__njobs__)-1
-#        
-#        #Build the list of events
-#        for i in xrange(self.__njobs__-1):
-#            #self.__evtperjob__.append( (i*evtperjob,(i+1)*evtperjob-1) )
-#            self.__evtperjob__.append( (i*evtperjob,evtperjob) )
-#        # And the remaining
-#        self.__evtperjob__.append( ((self.__njobs__-1)*evtperjob,remainevts) ) 
-#
-#    @staticmethod
-#    def getevt(filelist,**kw):
-#        """ ..method:: jobsender.getevt(filelist[,treename]) -> totalevts
-#        
-#        Getting the number of events contained in a list
-#        of files
-#
-#        :param filelist: the files to look into
-#        :type filelist: list(str)
-#        :param treename: the name of the tree where to check 
-#                         [CollectionTree default]
-#        :type treename: str
-#
-#        ;return: number of events contained in the treename Tree 
-#        :rtype: int
-#        """
-#        try:
-#            import cppyy
-#        except ImportError:
-#            pass
-#        import ROOT
-#
-#        if kw.has_key("treename"):
-#            treename=kw["treename"]
-#        else:
-#            treename="CollectionTree"
-#
-#        if DEBUG:
-#            print "Loading the root files to obtain the N_{evts} "\
-#                    "[Tree:%s]: " % treename
-#        t = ROOT.TChain(treename)
-#        for f in filelist:
-#            t.AddFile(f)
-#        return t.GetEntries()    
-#
-## jobsender is a mix-in class of jobspec and clusterspec
-#workenv.register(jobsender)
-#clusterspec.register(jobsender)
-#
-#### -FIXME:: PROVISIONAL---
+STATUSCODE  = { 'fail': 31, 'ok': 32}
+STATESORDER = [ None, 'configured', 'submitted', 'running', 'finished', 'aborted' ]
+NLETTERS = max(map(lambda x: len(str(x)),STATESORDER))
+class job(object):
+    """
+    Class encapsulating a job. A job IS a "clusterspec" 
+    plus a "workenv", i.e. a work to be performed in a cluster.
+    The class provides the following information (in parenthesis 
+    it is indicated which class is the responsible of filling 
+    the datamember):
+     * path: the path where the job has been build (jobspec)
+     * script: the script to be sended to the cluster (jobspec)
+     * ID: job id in the cluster (clusterspec)
+     * status: job status in the cluster (clusterspec)
+     * index: index of the job (regarding jobspec class)
+    """
+    def __init__(self,cluster,we,**kw):
+        """...class:: job(cluster,we) 
+
+        :param cluster: the cluster where the job is sent
+        :type  cluster: clusterspec concrete class instance
+        :param      we: the type of work the user want to perform
+        :type       we: workenv concrete class instance
+        """
+        self.cluster = cluster
+        self.weinst  = we
+        self.tasklist= None
+        # Dict with the different states of the tasks. Each
+        # possible state is populated with a list of tuples
+        # containing the index and the status of the tasks
+        self.states  = { None: [], 'configured': [], 'submitted': [], 
+                         'running': [], 'finished': [], 'aborted': [] 
+                         }
+        
+        # Any extra?
+        for _var,_value in kw.iteritems():
+            setattr(self,_var,_value)
+
+    def preparejobs(self):
+        """..method ::preparejobs()
+
+        wrapper to the workenv method. The tasks
+        are initialized
+        """
+        self.tasklist = self.weinst.preparejobs()
+
+    def submit(self):
+        """..method ::submit
+
+        wrapper to the clusterspec method
+        """
+        for jb in self.tasklist:
+            self.cluster.submit(jb)
+
+    def getlistoftasks(self):
+        """..method ::getlistoftasks() -> jobdescriptionlist
+
+        return the jobdescription list of instances, i.e. the jobs
+        """
+        return self.tasklist
+
+    def update(self):
+        """..method ::update() 
+        update the state and status of the job by looking at
+        the state of its tasks
+        """
+        import sys
+        i=0
+        point = float(len(self.tasklist))/100.0
+        # Just checking in those with possible changing of state
+        checkabletasks = filter(lambda x: x.state != 'finished' or
+                x.state != 'aborted',self.tasklist)
+        for jdsc in checkabletasks:
+            # Progress bar 
+            sys.stdout.write("\r\033[1;34mINFO\033[1;m Checking job states "+\
+                    "[ "+"\b"+str(int(float(i)/point)+1).rjust(3)+"%]")
+            sys.stdout.flush()
+            # end progress bar
+            self.cluster.getnextstate(jdsc,self.weinst.checkfinishedjob)
+            self.states[jdsc.state].append( (jdsc.index,jdsc.status) )
+            i+=1
+        print
+
+    def showstates(self):
+        """..method ::showstates()
+        print a summary of the states and status of the tasks
+        """
+        message = "\033[1;34mINFO\033[1;m List of tasks with state:\n"
+        for state in STATESORDER:
+            listof = self.getlistof(state)
+            if listof:
+                preformat = " + %"+str(NLETTERS)+"s: %s\n"
+                message += preformat % (str(state).upper(),listof)
+        print message
+        
+   
+    def getlistof(self,state):
+        """ ..getlistof(state) -> '[ind1, ind2, ...]'
+        return a string-like list of all the tasks indexs with the
+        given state. Note that the status is coded in color (red is fail,
+        green is ok)
+        """
+        if len(self.states[state]) == 0:
+            return None
+        # Obtaining a list of paired values. The edge are defining intervals
+        # of numbers with the same state
+        currentinit = sorted(self.states[state])[0] 
+        currentlast = currentinit 
+        compactlist = []
+        for (id,status) in sorted(self.states[state])[1:]:
+            print "id: %i %s" % (id,status)
+            if id-1 != currentlast[0] or status != currentlast[1]:
+                compactlist.append( (currentinit,currentlast) )
+                currentinit = (id,status)
+            currentlast = (id,status)
+        # last set
+        compactlist.append( (currentinit,currentlast) )
+        
+        premessage = "["
+        for ((idi,statusi),(idf,statusf)) in compactlist:
+            if idi == idf:
+                premessage+= "\033[1;%im%i\033[1;m," % (STATUSCODE[statusi],idi)
+            else:
+                premessage+= "\033[1;%im%i\033[1;m-" % (STATUSCODE[statusi],idi)
+                premessage+= "\033[1;%im%i\033[1;m," % (STATUSCODE[statusf],idf)
+
+        message = premessage[:-1]+"]"
+
+        return message
+
+
+

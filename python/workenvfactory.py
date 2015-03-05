@@ -63,8 +63,6 @@ class workenv(object):
         self.jobname     = bashscriptname.split('.sh')[0]
         # Name of the script to be used to send jobs including the suffix 
         self.scriptname  = bashscriptname+'.sh'
-        # List of jobdescription instances
-        self.joblist     = []
 
         # set the relevant variables used to check the kind
         # of job is
@@ -267,7 +265,7 @@ class athenajob(workenv):
 
         # setting up the folder structure to send the jobs
         # including the bashscripts
-        self.settingfolders(usersetupfolder,athenaversion,compiler)
+        return self.settingfolders(usersetupfolder,athenaversion,compiler)
 
 
     def getuserasetupfolder(self):
@@ -359,6 +357,7 @@ class athenajob(workenv):
 
         cwd=os.getcwd()
 
+        jdlist = []
         i=0
         for (skipevts,nevents) in self.skipandperform:
             # create a folder
@@ -370,24 +369,27 @@ class athenajob(workenv):
                     version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
             # Registring the jobs in jobdescription class instances
-            self.joblist.append( \
+            jdlist.append( \
                     jobdescription.buildfromjob(foldername,self.jobname,i)
                     )
-            self.joblist[-1].state   = 'configured'
-            self.joblist[-1].status  = 'ok'
-            self.joblist[-1].workenv = self
-            #self.setjobstate(self.joblist[-1],'configuring') ---> Should I define one?
+            jdlist[-1].state   = 'configured'
+            jdlist[-1].status  = 'ok'
+            jdlist[-1].workenv = self
+            #self.setjobstate(jdlist[-1],'configuring') ---> Should I define one?
             os.chdir(cwd)
             i+=1
 
-    def getlistofjobs(self):
-        """..method:: getlistofjobs() -> [ listofjobs ]
-        return the list of prepared jobs, if any, None otherwise
+        return jdlist
 
-        :return: List of jobs prepared
-        :rtype:  list(jobdescription)        
-        """
-        return self.joblist
+    # DEPRECATED!!
+    #def getlistofjobs(self):
+    #    """..method:: getlistofjobs() -> [ listofjobs ]
+    #    return the list of prepared jobs, if any, None otherwise
+
+    #    :return: List of jobs prepared
+    #    :rtype:  list(jobdescription)        
+    #    """
+    #    return self.joblist
 
     @staticmethod
     def checkfinishedjob(jobdsc):

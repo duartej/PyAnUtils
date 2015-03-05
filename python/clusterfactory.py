@@ -38,7 +38,7 @@ class clusterspec(object):
      """
     __metaclass__ = ABCMeta
     
-    def __init__(self,joblist,**kw):
+    def __init__(self,**kw):#joblist,**kw):
         """ ..class:: jobspec
         
         Class to deal with an specific cluster (cern/tau/...) cluster.
@@ -65,18 +65,19 @@ class clusterspec(object):
         # Actual command to kill a job
         self.killcom     = None
         # List of jobdescription instances
-        self.joblist     = joblist
+        #self.joblist     = joblist
 
-    def submit(self):
-        """..method:: submit()
-        wrapper to submit(jobdsc) function, using all the
-        jobs in the list
-        """
-        for jb in self.joblist:
-            self.submitjob(jb)
+    # DEPRECATED
+    #def submit(self):
+    #    """..method:: submit()
+    #    wrapper to submit(jobdsc) function, using all the
+    #    jobs in the list
+    #    """
+    #    for jb in self.joblist:
+    #        self.submitjob(jb)
     
-    def submitjob(self,jobdsc):
-        """...method:: submitjob(jobdsc)
+    def submit(self,jobdsc):
+        """...method:: submit(jobdsc)
          
         function to send the jobs to the cluster.
 
@@ -228,12 +229,12 @@ class cerncluster(clusterspec):
     Concrete implementation of the clusterspec class dealing with
     the cluster at cern (usign lxplus as UI)
     """
-    def __init__(self,joblist=None,**kw):
+    def __init__(self,**kw):#joblist=None,**kw):
         """..class:: cerncluster 
         Concrete implementation of the clusterspec class dealing with
         the cluster at cern (usign lxplus as UI)
         """
-        super(cerncluster,self).__init__(joblist,**kw)
+        super(cerncluster,self).__init__(**kw)#joblist,**kw)
         self.sendcom   = 'bsub'
         self.statecom  = 'bjobs'
         self.statuskill= 'bkill'
@@ -272,7 +273,7 @@ class cerncluster(clusterspec):
             elif simstate == 'finished':
                 mess =  ("Job <123456789> is not found","Job <123456789> is not found")
             elif simstate == 'aborted':
-                mess = ("","")
+                mess = ("JOBID <123456789>:\njob status EXIT","")
             return mess
         elif action == 'finishing':
             simstatus = [ 'ok','ok','ok','fail','ok','ok','ok']
@@ -326,22 +327,23 @@ class cerncluster(clusterspec):
             message+='\nWARNING: forcing "aborted" state'
             print message
             return 'aborted','fail'
-
-    def setjobstate(self,jobds,command):
-        """..method:: setjobstate(jobds,action) 
-        establish the state (and status) of the jobds ('jobdescription' 
-        instance) associated to this clusterspec instance, depending
-        of the 'command' being executed
-        """
-        if commad == 'configuring':
-            self.joblist[-1].state   = 'configured'
-            self.joblist[-1].status  = 'ok'
-            self.joblist[-1].jobspec = self
-        elif command == 'submitting':
-            self.joblist[-1].state   = 'submit'
-            self.joblist[-1].status  = 'ok'
-        else:
-            raise RuntimeError('Unrecognized command "%s"' % command)
+    
+    # DEPRECATED
+    #def setjobstate(self,jobds,command):
+    #    """..method:: setjobstate(jobds,action) 
+    #    establish the state (and status) of the jobds ('jobdescription' 
+    #    instance) associated to this clusterspec instance, depending
+    #    of the 'command' being executed
+    #    """
+    #    if command == 'configuring':
+    #        self.joblist[-1].state   = 'configured'
+    #        self.joblist[-1].status  = 'ok'
+    #        self.joblist[-1].jobspec = self
+    #    elif command == 'submitting':
+    #        self.joblist[-1].state   = 'submit'
+    #        self.joblist[-1].status  = 'ok'
+    #    else:
+    #        raise RuntimeError('Unrecognized command "%s"' % command)
     
     def failed(self):
         """..method:: failed()

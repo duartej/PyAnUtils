@@ -12,7 +12,7 @@ DEBUG=True
 JOBEVT=500
 from PyAnUtils.workenvfactory import athenajob
 from PyAnUtils.clusterfactory import cerncluster
-from PyAnUtils.jobssender     import bookeepingjobs,accessingjobsinfo
+from PyAnUtils.jobssender     import bookeepingjobs,accessingjobsinfo,job
 
 if __name__ == '__main__':
     from optparse import OptionParser,OptionGroup
@@ -76,17 +76,16 @@ if __name__ == '__main__':
     if args[0] == 'send':
         cwd = os.getcwd()
         os.chdir(os.path.abspath(opt.workingpath))
-
-        jobs = athenajob(opt.bashname,opt.joboption,opt.filenames,
+        
+        # Work environment and cluster definitions
+        athenawe = athenajob(opt.bashname,opt.joboption,opt.filenames,
                 njobs=opt.njobs)
-        jobs.preparejobs()
-        cern = cerncluster(jobs.getlistofjobs(),simulate=opt.dryrun,queue=opt.queue)
-        cern.submit()
-        bookeepingjobs(jobs,cern)
-        #print "Send the jobs using this:"
-        #print "for i in `echo */*.sh`; do j=`echo $i|cut -d/ -f1`;"\
-        #        "echo $j;cd $j; bsub -q 8nh %s; cd ..;  done;" % \
-        #        (jobs.scriptname+'.sh')a
+        cern = cerncluster(simulate=opt.dryrun,queue=opt.queue)
+        # Job instantation
+        js   = job(cern,athenawe)
+        js.preparejobs()
+        js.submit()
+        bookeepingjobs(js)
         os.chdir(cwd)
 
     elif args[0] == 'retrieve':
@@ -98,13 +97,13 @@ if __name__ == '__main__':
         except IndexError:
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
-        jspec,clspec = accessingjobsinfo(shfile)
-        for jdsc in jspec.getlistofjobs():
-            clspec.getnextstate(jdsc,jspec.checkfinishedjob)
-            print "INFO::JOB [%s] state: %s, status: %s" % (str(jdsc.index),jdsc.state,jdsc.status)
-            # Check the state and status and act as consequence
-            #clspec.gonextstate(jdsc)
-        bookeepingjobs(jspec,clspec)
+        js = accessingjobsinfo(shfile)
+        js.states  = { None: [], 'configured': [], 'submitted': [],
+                'running': [], 'finished': [], 'aborted': []}
+        js.update()                                                               
+        js.showstates()
+
+        bookeepingjobs(js)
         
     elif args[0] == 'kill':
         import glob
@@ -115,16 +114,16 @@ if __name__ == '__main__':
         except IndexError:
             raise RuntimeError('Not found jobs in the folder "%s"(, '\
                 ' i.e. not found ".presentjobs" file) ' % opt.workingpath)
-        jspec,clspec = accessingjobsinfo(shfile)
+        js = accessingjobsinfo(shfile)
         if not opt.joblisttokill:
-            indexjobstobekilled = map(lambda x: x.index,jspec.getlistofjobs())
+            indexjobstobekilled = map(lambda x: x.index,js.getlistoftasks())
         else:
             indexjobstobekilled  = map(lambda x: int(x),opt.joblisttokill.split(','))
-        jobstobekill = filter(lambda x: x.index in indexjobstobekilled,jspec.getlistofjobs())
+        jobstobekill = filter(lambda x: x.index in indexjobstobekilled,js.getlistoftasks())
         print "%s" % str(map(lambda x: x.index,jobstobekill))
         for jdsc in jobstobekill:
             clspec.kill(jdsc)
-        bookeepingjobs(jspec,clspec)
+        bookeepingjobs(js)
     else:
         raise RuntimeError('Not valid argument "%s".'\
                 ' Valid args: send|aretrieve' % args[0])
