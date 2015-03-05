@@ -647,11 +647,13 @@ class cerncluster(clusterspec):
                 return 'submitted','ok'
             elif status == 'RUN':
                 return 'running','ok'
+            elif status == 'DONE':
+                return 'finished','ok'
             elif status == 'EXIT':
                 return 'aborted','ok'
             else:
-                message='I have no idea of the state parsed in the cluster"\
-                        " as "%s". Parser should be updated\n' % status
+                message='I have no idea of the state parsed in the cluster'
+                message+=' as "%s". Parser should be updated\n' % status
                 message+='WARNING: forcing "None" state'
                 print message
                 return None,'fail'
