@@ -195,17 +195,6 @@ class jobdescription(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    @staticmethod
-    def buildfromjob(path,script,index):
-        """
-        """
-        return jobdescription(path=path,script=script,index=index)
-    
-    @staticmethod
-    def buildfromcluster(ID,status):
-        """
-        """
-        return jobdescription(ID=ID,status=status)
 
 
 STATUSCODE  = { 'fail': 31, 'ok': 32}
@@ -281,14 +270,14 @@ class job(object):
         checkabletasks = filter(lambda x: x.state != 'finished' or
                 x.state != 'aborted',self.tasklist)
         for jdsc in checkabletasks:
+            i+=1
             # Progress bar 
             sys.stdout.write("\r\033[1;34mINFO\033[1;m Checking job states "+\
-                    "[ "+"\b"+str(int(float(i)/point)+1).rjust(3)+"%]")
+                    "[ "+"\b"+str(int(float(i)/point)).rjust(3)+"%]")
             sys.stdout.flush()
             # end progress bar
             self.cluster.getnextstate(jdsc,self.weinst.checkfinishedjob)
             self.states[jdsc.state].append( (jdsc.index,jdsc.status) )
-            i+=1
         print
 
     def showstates(self):
@@ -318,7 +307,6 @@ class job(object):
         currentlast = currentinit 
         compactlist = []
         for (id,status) in sorted(self.states[state])[1:]:
-            print "id: %i %s" % (id,status)
             if id-1 != currentlast[0] or status != currentlast[1]:
                 compactlist.append( (currentinit,currentlast) )
                 currentinit = (id,status)

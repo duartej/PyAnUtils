@@ -369,8 +369,8 @@ class athenajob(workenv):
                     version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents)
             # Registring the jobs in jobdescription class instances
-            jdlist.append( \
-                    jobdescription.buildfromjob(foldername,self.jobname,i)
+            jdlist.append( 
+                    jobdescription(path=foldername,script=self.jobname,index=i)
                     )
             jdlist[-1].state   = 'configured'
             jdlist[-1].status  = 'ok'

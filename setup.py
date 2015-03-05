@@ -8,7 +8,9 @@ setup(name='PyAnUtils',
 		url='https://github.com/',
 		# See https://docs.python.org/2/distutils/setupscript.html#listing-whole-packages
 		# for changes in the package distribution
-        package_dir={'PyAnUtils':'python','dvAnUtils':'python/dvAnUtils'},
-		packages = ['PyAnUtils','dvAnUtils' ],
-		scripts=['bin/mtgfastfullcmp','bin/lazycmt','bin/clustermanager','python/dvAnUtils/bin/dvtrigeff'],
+        package_dir={'PyAnUtils':'python','dvAnUtils':'python/dvAnUtils',
+            'jobSender':'python/jobSender'},
+		packages = ['PyAnUtils','dvAnUtils','jobSender' ],
+		scripts=['bin/mtgfastfullcmp','bin/lazycmt','python/dvAnUtils/bin/dvtrigeff',
+            'python/jobSender/bin/clustermanager'],
 		)
