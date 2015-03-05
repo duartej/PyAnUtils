@@ -235,12 +235,7 @@ class job(object):
         # status, therefore no possibility to any task to be with 
         # two different states
         self.taskstates  = {}
-        # Dict with the different states of the tasks. Each
-        # possible state is populated with a dicts being the
-        # keys the index and the values its status
-        self.states  = { None: {}, 'configured': {}, 'submitted': {}, 
-                         'running': {}, 'finished': {}, 'aborted': {}
-                         }
+        
         # Any extra?
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
@@ -270,12 +265,12 @@ class job(object):
         """
         # Get the list of jobs-to-be-killed (jtbk) from the submitted ones
         jobindexlist = map(lambda x: x.index,joblist)
-        sbindexlist  = map(lambda x: x,self.states['submitted'].keys())
+        sbindexlist  = map(lambda x: x,self.getdictof('submitted').keys())
         tokillsb = list(set(jobindexlist).intersection(sbindexlist))
         # Eliminated from the jtbk list the submitted ones (picked them up above)
         remaining = set(jobindexlist).difference(tokillsb)
         # Get the list of jtbk from the running ones
-        runindexlist = map(lambda x: x,self.states['running'].keys())
+        runindexlist = map(lambda x: x,self.getdictof('running').keys())
         tokillrn = list(remaining.intersection(runindexlist))
         # Eliminated from the jtbk list the running ones (picked them up above)
         renmant = list(remaining.difference(tokillrn))
@@ -302,15 +297,6 @@ class job(object):
         """
         return self.tasklist
 
-    def __cacheupdate__(self):
-        """..method ::__cacheupdate__() 
-        update the self.state internal dict by checking the current
-        state and status of the jobs
-        """
-        self.states = dict( [(x,{}) for x in STATESORDER] )
-        for (index,(state,status)) in self.taskstates.iteritems():
-            self.states[state][index] = status
-
     def update(self):
         """..method ::update() 
         update the state and status of the job by looking at
@@ -332,41 +318,50 @@ class job(object):
             # end progress bar
             self.cluster.getnextstate(jdsc,self.weinst.checkfinishedjob)
             self.taskstates[jdsc.index] = (jdsc.state,jdsc.status)
-            self.states[jdsc.state][jdsc.index] = jdsc.status
         print
 
     def showstates(self):
         """..method ::showstates()
         print a summary of the states and status of the tasks
         """
-        self.__cacheupdate__()
+        #self.__cacheupdate__()
         message = "\033[1;34mINFO\033[1;m List of tasks with state:\n"
         for state in STATESORDER:
-            listof = self.getlistof(state)
+            listof = self.getlistofindices(state)
             if listof:
                 preformat = " + %"+str(NLETTERS)+"s: %s\n"
                 message += preformat % (str(state).upper(),listof)
         print message
         
+    def getdictof(self,state):
+        """ ..getdictof(state) -> '{ ind1: (ste1,stus1), ...}'
+        return a kind sub-dict of taskstates with state==state 
+        """
+        l = filter(lambda (id,(ste,stus)): ste == state,self.taskstates.iteritems())
+        return dict(l)
    
-    def getlistof(self,state):
-        """ ..getlistof(state) -> '[ind1, ind2, ...]'
+    def getlistofindices(self,state):
+        """ ..getlistofindices(state) -> '[ind1, ind2, ...]'
         return a string-like list of all the tasks indexs with the
         given state. Note that the status is coded in color (red is fail,
         green is ok)
         """
-        if len(self.states[state]) == 0:
+        prestatedict = self.getdictof(state)
+        if len(prestatedict) == 0:
             return None
+        # As all the prestatedict contains the same state, let's skip this 
+        # redundance: { 'id': st, ...} 
+        statedict = dict( map(lambda (id,(ste,stus)): (id,stus), prestatedict.iteritems()) )
         # Obtaining a list of paired values. The edge are defining intervals
         # of numbers with the same state, note that all the operations are
         # done with the tuples (id,status)
-        idinit = sorted(self.states[state].keys())[0]
-        stinit = self.states[state][idinit]
+        idinit = sorted(statedict.keys())[0]
+        stinit = statedict[idinit]
         currentinit = (idinit,stinit)
         currentlast = currentinit
         compactlist = []
-        for id in sorted(self.states[state].keys())[1:]:
-            status = self.states[state][id]
+        for id in sorted(statedict.keys())[1:]:
+            status = statedict[id]
             if id-1 != currentlast[0] or status != currentlast[1]:
                 compactlist.append( (currentinit,currentlast) )
                 currentinit = (id,status)
