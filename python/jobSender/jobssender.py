@@ -285,7 +285,7 @@ class job(object):
 
         tokillindices = tokillsb+tokillrn
         tokill = filter(lambda x: x.index in tokillindices,joblist)
-        print tokill
+        print "Killing them..."
         for ik in tokill:
             self.cluster.kill(ik)
 
