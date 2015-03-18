@@ -29,6 +29,48 @@ def printdiff(g,xvar,dim2=False):
                 print "%6.3f || %.3f" % (x[i],y[i])
     print "============================================"
 
+def getminemptypoint(g):
+    """
+    Find the lowest empty point (bin content == 0)
+    """
+    y = g.GetY()
+    maxpoint = g.GetN()-1
+    minpoint = -1
+    while y[minpoint+1] == 0:
+        minpoint+=1
+        if minpoint >= maxpoint:
+            break
+    return minpoint
+
+def getmaxemptypoint(g):
+    """
+    Find the highest empty point (bin content == 0)
+    """
+    y = g.GetY()
+    maxpoint = g.GetN()-1
+    while y[maxpoint-1] == 0:
+        maxpoint-=1
+        if maxpoint == 0:
+            break
+    return maxpoint
+
+def getminemptybin(h):
+    """
+    Find the lowest empty bin (bin content == 0)
+    """
+    minbin = 0
+    while h.GetBinContent(minbin+1) == 0:
+        minbin+=1
+    return minbinp
+
+def getmaxemptybin(h):
+    """
+    Find the highest empty bin (bin content == 0)
+    """
+    maxbin = h.GetNbinsX()
+    while h.GetBinContent(maxbin-1) == 0:
+        maxbin-=1
+    return maxbin
 
 def drawgraph2d(gdict,dname):
     """
@@ -160,9 +202,18 @@ def drawgraph(gdict,dname,xtitle):
     ymax = max(map(lambda x: 1.01*x.GetYaxis().GetBinUpEdge(x.GetYaxis().GetLast()),
         gdict.values()))
     ymin = 0.0
-    xmax = max(map(lambda x: x.GetXaxis().GetBinUpEdge(x.GetXaxis().GetLast()),
-        gdict.values()))
-    xmin = -xmax
+    #xmax = max(map(lambda x: x.GetXaxis().GetBinUpEdge(x.GetXaxis().GetLast()),
+    #    gdict.values()))
+    #xmin = -xmax
+    # XXX- Testing value-dependent
+    _xmax = max(map(lambda x: x.GetXaxis().GetBinUpEdge(getmaxemptypoint(x)), gdict.values()))
+    _xmin = min(map(lambda x: x.GetXaxis().GetBinLowEdge(getminemptypoint(x)), gdict.values()))
+    if abs(_xmax) > abs(_xmin):
+        xmax = _xmax
+        xmin = -xmax
+    else:
+        xmin = _xmin
+        xmax = -xmin
     if xtitle == 'theta':
         xmin = 0.0
     
