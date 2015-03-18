@@ -187,8 +187,9 @@ if __name__ == '__main__':
               'MC-displaced vertex tracks are checked')
     createopt.add_option( '-x', '--extravars', action='store_true', \
             dest = 'extravars',help='Includes efficiencies with respect extravariables')
-    createopt.add_option( '-t', '--triggersOR', action='store', metavar='[TR1,TR2,...]',\
-            dest = 'triggersOR',help='List of triggers to be used in the OR')
+    createopt.add_option( '-t', '--triggersOR', action='store', metavar='TR1:TR2:TR3,TR2:TR4,..',\
+            dest = 'triggersOR',help='List of triggers to be used in the OR. The triggers separated by'\
+            ' ":" are going to be ORed, while the comma "," separates group of OR triggers')
     createopt.add_option( '-e', '--extraplots', action='store_true', \
             dest = 'extraplots',help='Perform some extra plots related to the events, kinematics and'\
               ' more')
