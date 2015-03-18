@@ -68,9 +68,16 @@ def geteffinstance(rootfile):
     # to instanciate the eff-class
     trgnames = []
     esv = effsv()
+    # Re-initializing the ORs
+    esv.grouptriggersOR = {}
     for tkey in f.GetListOfKeys():
         effname = tkey.GetName()
         trname = esv.gettriggernamefrom(effname)
+        # The OR case
+        if trname.find('OR') == 0:
+            # Just filling the keys, not interested 
+            # in the trigger list
+            esv.grouptriggersOR[trname] = None 
         varname = esv.getvarnamefrom(effname)
         effobject = f.Get(effname)
         effobject.SetDirectory(0)
@@ -110,7 +117,7 @@ def create(folder,opt):
     #trarrays = setuptree(t,trnames)
     #eff = dict(map(lambda x: (x,0),trarrays.keys()))
     # Init efficiencies instance
-    effwrtsv = effsv(trnames,extravareff=opt.extravars)
+    effwrtsv = effsv(trnames,extravareff=opt.extravars,triggersOR=opt.triggersOR)
     # loop over the entries
     nentries = rpvmc.getentries()
     print "Processing %i events" % nentries
@@ -126,7 +133,7 @@ def create(folder,opt):
         for trname in trnames:
             trgdecisions[trname] = rpvmc.get(trname)
         # Do it once per event, not re-looping for each trigger
-        rpvmc.filleff(trgdecisions,effwrtsv,ignorematching,extra=opt.extravars)
+        rpvmc.filleff(trgdecisions,effwrtsv,ignorematching,triggersOR=opt.triggersOR,extra=opt.extravars)
     # Some summary statistics
     effwrtsv.showresults()
     # Saving info
@@ -180,6 +187,8 @@ if __name__ == '__main__':
               'MC-displaced vertex tracks are checked')
     createopt.add_option( '-x', '--extravars', action='store_true', \
             dest = 'extravars',help='Includes efficiencies with respect extravariables')
+    createopt.add_option( '-t', '--triggersOR', action='store', metavar='[TR1,TR2,...]',\
+            dest = 'triggersOR',help='List of triggers to be used in the OR')
     createopt.add_option( '-e', '--extraplots', action='store_true', \
             dest = 'extraplots',help='Perform some extra plots related to the events, kinematics and'\
               ' more')

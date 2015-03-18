@@ -80,6 +80,29 @@ DEFAULTXTITLE = { 'Dtdv': 'XY_{DV} [mm]' ,
                 'genpfromdv_vz': 'prod v_{z}^{<4mm} [mm]', 
                 }
 
+def parsegrouptriggers(linestr):
+    """.. function:: parsegrouptriggers(linestr) -> [ 'OR_TR1_TR2_...', 'OR_TRX_...']
+
+    The linestr contains the triggers which want to be OR. They are grouped 
+    between comas ","  and each trigger in the group should be separated by 
+    a semi-colon ":"
+    The function returns a list with the trigger grouped in a strings
+    """
+    trgroup = {}
+    
+    groups = linestr.split(",")
+    for g in groups:
+        trnames = g.split(":")
+        _pre = 'OR'
+        trlist = []
+        for tr in trnames:
+            _pre+= ('_'+tr)
+            trlist.append(tr)
+        trgroup[_pre] = trlist
+    #FIXME:: Check the syntax
+    return trgroup
+
+
 class effsv(object):
     """.. class:: effsv
     Encapsulate a trigger efficiency defined by one or more trigger
@@ -108,6 +131,14 @@ class effsv(object):
             self.extravareff=kw['extravareff']
         else:
             self.extravareff=False
+        
+        self.grouptriggersOR = {}
+        if kw.has_key('triggersOR') and kw['triggersOR']:
+            # Just doing the OR of these selected triggers
+            self.grouptriggersOR = parsegrouptriggers(kw['triggersOR'])
+        else:
+            self.grouptriggersOR["OR"] = None
+
 
         self.__var__= [ 'Dtdv', 'Dzdv', 'Drdv',   # SV with respect Primary vertex
                         'tdv', 'zdv', 'rdv'       # SV absolute position
@@ -150,8 +181,9 @@ class effsv(object):
                 self.__effs__[i] = dict(map(lambda x:
                     (x,ROOT.TEfficiency(self.geteffname(x,i),'',_xbins,_xmin,_xmax)),
                             trnameslist))
-                ## -- And the OR key
-                self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',_xbins,_xmin,_xmax)
+                ## -- And the ORs keys
+                for orkey in self.grouptriggersOR.keys():
+                    self.__effs__[i][orkey] = ROOT.TEfficiency('eff'+i+'_'+orkey,'',_xbins,_xmin,_xmax)
             # Could be put in the previous for
             if self.extravareff:
                 for i in self.__extravars__:
@@ -161,12 +193,27 @@ class effsv(object):
                     self.__effs__[i] = dict(map(lambda x:
                         (x,ROOT.TEfficiency(self.geteffname(x,i),'',_bins,_xmin,_xmax)),
                         trnameslist))
-                    ## -- And the OR key
-                    self.__effs__[i]["OR"] = ROOT.TEfficiency('eff'+i+'_OR','',_bins,_xmin,_xmax)
+                    ## -- And the ORs keys
+                    for orkey in self.grouptriggersOR.keys():
+                        self.__effs__[i][orkey] = ROOT.TEfficiency('eff'+i+'_'+orkey,'',_bins,_xmin,_xmax)
         else:
             self.__trgnames__ = []
 
         self.plotsuffix = '.png'
+
+    def getgroupoftriggers(self,deftr):
+        """.. method:: getgroupoftriggers(deftr) -> { 'OR_TR1_TR2...': [tr1,tr2,...] ,  ..}
+
+        Return a dict with the group of OR which were defined at creation time
+        (see parsegrouptriggers function).
+        If the key OR is found means that all the triggers should be used, then the
+        argument deftr is getting this info
+        """
+        if self.grouptriggersOR.has_key("OR"):
+            return { 'OR': deftr }
+
+        return self.grouptriggersOR
+
 
         
     def gettrgnames(self):
@@ -571,14 +618,19 @@ class storedeff(object):
             extra = True
         else:
             extra = False
-        # Get the list of MC info related with the DV
+        # Just getting the group of triggers
+        triggersOR = effsvinst.getgroupoftriggers(trgdecdict.keys())
+
         sv = self.getmctruthinfo(extra)
         # Getting the OR of all  the triggers
-        trigdecOR = False
-        for (tragname,trgdec) in trgdecdict.iteritems():
-            trigdecOR = (trigdecOR or trgdec)
-        # And adding it to the trgdecdict
-        trgdecdict["OR"] = trigdecOR
+        for orkey,grouptrlist in triggersOR.iteritems():
+            trigdecOR = False
+            for (tragname,trgdec) in \
+                    filter(lambda (trname,wh): trname in grouptrlist,trgdecdict.iteritems()):
+                trigdecOR = (trigdecOR or trgdec)
+            # And adding it to the trgdecdict
+            #trgdecdict["OR"] = trigdecOR
+            trgdecdict[orkey] = trigdecOR
         # Filling the efficiencies
         matchvar = "%s_isJetRoiMatched"
         presentvar = "%s_isJetRoiPresent"
@@ -590,7 +642,7 @@ class storedeff(object):
                 try:
                     ispresent = bool(getattr(self.tree,presentvar%trgname)[0])
                 except AttributeError:
-                    ## TO BE DEPRECATED: just for backwards compability 
+                    # The OR case!!
                     ispresent=True
                     pass
                 if ispresent:
@@ -610,7 +662,7 @@ class storedeff(object):
                         if not ismatched:
                             continue
                     except AttributeError:
-                        # Just controlling the OR-case
+                        # Just controlling the OR-cases
                         ismatched =1
                 else:
                     # Is not present is going to be considered as a fail decision
