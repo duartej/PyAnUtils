@@ -35,8 +35,8 @@ kAzure=860
 kCyan=432
 kOrange=800
 
-COLORS = [ kBlack, kOrange-2, kRed+2, kAzure+3,kCyan-2,kGreen-2,\
-		kOrange+7, kRed-3, kAzure-3, kCyan+4, kGreen+4 ]
+COLORS = [ kBlack, kRed+2, kAzure+3,kCyan-2,kGreen-2, kOrange-2, \
+		 kRed-3, kAzure-3, kCyan+4, kGreen+4, kOrange+7 ]
 TEXTSIZE = 0.03
 
 DEFAULTBINNING = { 'eta': (100,-5,5), 'phi': (100,-3.1415,3.1415),
@@ -84,15 +84,15 @@ def parsegrouptriggers(linestr):
     """.. function:: parsegrouptriggers(linestr) -> [ 'OR_TR1_TR2_...', 'OR_TRX_...']
 
     The linestr contains the triggers which want to be OR. They are grouped 
-    between comas ","  and each trigger in the group should be separated by 
-    a semi-colon ":"
+    between semi-colons ":"  and each trigger in the group should be separated by 
+    a comma ","
     The function returns a list with the trigger grouped in a strings
     """
     trgroup = {}
     
-    groups = linestr.split(",")
+    groups = linestr.split(":")
     for g in groups:
-        trnames = g.split(":")
+        trnames = g.split(",")
         _pre = 'OR'
         trlist = []
         for tr in trnames:
@@ -346,7 +346,16 @@ class effsv(object):
             self.__effs__[varname][trname].SetMarkerSize(0.5)
             self.__effs__[varname][trname].SetMarkerColor(COLORS[_j])
             self.__effs__[varname][trname].SetFillColor(COLORS[_j])
-            legend.AddEntry(self.__effs__[varname][trname],trname,'PL')
+            # XXX - PROVISIONAL PATCH: To be deleted
+            # converting trigger names to displaced vertex triggers
+            if trname.find('OR') == 0:
+                legentryname = 'OR'
+            elif trname.find('_L') != -1:
+                # Note format HLT_JETPART_LEVEL1PART
+                legentryname = 'HLT_DV_'+trname.split('_')[-1]
+            else:
+                legentryname = trname
+            legend.AddEntry(self.__effs__[varname][trname],legentryname,'PL')
             self.__effs__[varname][trname].Draw("PSAME")
             _j += 1
         drawlegend(legend,'RIGHT',0.40)
