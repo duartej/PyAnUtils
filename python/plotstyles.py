@@ -37,10 +37,10 @@ def squaredStyle():
 	squaredStyle.SetPadBorderMode  (   0)
 	squaredStyle.SetPadBorderSize  (  10)
 	squaredStyle.SetPadColor       (   0)
-	squaredStyle.SetPadBottomMargin(0.18)
+	squaredStyle.SetPadBottomMargin(0.16)
 	squaredStyle.SetPadTopMargin   (0.08)
-	squaredStyle.SetPadLeftMargin  (0.18)
-	squaredStyle.SetPadRightMargin (0.05)
+	squaredStyle.SetPadLeftMargin  (0.16)
+	squaredStyle.SetPadRightMargin (0.16)
 	
 	#----------------------------------------------------------------------------
 	# Frame
@@ -83,7 +83,7 @@ def squaredStyle():
 	#----------------------------------------------------------------------------
 	squaredStyle.SetTitleBorderSize(    0)
 	squaredStyle.SetTitleFillColor (   10)
-	squaredStyle.SetTitleAlign     (   12)
+	#squaredStyle.SetTitleAlign     (   12)
 	squaredStyle.SetTitleFontSize  (0.045)
 	squaredStyle.SetTitleX         (0.560)
 	squaredStyle.SetTitleY         (0.860)
