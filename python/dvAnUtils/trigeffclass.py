@@ -680,6 +680,180 @@ class storedeff(object):
                 for varname,val in svinfodict.iteritems():
                     effsvinst.fill(trgname,varname,(trgdec and ismatched),val)
                 i+=1
+    
+    def roofitTree(self,genericbranches,signalonlybranches,outfile,**kwd):
+        """..method:: roofitTree(genericbranches,signalonlybranches,outfile[,
+                            reprocess=[True|False],
+                            treename=treename,
+                            evtbranch=evtbranch]) -> ROOT.TTree 
+        
+        Convert the branches designated in 'genericbranches' and (if any) in
+        'signalonlybranches' from a vector<X> format to a plain ntuple, where
+        each row corresponds to a RoI. The contents of the 'signalonlybranches'
+        (usually the kinematics of the two LSP) will be copied redundantly in 
+        each entry. A new int branch called 'event' is also added containing 
+        the number of the event the RoI belongs to. A new branch is created as
+        well: a int branch 'signal', which is set to 1 when is a signal row or
+        0 when is background. The resulting tree is suitable to perform a 
+        RooFit analysis.
+
+        That tree is copied in a file called outfile; but if the file already 
+        exist the tree got from this tree is going to be returned, if the 
+        'reprocess' option flag is set to True, event if the file exist the
+        algorithm is performed and the output file is recreated.
+        """
+        import os
+        import sys
+        from array import array
+        from math import sqrt
+        from ROOT import TTree,TFile
+        
+        # extra class to deal with the options
+        # FIXME:: Probably to be promoted to a generic
+        #         and independent class
+        class extraopt:
+            def __init__(self,kwddict):
+                self.validkwd = [ ("reprocess",False),
+                        ("treename",'roofitRPVMCInfoTree'),("evtbranch",None) ]
+                for name,initval in self.validkwd:
+                    setattr(self,name,initval)
+                for key,val in kwddict.iteritems():
+                    if key not in validkwd:
+                        raise RuntimeError("not valid '%s' when calling 'roofitTree'" %
+                        key)
+                    setattr(self,key,val)
+
+        eo = extraopt(kwd)
+        # Note that contains
+        #   eo.treename, eo.reprocess, oe.evtbranch
+        # Do nothing if already exist the file,
+        # and the TTree inside there, so return it
+        if os.path.isfile(outfile):
+            _f = TFile(outfile)
+            if _f.isZombie():
+                raise IOError("No such root file: '%s'" % outfile) 
+            # Check the tree is in there
+            if oe.treename not in _f.GetListOfKeys():
+                print "[WARNING] The root file '%s' has been found but"\
+                        " does not contains the TTree '%s'. The"\
+                        " tree is going to be processed" % (outfile,oe.treename)
+            else:
+                # OJO!! Esta bien esto?, No deberia tener el tree suelto y
+                # cerrar el fichero?
+                return _f.Get(oe.treename)
+
+        # lazyness: shortenen the variable names:
+        branches =genericbranches
+        dvbranches=signalonlybranches
+
+        variables = {}
+        # Get the types of the roi branches and the dv 
+        for bname in branches+dvbranches:
+            try:
+                _bname = bname
+                if bname in dvbranches:
+                    _bname = bname.split('_')[0]
+                vtype = self.tree.GetBranch(_bname).GetClassName()
+            except ReferenceError:
+                raise ReferenceError("roofitTree: The branch '%s' doesn't"\
+                        " exist in the Tree" % bname)
+            # Obtain the equivalent non-vector
+            equivtype = vtype.lower().replace('vector<','').replace('>','')
+            # Get the initial of the type to be put in the branch
+            inittype  = equivtype.upper()[0]
+            # Update the variables dict with all this info
+            variables[bname] = [array(inittype.lower(),[-1]),inittype]
+            # Add the 'event' entry to keep track of the vector per event
+            event = array('i',[-1])
+            # Add the 'isSignal' entry to describe signal (1) or background (0)
+            # RoIs
+            isSignal = array('i',[-1])
+        # New branch: event number
+        eventname = 'event'
+        if eventname in branches:
+            eventname+='__roofitTree'
+        # Setup the new tree
+        tree = TTree(eo.treename,eo.treename)
+        tree.Branch(eventname,event,eventname+'/I')
+        # New branch: designating signal or background
+        tree.Branch("isSignal",isSignal,"isSignal/I")
+        # Set-up the other variables of the new tree
+        dummy = map(lambda (name,(var,_type)): tree.Branch(name,var,name+'/'+_type),
+                sorted(variables.iteritems(),key=lambda (name,(var,_type)): _type,reverse=True))
+
+        # Set only the variables to read from the old tree
+        self.tree.SetBranchStatus("*",0)
+        dum=map(lambda bname: self.tree.SetBranchStatus(bname,1),branches)
+        dum=map(lambda bname: self.tree.SetBranchStatus(bname,1),\
+                set(map(lambda x: x.split('_')[0], dvbranches)))
+    
+        # Prepare the DV-related quantities
+        dvbranchespost = []
+        for bname in dvbranches:
+            try:
+                name,k = bname.split('_')
+            except ValueError:
+                raise ValueError("roofitTree: Unexpected format: '%s'. "\
+                    "Expecting 'name_i', being i-the index" % bname)
+            dvbranchespost.append((name,k))
+
+        dvsample = False
+        if len(dvbranches) > 0:
+            dvsample = True
+        # Fill the tree
+        # --- Progress bar :)
+        point = float(self.tree.GetEntries())/100.0
+        for i,iEvent in enumerate(self.tree):
+            sys.stdout.write("\r\033[1;34mINFO\033[1;m Post-processing,"+\
+                    " creating RooFit-like tree [ "+"\b"+\
+                    str(int(float(i)/point)).rjust(3)+"%]")
+            sys.stdout.flush()
+            # end-progress bar
+            event[0] = i
+            # Get number of elements 
+            # First for the dv (if any), which is going
+            # to be the same for all the event
+            for (name,kstr) in dvbranchespost:
+                k = int(kstr)
+                nametostore = name+'_'+kstr
+                try:
+                    variables[nametostore][0][0] = getattr(iEvent,name)[k]
+                except IndexError:
+                    # Meaning that this is not a signal DV sample
+                    # -- put dvsample to False
+                    dvsample = False
+                    # -- remove the content of dvbranchespost so do not
+                    #    enter again here
+                    dvbranchespost = {}
+            # Now the RoI based elements
+            # Assuming the same number of elements in the branches list
+            nsize = max(map(lambda bname: getattr(iEvent,bname).size(),branches))
+            for k in xrange(nsize):
+                # Not interested if there is no tracks (Sure?)
+                #if iEvent.ntracks[k] < 1:
+                #    continue
+                # Also getting here the cuts for signal,
+                # when dealing with a signal sample
+                # If is not a DV samples it only can be bkg
+                isSignal[0] = 0
+                if dvsample:
+                    phiroi = iEvent.jetroi_phi[k]
+                    etaroi = iEvent.jetroi_eta[k]
+                    dR0 = sqrt((phiroi-iEvent.phi[0])**2.+(etaroi-iEvent.eta[0])**2.) < RCUT
+                    dR1 = sqrt((phiroi-iEvent.phi[1])**2.+(etaroi-iEvent.eta[1])**2.) < RCUT
+                    isSignal[0] = (dR0 or dR1)
+    
+                for bname in branches:
+                    variables[bname][0][0] = getattr(iEvent,bname)[k]
+                # Fill the loop (with constant event number)
+                tree.Fill()
+        # Create the file and store the ttree before returning it
+        print
+        _f = TFile(outfile.replace('.root','')+'.root',"UPDATE")
+        tree.Write()
+        _f.Close()
+        
+        return tree
 
 class rpvmcinfo(storedeff):
     """.. class rpvmcinfo(rootfiles)
