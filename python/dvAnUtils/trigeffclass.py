@@ -681,7 +681,7 @@ class storedeff(object):
                     effsvinst.fill(trgname,varname,(trgdec and ismatched),val)
                 i+=1
     
-    def roofitTree(self,genericbranches,signalonlybranches,outfile,**kwd):
+    def roofitTree(self,genericbranches,signalonlybranches,pre_outfile,**kwd):
         """..method:: roofitTree(genericbranches,signalonlybranches,outfile[,
                             reprocess=[True|False],
                             treename=treename,
@@ -707,6 +707,7 @@ class storedeff(object):
         from array import array
         from math import sqrt
         from ROOT import TTree,TFile
+        from ROOT.TObject import kOverwrite
         
         # extra class to deal with the options
         # FIXME:: Probably to be promoted to a generic
@@ -718,7 +719,7 @@ class storedeff(object):
                 for name,initval in self.validkwd:
                     setattr(self,name,initval)
                 for key,val in kwddict.iteritems():
-                    if key not in validkwd:
+                    if key not in map(lambda (x,y): x,self.validkwd):
                         raise RuntimeError("not valid '%s' when calling 'roofitTree'" %
                         key)
                     setattr(self,key,val)
@@ -728,19 +729,22 @@ class storedeff(object):
         #   eo.treename, eo.reprocess, oe.evtbranch
         # Do nothing if already exist the file,
         # and the TTree inside there, so return it
+        outfile = pre_outfile.replace('.root','')+'.root'
         if os.path.isfile(outfile):
             _f = TFile(outfile)
-            if _f.isZombie():
+            if _f.IsZombie():
                 raise IOError("No such root file: '%s'" % outfile) 
             # Check the tree is in there
-            if oe.treename not in _f.GetListOfKeys():
+            if eo.treename not in _f.GetListOfKeys():
                 print "[WARNING] The root file '%s' has been found but"\
                         " does not contains the TTree '%s'. The"\
                         " tree is going to be processed" % (outfile,oe.treename)
             else:
                 # OJO!! Esta bien esto?, No deberia tener el tree suelto y
                 # cerrar el fichero?
-                return _f.Get(oe.treename)
+                print "Returning tree from '%s' (Use 'reprocess option if"\
+                        " you want to reprocess the file)" % outfile
+                return _f.Get(eo.treename),_f
 
         # lazyness: shortenen the variable names:
         branches =genericbranches
@@ -850,7 +854,7 @@ class storedeff(object):
         # Create the file and store the ttree before returning it
         print
         _f = TFile(outfile.replace('.root','')+'.root',"UPDATE")
-        tree.Write()
+        tree.Write("",kOverwrite)
         _f.Close()
         
         return tree
