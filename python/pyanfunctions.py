@@ -9,6 +9,46 @@
 """
 TEXTSIZE=0.03
 
+class ExtraOpt:
+    """.. class:: ExtraOpt(validkwdtuple)
+
+    Auxiliary class to deal with optional dictionary in function,
+    classes, ... (the kargs of somefunction(arg1,**kargs) ).
+
+    The class must be instanced with a list of 2-tuple 
+    ('optarg',defaultval). The arguments will be set as attributes
+    of the class, accessibles for any client. After instanciated 
+    can be called as well to update his values using the 'setkwd'
+    method
+    """
+    def __init__(self,validkwd):
+        """.. class:: extraopt(validkwdtuple)
+
+        Auxiliary class to deal with optional dictionary in function,
+        classes, ... (the kargs of somefunction(arg1,**kargs) ).
+
+        The class must be instanced with a list of 2-tuple 
+        ('optarg',defaultval). The arguments will be set as attributes
+        of the class, accessibles for any client. After instanciated 
+        can be called as well to update his values using the 'setkwd'
+        method
+        """
+        self.validkwd = validkwd
+        for name,initval in self.validkwd:
+            setattr(self,name,initval)
+    def setkwd(self,kwddict):
+        """.. method::setkwd(kwddict) 
+
+        Set the attributes of this instances with the values
+        found in the kwddict dict. The keys of the dict are
+        the attributes to be modified
+        """
+        for key,val in kwddict.iteritems():
+            if key not in map(lambda (x,y): x,self.validkwd):
+                raise RuntimeError("not valid '%s' when calling '%s'" %
+                (key,self.__class__))
+            setattr(self,key,val)
+
 def graphtohist(graph,binning=1000):
     """.. function:: graphtohist(graph,binning=1000) -> ROOT.TH1F
     
