@@ -708,6 +708,9 @@ class storedeff(object):
         from math import sqrt
         from ROOT import TTree,TFile
         from ROOT.TObject import kOverwrite
+
+        # PSEUDOGLOBAL: Cut of the matching cone to define signal RoI
+        RCUT = 0.2
         
         # extra class to deal with the options
         # FIXME:: Probably to be promoted to a generic
@@ -738,7 +741,7 @@ class storedeff(object):
             if eo.treename not in _f.GetListOfKeys():
                 print "[WARNING] The root file '%s' has been found but"\
                         " does not contains the TTree '%s'. The"\
-                        " tree is going to be processed" % (outfile,oe.treename)
+                        " tree is going to be processed" % (outfile,eo.treename)
             else:
                 # OJO!! Esta bien esto?, No deberia tener el tree suelto y
                 # cerrar el fichero?
@@ -856,8 +859,11 @@ class storedeff(object):
         _f = TFile(outfile.replace('.root','')+'.root',"UPDATE")
         tree.Write("",kOverwrite)
         _f.Close()
+        # Reopened because otherwise the tree is lost of memory
+        _f = TFile(outfile.replace('.root','')+'.root')
+        tree = _f.Get(eo.treename)
         
-        return tree
+        return tree,_f
 
 class rpvmcinfo(storedeff):
     """.. class rpvmcinfo(rootfiles)
