@@ -28,6 +28,30 @@ def negative_binomial_pdf(obs):
     e_IP: ROOT.RooRealVar
         The success efficiency
 
+    Notes
+    -----
+    The implementation in ROOT::Math::negative_binomial_pdf(x,p,r):
+    .. math::
+        :nowrap:
+
+        \begin{equation*}
+            f(x;p,n) = \frac{x+n-1}{x}p^n(1-p)^x
+        \end{equation*}
+    describes the probability to have *x-1* successes and r-failures
+    after x+r-1 trials. 
+    
+    Note that the variable in *f* is the failure (r). Our implementation deals 
+    with the success variable, therefore we switch x --> r:
+    .. math::
+        :nowrap:
+
+        \begin{eqnarray*}
+            f(n;p,x) &=& \frac{x+n-1}{n}p^x(1-p)^n\\
+            f(n;(1-\varepsilon),x) &=& \frac{x+n-1}{n}(1-\varepsilon)^x\varepsilon^n
+        \end{eqnarray*}
+    describing now, the probability of having *n* successes and *x-1* failures,
+    with a success efficiency (probability) of 
+    .. math:: \varepsilon=1-p
     """
     import ROOT
 
@@ -69,6 +93,10 @@ def negative_binomial_sum_pdf(ntracks):
         The success efficiency from the Interaction Point component
     signalfrac: ROOT.RooRealVar
         The relative number of entries of the Displaced Vertex component
+
+    See Also
+    --------
+    negative_binomial_pdf
     """
     import ROOT
     r_IP_sig = ROOT.RooRealVar("r_IP_sig","number of no-reconstructed particles",0,100)
