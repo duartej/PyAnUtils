@@ -7,7 +7,7 @@
       :synopsis: Module gathering a bunch of useful analysis-related functions
 	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
-TEXTSIZE=0.03
+TEXTSIZE=0.05
 
 class ExtraOpt:
     """.. class:: ExtraOpt(validkwdtuple)
@@ -182,7 +182,7 @@ def drawlegend(legend,where,ystart):
     :param ystart: where to place the upper y coordinate
     :type ystart: float
     """
-    textlength=0.12
+    textlength=0.28#0.12
     # Extract the maximum available lenght
     maxsize=0.0
     for i in legend.GetListOfPrimitives():
