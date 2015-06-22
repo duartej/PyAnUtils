@@ -44,24 +44,53 @@ class ObservableSamplingProb(object):
         
     """
     def __init__(self,obs,**kwd):
-        """
+        """ TWO CONSTRUCTORS with readws=***
+        and the other
         """
         from PyAnUtils.pyanfunctions import ExtraOpt
         
         # Extra options
-        extraopt = ExtraOpt( [('rootfile',None),('ws',None)] )
+        extraopt = ExtraOpt( [('readws',None),('modeltype',None),
+            ('modelname',None)] )
         extraopt.setkwd(kwd)
-
-        # Initialize observable put the name as attribute
-        self.__observable = obs.GetName()
-        self.__setattr__(obs.GetName(),obs)
-
+            
+            
         # Initialize dictionary of models, which must be
         # associated to an observable. Also, the hashed
         # name of the pdf used is stored
         self.__models   = {}
         self.__pdftypes = {}
 
+        # Constructor from a Workspace
+        if hasattr(extraopt,'readws'): 
+            out = extraopt.readws
+            if type(obs) != str:
+                raise RuntimeError("Initialization with the 'readws' keyword"\
+                        " requires the first argument to be the name of the"\
+                        " observable (str)")
+            if not out[2].has_key(obs):
+                raise AttributeError("Observable '%s' not found in the "\
+                        "Workspace" % obs)
+            self.__observable = obs
+            self.__setattr__(self.__observable,out[2][obs])
+            self.__setattr__
+            # Set up the models, need info from the user
+            # --- The modeltype (bkg,signal,..)
+            if not hasattr(extraopt,'modeltype'):
+                raise RuntimeError("Initialization with the 'readws' keyword"\
+                        " requires another keyword 'modeltype' to be set")
+            # --- the actual internal name 
+            if not hasattr(extraopt,'modelname'):
+                raise RuntimeError("Initialization with the 'readws' keyword"\
+                        " requires another keyword 'modelname' to be set")
+            # --- Set up the models
+            self.__setupmodelsfromws(out,extraopt.modeltype,extraopt.modelname)
+        # Regular constructor
+        else:
+            # Initialize observable put the name as attribute
+            self.__observable = obs.GetName()
+            self.__setattr__(obs.GetName(),obs)
+            
     def __str__(self):
         """
         """
@@ -138,7 +167,42 @@ class ObservableSamplingProb(object):
         """
         return self.__models.keys()
 
-    
+    def __setupmodelsfromws(self,out,modeltypesIn,modelnamesIn):
+        """ TO BE DOCUMENTED !! FIXME
+        """
+        # -- Could be a list
+        if type(modeltypesIn) == list or type(modelnamesIn) == list:
+            if type(modelnamesIn) != list:
+                raise NameError("Coherence requires to 'modelnames' keyword"\
+                        " being a string, as 'modeltypes' is")
+            if type(modeltypesIn) != list:
+                raise NameError("'Coherence requires to 'modeltypes' keyword"\
+                        " being a string, as 'modelnames' is")
+            modeltypeslist = modeltypesIn
+            modelnameslist = modelnamesIn
+            # Check the same len!!! FIXME
+        else:
+            modeltypeslist = [modeltypesIn]
+            modelnameslist = [modelnameIn] 
+        # Setting
+        for modeltype,modelname in zip(modeltypeslist,modelnameslist):
+            try:
+                # Note that the regular constructor puts a ntuple
+                # containing the observables, so mimicking that
+                self.__models[modeltype] = (out[3][modelname],None)
+            except KeyError:
+                # Who is not there?
+                nothere = None
+                if self.__models.has_key(modeltype):
+                    nothere = modeltype
+                else:
+                    # should be here
+                    nothere = modelname
+                raise AttributeError("Not found the model '%s'" % nothere)
+            # Don't have this info, so
+            self.__pdftypes[modeltype] = '__UNDEF__'
+
+
     def setupmodel(self,modeltype,modelpdfname):
         """Main method to setup the model
         
@@ -266,15 +330,34 @@ class ObservableSamplingProb(object):
         c.SaveAs(aux.sample+"_"+self.__observable+"_log.pdf")
         c.SetLogy(0)
 
+    def getobservable(self):
+        """TO BE DCOUMENTED FIXME
+        """
+        return self.__getattribute__(self.__observable)
+
+    def getmodel(self,modeltype=None):
+        """
+        """
+        # Just picking the first one
+        if not modeltype:
+            modeltype = self.__models.keys()[0]
+        elif not self.__models.has_key(modeltype):
+            raise AttributeError("No model type '%s' available" % modeltype)
+
+        return self.__models[modeltype][0]
+        
+
+
 class evidence:
     """
     """
-    def __init__(self,obsinstances):
+    def __init__(self,obsinst,):
         """
+        obsinstances = ( obs, model sign, model bkg) 
         """
-        self.__observable = lll
-        self.__modelDV = modelDV
-        self.__modelBkg= modelBkg
+        self.__observable = obsinst.getobservable()
+        self.__modelDV = obs.getmodel(modeltype)
+        self.__modelBkg= obsinstances[2]
 
 
     def __call__(self,observable):
