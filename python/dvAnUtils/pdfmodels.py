@@ -63,7 +63,7 @@ def negative_binomial_pdf(obs):
 
     return nbd,r_IP,e_IP
 
-def negative_binomial_sum_pdf(ntracks):
+def negative_binomial_sum_pdf(obs):
     """Build a negative binomial ROOT.RooRealPdf 
 
     Parameters
@@ -99,15 +99,17 @@ def negative_binomial_sum_pdf(ntracks):
     negative_binomial_pdf
     """
     import ROOT
+    obsname = obs.GetName()
+
     r_IP_sig = ROOT.RooRealVar("r_IP_sig","number of no-reconstructed particles",0,100)
     e_IP_sig = ROOT.RooRealVar("e_IP_sig","track reconstruction efficiency of particles from IP",0,1)
     nbdbkg = ROOT.RooGenericPdf("nt_IP_DV","Negative Binomial",
-         "ROOT::Math::negative_binomial_pdf(ntracks,(1.0-e_IP_sig),r_IP_sig)",ROOT.RooArgList(ntracks,e_IP_sig,r_IP_sig))
+         "ROOT::Math::negative_binomial_pdf("+obsname+",(1.0-e_IP_sig),r_IP_sig)",ROOT.RooArgList(obs,e_IP_sig,r_IP_sig))
     
     r_DV = ROOT.RooRealVar("r_DV","number of no-reconstructed particles",0,100)
     e_DV = ROOT.RooRealVar("e_DV","track reconstruction efficiency of particles from DV",0,1)
     nbdDV = ROOT.RooGenericPdf("nt_DV","Negative Binomial",
-         "ROOT::Math::negative_binomial_pdf(ntracks,(1.0-e_DV),r_DV)",ROOT.RooArgList(ntracks,e_DV,r_DV))
+         "ROOT::Math::negative_binomial_pdf("+obsname+",(1.0-e_DV),r_DV)",ROOT.RooArgList(obs,e_DV,r_DV))
     signalfrac = ROOT.RooRealVar("signalfrac","DV-fraction in the RoIs signal",0.5,0.,1.)
 
     nbd = ROOT.RooAddPdf("signalRoI","Signal RoIS with two populations",
