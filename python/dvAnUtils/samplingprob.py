@@ -62,7 +62,7 @@ class ObservableSamplingProb(object):
         self.__pdftypes = {}
 
         # Constructor from a Workspace
-        if hasattr(extraopt,'readws'): 
+        if extraopt.readws: 
             out = extraopt.readws
             if type(obs) != str:
                 raise RuntimeError("Initialization with the 'readws' keyword"\
@@ -76,11 +76,11 @@ class ObservableSamplingProb(object):
             self.__setattr__
             # Set up the models, need info from the user
             # --- The modeltype (bkg,signal,..)
-            if not hasattr(extraopt,'modeltype'):
+            if not extraopt.modeltype:
                 raise RuntimeError("Initialization with the 'readws' keyword"\
                         " requires another keyword 'modeltype' to be set")
             # --- the actual internal name 
-            if not hasattr(extraopt,'modelname'):
+            if not extraopt.modelname:
                 raise RuntimeError("Initialization with the 'readws' keyword"\
                         " requires another keyword 'modelname' to be set")
             # --- Set up the models
@@ -295,7 +295,7 @@ class ObservableSamplingProb(object):
         
         aux = ExtraOpt( [ ('sample',''),('xtitle','N_{t}'),
             ('ytitle','Number of Events'),('title',''),
-            ('layoutlabel',''),('components','') ] )
+            ('layoutlabel',''),('components',''), ('bins','') ] )
         aux.setkwd(kwd)
     
         ROOT.gROOT.SetBatch(1)
@@ -304,7 +304,11 @@ class ObservableSamplingProb(object):
         frame.SetXTitle(aux.xtitle)
         frame.SetYTitle(aux.ytitle)
         frame.SetTitle(aux.title)
-        data.plotOn(frame)
+        # Just if the data has to be rebinnined
+        if aux.bins:
+            data.plotOn(frame,ROOT.RooFit.Binning(int(aux.bins)))
+        else:
+            data.plotOn(frame)
         # Model to use -->
         if not modeltype:
             modeltype = self.__models.keys()[0]
@@ -325,10 +329,14 @@ class ObservableSamplingProb(object):
                 ROOT.RooFit.Label(aux.layoutlabel))
         frame.Draw()
         c = ROOT.gROOT.GetListOfCanvases()[0]
-        c.SaveAs(aux.sample+"_"+self.__observable+".pdf")
-        c.SetLogy()
-        c.SaveAs(aux.sample+"_"+self.__observable+"_log.pdf")
+        #plotname_nosuffix = plotname.split('.')[0]
+        #plotname_suffix   = plotname.split('.')[-1]
         c.SetLogy(0)
+        c.SaveAs(plotname)
+        #c.SaveAs(aux.sample+"_"+self.__observable+".pdf")
+        c.SetLogy(1)
+        c.SaveAs(plotname.split('.')[0]+"_log."+plotname.split(".")[-1])
+        #c.SaveAs(aux.sample+"_"+self.__observable+"_log.pdf")
 
     def getobservable(self):
         """TO BE DCOUMENTED FIXME
