@@ -170,19 +170,26 @@ def getcoord(where,xwidth,ywidth,ystart=-1):
     
     return (x1,y1,x2,y2) 
 
-def drawlegend(legend,where,ystart):
+def drawlegend(legend,where,ystart,**kwd):
     """..function:: drawlegend(legend,where,ystart)
     Draw a TLegend in the position defined by where (see getcoor
     function) and with the y-position starting at ystart
     
-    :param legend: the legend to draw
-    :type legend: ROOT.TLegend
-    :param where: placement LEFT, RIGHT or CENTER
-    :type where: str
-    :param ystart: where to place the upper y coordinate
-    :type ystart: float
+    Parameters
+    ----------
+    legend: ROOT.TLegend
+        the legend to draw
+    where: str
+        placement LEFT, RIGHT or CENTER
+    ystart: float
+        where to place the upper y coordinate
+    textlength: str, optional
+        the maximum length of the text, giving
+        the x-width of the legend's box [Default: 0.12]
     """
-    textlength=0.28#0.12
+    textlength=0.12
+    if kwd.has_key("textlength"):
+        textlength = float(kwd['textlength'])
     # Extract the maximum available lenght
     maxsize=0.0
     for i in legend.GetListOfPrimitives():
