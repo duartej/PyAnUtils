@@ -12,6 +12,6 @@ setup(name='PyAnUtils',
             'jobSender':'python/jobSender'},
 		packages = ['PyAnUtils','dvAnUtils','jobSender' ],
 		scripts=['bin/mtgfastfullcmp','bin/lazycmt','python/dvAnUtils/bin/dvtrigeff',
-                    'python/dvAnUtils/bin/roibasisconverter',
+                    'python/dvAnUtils/bin/roibasisconverter', 'python/dvAnUtils/bin/fitmodel',
                     'python/jobSender/bin/clustermanager'],
 		)

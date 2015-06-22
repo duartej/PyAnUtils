@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+"""
+.. script:: fitmodel -- Fitting an observable to a default selected model
+==============================================================================
+   :platform: Unix
+      :synopsis: Quick fitting of a pdf model for an observable. First 
+                 approximation which can be used to setup the workspace to 
+                 start to work in.
+    .. scriptauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+"""
+
+TENTATIVEPDF = { 'ntracks': {'bkg':'negative_binomial_pdf', 
+                               'sig': 'negative_binomial_sum_pdf'}
+                               }
+TENTATIVEPDF['ntracksd0uppercut'] = TENTATIVEPDF['ntracksd0lowercut'] = TENTATIVEPDF['ntracks']
+
+def main(inputfile,obs):
+    """Steering function. Performs a initial tentative fit of the data
+    using a predefined pdf models. The output is stored in a ROOT file
+    as a ROOT.Workspace.
+    
+
+    Parameters
+    ----------
+    inputfile: str
+        The ROOT file name
+    obs: str
+        The name of the observable
+    """
+    from dvAnUtils.samplingprob import readfile,ObservableSamplingProb
+    # Obtaining the info from the root file
+    f,obsdict,modeldict,databkgdict,datasigdict = readfile(inputfile)
+    if not obsdict.has_key(obs):
+        raise RuntimeError("Observable '%s' not defined" % obs)
+    sd = ObservableSamplingProb(obsdict[obs])
+    # Does contain signal?
+    has_signal_content = False
+    if len(datasigdict) != 0:
+        has_signal_content = True
+    
+    # Setting up the sampling probability model(s)
+    sd.setupmodel('bkg',TENTATIVEPDF[obs]['bkg'])
+    
+    # Getting the data to be used to fit
+    databkg = databkgdict['dvbkg_'+obs]
+    # Perform the fit
+    sd.fitTo(databkg,'bkg')
+    
+    samplename = inputfile.split('_')[1]
+    # And plot!
+    sd.plot(samplename+'_bkg_'+obs+'.pdf',databkg,'bkg')
+    
+    # Same for the signal content if any
+    if has_signal_content:
+        sd.setupmodel('sig',TENTATIVEPDF[obs]['sig'])
+        datasig = datasigdict['dvsig_'+obs]
+        sd.fitTo(datasig,'sig')
+        sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
+
+    extratag = '_bkg_'
+    if has_signal_content:
+        extratag = '_bkgsig_'
+
+    # Create the ROOT file with the WS to continue working
+    containertoupdate = [databkg]
+    if has_signal_content:
+        containertoupdate.append(datasig)
+    nfile = inputfile.split('_')[1]+extratag+obs+'_ws.root'
+    sd.update('w',nfile,containertoupdate)
+    
+if __name__ == '__main__':
+    from optparse import OptionParser
+    import os
+    
+    usage = "fitmodels.py ROOTFILE [options]"
+    usage +="\n\nQuick fitting of a pdf [hardcoded] model  for an observable.\n"
+    usage +="First approximation which can be used to setup the workspace\nto"
+    usage +=" start to work with."
+
+    parser = OptionParser(usage=usage)
+    parser.set_defaults(obs='ntracks')
+    parser.add_option( "-o","--observable",action='store',dest='obs',\
+            help="Name of the observable [ntracks]")
+
+    (opt,args) = parser.parse_args()
+    if len(args) != 1:
+        message = "\033[31mfitmodel ERROR\033[m Mandatory argument ROOTFILE)"
+        raise RuntimeError(message)
+    
+    # Check the root file
+    if not os.path.isfile(args[0]):
+        raise IOError("ROOT file '%s' not found" % args[0])
+    main(args[0],opt.obs)
+    
