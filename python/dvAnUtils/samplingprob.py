@@ -343,6 +343,24 @@ class ObservableSamplingProb(object):
         """
         return self.__getattribute__(self.__observable)
 
+    def get_variable_from_model(self,modeltype,obsname):
+        """TO BE DCOUMENTED FIXME
+        """
+        model = self.getmodel(modeltype)
+        variables = model.getVariables()
+        itvar = variables.iterator()
+        for i in xrange(len(variables)):
+            currentvar = itvar.Next()
+            if currentvar.GetName() == obsname:
+                return currentvar
+        return None
+
+
+    def getobservablename(self):
+        """TO BE DCOUMENTED FIXME
+        """
+        return self.__observable
+
     def getmodel(self,modeltype=None):
         """
         """
