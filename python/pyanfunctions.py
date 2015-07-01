@@ -10,16 +10,53 @@
 TEXTSIZE=0.05
 
 class ExtraOpt:
-    """.. class:: ExtraOpt(validkwdtuple)
-
-    Auxiliary class to deal with optional dictionary in function,
-    classes, ... (the kargs of somefunction(arg1,**kargs) ).
+    """Auxiliary class to deal with optional dictionary in function,
+    classes, ... (the kargs of somefunction(arg1,**kargs) ). 
 
     The class must be instanced with a list of 2-tuple 
     ('optarg',defaultval). The arguments will be set as attributes
     of the class, accessibles for any client. After instanciated 
     can be called as well to update his values using the 'setkwd'
     method
+
+    ExtraOpt( validkwdtuple )
+
+    Parameters
+    ----------
+    validkwdtuple: list(tuple(str,anything))
+        The list of 2-tuples of the valid keywords and its default
+        values. The list should be like 
+            ['value1',val1),('value2',val2), ...]
+        where val_i could be any type.
+
+    Example
+    -------
+    The usual way to use this class is inside of a function/class which
+    uses optional arguments, supposse the function 'f' accepts several
+    optional arguments 'opt1' (a float) and 'opt2' (a bool). Then we
+    can use this class to set the default arguments and to initialize
+    the ones created by the user:
+
+    >>> def f(somearg,**kwd):
+            # Define the valid optional argumenst and their defaults
+            opt = ExtraOpt( [('opt1',2.3),('opt2',False)] )
+            opt.setkwd(kwd)
+            ...
+            # Do whatever the function should do
+            ...
+            # Change behaviour depending the value of the optional
+            if opt.opt1 == somevalue:
+                blabla
+
+    When someone calls the function f and wants to introduce some of the
+    optionals, the class deals with it
+
+    >>> f(somearg,opt1=34)
+
+    But if the optional doesn't exist,
+
+    >>> f(somearg,optdoesntexist='testing')
+    RuntimeError: not valid 'optdoesntexist' when calling 'f'                
     """
     def __init__(self,validkwd):
         """.. class:: extraopt(validkwdtuple)
