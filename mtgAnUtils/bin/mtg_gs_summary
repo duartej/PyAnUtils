@@ -11,6 +11,7 @@
       .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 DEBUG=True
+TOLERANCE=1e-9
 
 def getposition(theta,phi,p):
     """The points x,y,z are returned given the magnitud and 
@@ -102,26 +103,50 @@ def validation(trajectorylist,**kwd):
     """
     import ROOT
     from PyAnUtils.plotstyles import njStyle as dfStyle
+    from PyAnUtils.plotstyles import squaredStyle as sqStyle
+    from PyAnUtils.plotstyles import setpalette
     from PyAnUtils.pyanfunctions import ExtraOpt
 
     opt = ExtraOpt( [('verbose',False)] )
     opt.setkwd(kwd)
 
+    squaredStyle = sqStyle()
+    squaredStyle.SetOptStat(0)
+    
     style = dfStyle()
     style.cd()
     style.SetOptStat(0)
     
-    # --- Plot of theta,phi
+    
     geometry=trajectorylist[0].origin()
+    # --- Plot of theta,phi
     g = ROOT.TGraph()
+    # --- Check if there are counterparts in the other geometry
+    #     A graph with this points is also plotted
+    g2 = ROOT.TGraph()
+    # --- Plot of number of updates
+    gupdates = ROOT.TGraph2D()
+
+    # Obtain the points
     ts = sorted(trajectorylist)
+    k = 0
+    verbmes = ''
     for i,t in enumerate(ts):
-        g.SetPoint(i,t.theta(),t.phi())
+        g.SetPoint(i,t.eta(),t.phi())
+        gupdates.SetPoint(i,t.eta(),t.phi(),t.number_of_crossed_volumes())
+        if not t.getmirror():
+            verbmes += "Not found at eta=%6.3f, phi=%6.3f" % (t.eta(),t.phi())
+            g2.SetPoint(k,t.eta(),t.phi())
+            k+=1
+    verbmes += ""
+    
+    # --- Actual plotting
+    # - theta, phi plot
     set_attr_plotobject(g,color=1)
     
     ROOT.gROOT.SetBatch()
     c = ROOT.TCanvas()
-    frame = ROOT.TH2F('frame','',1,0,3.1416,1,-3.1416,3.1416)
+    frame = ROOT.TH2F('frame','',1,-4.6,4.6,1,-3.1416,3.1416)
     ROOT.gStyle.SetOptStat(0)
     set_attr_plotobject(frame,\
             title='[GS-Validation]: Trajectory points on %s geometry' % geometry,\
@@ -133,29 +158,18 @@ def validation(trajectorylist,**kwd):
     c.Close()
     # -- End Plot of theta,phi
 
-    # --- Check if there are counterparts in the other geometry
-    #     A graph with this points is also plotted
+    # --- Missing points plot
     counterpart = "FULL"
     if geometry == counterpart:
         counterpart = "FAST"
-    g2 = ROOT.TGraph()
     set_attr_plotobject(g2,color=ROOT.kRed+3,markerstyle=34,markersize=2)
     print "="*80
     print "[GS-Validation] Checking the points at %s geometry without"\
             " a counterpart in %s" % (geometry,counterpart)
-    k = 0
-    verbmes = ''
-    for t in ts:
-        if not t.getmirror():
-            verbmes += "Not found at theta=%6.3f, phi=%6.3f" % (t.theta(),t.phi())
-            g2.SetPoint(k,t.theta(),t.phi())
-            k+=1
-    verbmes += ""
     if opt.verbose:
         print verbmes
     print "%i points in %s were not simulated" % (g2.GetN(),counterpart)
     print "="*80
-
 
     if g2.GetN() != 0:
         set_attr_plotobject(frame,\
@@ -168,9 +182,22 @@ def validation(trajectorylist,**kwd):
         
         c.SaveAs('validation_nomirrors_'+geometry+'.png')
         c.Close()
+    # -- End missing points
+    
+    # -- Number of crossing volumes
+    squaredStyle.cd()
+    c = ROOT.TCanvas()
+    setpalette('grayscale')
+    set_attr_plotobject(frame,\
+            title='[GS-Validation]: Number of crossing volumes on %s geometry' % geometry,\
+            xtitle='#theta',ytitle='#phi')
+    frame.Draw()
+    gupdates.Draw("COLZSAME")
+    c.SaveAs('validation_crossingpoints_'+geometry+'.png')
 
     g.Delete()
     g2.Delete()
+
 
 def plot_radlength(trajectorylist,variable,**kwd):
     """
@@ -240,7 +267,8 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
 
     opt = ExtraOpt( [('xmin_var1',-4.5),('xmax_var1',4.5),
             ('xmin_var2',-3.1416), ('xmax_var2',3.1416), 
-            ('doplot',True), ('relative_diff',False)] )
+            ('doplot',True), ('relative_diff',False),
+            ('verbose',False)] )
     opt.setkwd(kwd)
 
     geometry = trajectorylist[0].origin()
@@ -249,16 +277,18 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     # --- Fill the 2D and the difference between them (just when FAST?)
     gt    = ROOT.TGraph2D()
     gdiff = ROOT.TGraph2D()
+    gnopresent = ROOT.TGraph()
     idiff = 0
     zmax = -1e99
     zmin = 0
     zmaxdiff = -1e99
     zmindiff = 0
     denominator = 1.0
+    inpresent = 0
     for (i,t) in enumerate(tordered):
         x0 = t.getX0()
         if opt.relative_diff:
-            denominator = x0
+            denominator = x0/100.0
         var1value = getattr(t,var1)()
         var2value = getattr(t,var2)()
         gt.SetPoint(i,var1value,var2value,x0)
@@ -273,13 +303,19 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
                 x0diff = (x0-x0mirror)/denominator
             except ZeroDivisionError:
                 # Just move from the zero and giving
-                # just the distance. Print a warning
-                print "\033[1;33mWARNING\033[1;m The trajectory (%6.4f,%6.4f)"\
-                        " do not passed through any material in" \
-                        % (var1value,var2value)
-                print "%s geometry. In its counterpart "\
-                        "simulation x0=%6.4f" % (geometry,x0mirror) 
-                x0diff = x0-x0mirror
+                # just the distance. 
+                x0diff = (x0-x0mirror)*100.
+                # Print a warning if in x0mirror THERE IS
+                # radiation lenght != 0
+                if abs(x0diff) > TOLERANCE:
+                    if opt.verbose:
+                        print "\033[1;33mWARNING\033[1;m The trajectory (%6.4f,%6.4f)"\
+                                " do not passed through any material in" \
+                                % (var1value,var2value)
+                        print "%s geometry. In its counterpart "\
+                                "simulation x0=%6.4f" % (geometry,x0mirror)
+                        gnopresent.SetPoint(inpresent,var1value,var2value)
+                        inpresent+=1
             gdiff.SetPoint(idiff,var1value,var2value,x0diff)
             idiff += 1
             if zmaxdiff < x0diff:
@@ -290,10 +326,32 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
         return gt,gdiff
     
     # -- Plots and cosmethics
+    counterpart = "FULL"
+    if geometry == "FULL":
+        counterpart = "FAST"
+    
     ROOT.gROOT.SetBatch()
     c = ROOT.TCanvas()
     frame = ROOT.TH2F('frame','',1,opt.xmin_var1,opt.xmax_var1,1,\
                          opt.xmin_var2,opt.xmax_var2)
+    
+    # -- No present graph
+    if gnopresent.GetN() > 0:
+        set_attr_plotobject(frame,title='Trajectories not present at %s'\
+                ' but at %s' % (geometry,counterpart),\
+                xtitle='#'+var1,ytitle='#'+var2)
+        set_attr_plotobject(gnopresent,color=ROOT.kRed+3)
+        frame.Draw()
+        gnopresent.Draw("P")
+        c.SaveAs('nopresent_'+var1+'_'+var2+'_'+geometry+'.png')
+        print "="*80
+        print "%i points in %s"\
+                " have no radiation lenght"\
+                " (from a total of %i)" % (gnopresent.GetN(),geometry,len(trajectorylist))
+        print "="*80
+    # --- End no present graph
+
+    # --- Radiation lenght (COLZ) 
     set_attr_plotobject(frame,title='Radiation lenght vs #'+var1+' #'+var2+
             ', %s' % geometry,\
             xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
@@ -301,7 +359,9 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     setpalette('inv_darkbody')
     gt.Draw("SAMECOLZ")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'.png')
-    # 2D lego
+    # --- End Radiation lenght (COLZ) 
+    
+    # --- Radiation length 2D LEGO
     frame3d = ROOT.TH3F('frame3d','',1,opt.xmin_var1,opt.xmax_var1,1,\
                          opt.xmin_var2,opt.xmax_var2,1,zmin,1.1*zmax)
     set_attr_plotobject(frame3d,title='Radiation lenght vs #'+var1+' #'+var2+
@@ -312,12 +372,11 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     frame3d.Draw()
     gt.Draw("LEGO2SAME")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO.png')
-    # --- Now the diff plots
+    # --- End Radiation length 2D LEGO
+    
+    # --- Rad. length diff plots
     if abs(zmindiff) > abs(zmaxdiff):
         setpalette('darkbody')
-    counterpart = "FULL"
-    if geometry == "FULL":
-        counterpart = "FAST"
     plottitle = 'Difference between simulations %s - %s ' % (geometry,counterpart)
     ztitle    = 'Radiation Length '+geometry+'-'+counterpart+'/X_{0}'
     plotname  = 'radlength_'+var1+'_'+var2+'_'+geometry+'_DIFF'
@@ -333,7 +392,9 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     frame.Draw()
     gdiff.Draw("SAMECOLZ")
     c.SaveAs(plotname)
+    # --- End Rad. length diff plots
     
+    # --- Rad. length diff plots 2D lego
     frame3d.GetZaxis().SetLimits(zmindiff,zmaxdiff)
     frame3d.SetTitle(plottitle)
     frame3d.GetZaxis().SetTitle(ztitle)
@@ -345,6 +406,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     legoplotname = pname+'_LEGO.'+suffix
     c.SaveAs(legoplotname)
     c.Close()
+    # --- Rad. length diff plots 2D lego
 
     return gt,gdiff
 
@@ -358,7 +420,7 @@ def same_canvas_plots(glist,**kwd):
     """
     pass
 
-def main(fullfn,fastfn,verbose,validation,rel_diffs):
+def main(fullfn,fastfn,verbose,do_validation,rel_diffs):
     """Steering funtion. Performs the validation plots and 
     the 1 and 2-D plots
     """
@@ -367,7 +429,7 @@ def main(fullfn,fastfn,verbose,validation,rel_diffs):
     # -- Getting the trajectories
     print "Getting trajectories"
     fulllist,fastlist = build_trajectory_lists(fullfn,fastfn)
-    if validation:
+    if do_validation:
         # -- Plot some validation plots
         print "-"*80
         print "1. Validation plots for 'FULL' and FAST geometries"
@@ -388,10 +450,10 @@ def main(fullfn,fastfn,verbose,validation,rel_diffs):
     print "-"*80
     g_full,g_full_diff = plot_radlength_2d(fulllist,'eta','phi',\
             xmin_var1=-4.5,xmax_var1=4.5,xmin_var2=-3.1416,xmax_var2=3.1416,\
-            relative_diff=rel_diffs)
+            relative_diff=rel_diffs,verbose=verbose)
     g_fast,g_fast_diff = plot_radlength_2d(fastlist,'eta','phi',\
             xmin_var1=-4.5,xmax_var1=4.5,xmin_var2=-3.1416,xmax_var2=3.1416,\
-            relative_diff=rel_diffs)
+            relative_diff=rel_diffs,verbose=verbose)
 
     print "FINISHED! Bye.."
 

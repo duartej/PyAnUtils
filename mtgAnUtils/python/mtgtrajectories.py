@@ -49,6 +49,10 @@ class trajectory:
     _id: int
         An identifier [TO BE DEPRECATED] Can be use directly the
         built-in `id`
+    _updates: int
+        How many times the trajectory has been updated. This is equivalent
+        to how many volumes crossed
+
 
     Methods
     -------
@@ -71,6 +75,7 @@ class trajectory:
         self._mirrortrajectory = None
 
         self._id = id(self)
+        self._updates = 0
 
     def __str__(self):
         out = '<geantino trajectory at theta=%.3f phi=%.3f>\n'
@@ -199,6 +204,7 @@ class trajectory:
             The radiation lenght
         """
         self._X0 += x0
+        self._updates += 1
 
     def setmirror(self,mirrortraj):
         """Set the input trajectory as mirror trajectory,
@@ -229,6 +235,13 @@ class trajectory:
             return self._mirrortrajectory()
         else:
             return None
+
+    def number_of_crossed_volumes(self):
+        """Number of volumes the trajectory crossed.
+        Note that actually is checking how many updates
+        have received.
+        """
+        return self._updates
 
 def gettreefile(filename):
     """Auxiliary function to create from the input filename,
