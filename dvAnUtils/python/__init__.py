@@ -8,3 +8,9 @@
 	  do the ATLAS specific displaced vertex physics analysis
 	  .. packageauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
+# Used when 'from dvAnUtils import *'
+__all__ = [ "pdfmodels","samplingprob","trigeffclass"]
+# Used when 'import dvAnUtils'
+import pdfmodels
+import samplingprob
+import trigeffclass
