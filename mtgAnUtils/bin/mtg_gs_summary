@@ -13,28 +13,6 @@
 DEBUG=True
 TOLERANCE=1e-9
 
-def getposition(theta,phi,p):
-    """The points x,y,z are returned given the magnitud and 
-    angles of a vector
-
-    Parameters
-    ----------
-    theta: float
-        The theta angle (in spheric coordinates)
-    phi: float
-        The phi angle (in spheric coordinates)
-    p: float
-        The magnitude of the vector
-
-    Return
-    ------
-    (x,y,z): tuple(float,float,float)
-    """
-    from math import sin,cos
-    
-    pt = p*sin(theta)
-    return (pt*cos(phi),pt*sin(phi), p*cos(theta))
-
 def gethisto3d(name):
     import ROOT
     ROOT.TH3.AddDirectory(False)

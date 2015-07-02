@@ -51,8 +51,17 @@ class trajectory:
         built-in `id`
     _updates: int
         How many times the trajectory has been updated. This is equivalent
-        to how many volumes crossed
-
+        to how many volumes crossed [TO BE DEPRECATED? It can be used the 
+        length of any of the _position lists]
+    _x_position: list((float,float))
+        Every x position of the trajectory, whenever it crosses a volume
+        the input and output
+    _y_position: list((float,float))
+        Every y position of the trajectory, whenever it crosses a volume
+        the input and output
+    _z_position: list((float,float))
+        Every z position of the trajectory, whenever it crosses a volume
+        the input and output
 
     Methods
     -------
@@ -76,11 +85,14 @@ class trajectory:
 
         self._id = id(self)
         self._updates = 0
+        self._x_position = []
+        self._y_position = []
+        self._z_position = []
 
     def __str__(self):
-        out = '<geantino trajectory at theta=%.3f phi=%.3f>\n'
-        out += 'Geometry: %i\n' % self.origin()
-        out += 'It has counterpart: %b\n' % (self.getmirror() != None)
+        out = '<geantino trajectory at theta=%.3f phi=%.3f>\n' % (self._theta,self._phi)
+        out += 'Geometry: %s\n' % self.origin()
+        out += 'It has counterpart: %s' % (self._mirrortrajectory != None)
 
         return out
 
@@ -195,15 +207,24 @@ class trajectory:
         return False
 
     
-    def update(self,x0):
+    def update(self,x0,xinit,xend):
         """Update the radiation lenght datamember
 
         Parameters
         ----------
         x0: float
             The radiation lenght
+        xinit: (float,float,float)
+            The x,y,z of the entrace point (at the
+            considered update volume)
+        xend: (float,float,float)
+            The x,y,z of the out point (of the 
+            considered updatedv volume)
         """
         self._X0 += x0
+        self._x_position.append((xinit[0],xend[0]))
+        self._y_position.append((xinit[1],xend[1]))
+        self._z_position.append((xinit[2],xend[1]))
         self._updates += 1
 
     def setmirror(self,mirrortraj):
@@ -243,6 +264,38 @@ class trajectory:
         """
         return self._updates
 
+    def get_in_position(self,i):
+        """The inner position through the i-volume
+
+        Parameters
+        ----------
+        i: int
+            The number of crossed volume
+
+        Return
+        ------
+        (x,y,z): (float,float,float)
+            The inner position vector
+        """
+        return (self._x_position[i][0],self._y_position[i][0],
+                    self._z_position[i][0])
+    
+    def get_exit_position(self,i):
+        """The exit position from the i-volume
+
+        Parameters
+        ----------
+        i: int
+            The number of crossed volume
+
+        Return
+        ------
+        (x,y,z): (float,float,float)
+            The exit position vector
+        """
+        return (self._x_position[i][1],self._y_position[i][1],
+                    self._z_position[i][1])
+
 def gettreefile(filename):
     """Auxiliary function to create from the input filename,
     the 'particle tree' [TO BE PROMOTED, adding the tree name
@@ -264,12 +317,37 @@ def gettreefile(filename):
     t = f.Get('particles')
     return t,f
 
+def getposition(theta,phi,p):
+    """The points x,y,z are returned given the magnitud and 
+    angles of a vector
+
+    Parameters
+    ----------
+    theta: float
+        The theta angle (in spheric coordinates)
+    phi: float
+        The phi angle (in spheric coordinates)
+    p: float
+        The magnitude of the vector
+
+    Return
+    ------
+    (x,y,z): tuple(float,float,float)
+    """
+    from math import sin,cos
+    
+    pt = p*sin(theta)
+    return (pt*cos(phi),pt*sin(phi), p*cos(theta))
 
 def create_or_update_trajectory(iEvent,trajectorylist,trajectory_type):
     """A new trajectory is created and is appended to the input 
     trajectory list if there was none trajectory in the input list 
     before matched with the (theta,phi) values of the current
-    tree entry
+    tree entry. On the other hand, if there is already a trajectory
+    with the same (theta,phi)-values it means that it is entering
+    in another sub-volume of the Muon System. Therefore, the stored
+    trajectory is updated with the radiation length recorred on that
+    volumen and the entry and exit points.
 
     Parameters
     ----------
@@ -292,11 +370,15 @@ def create_or_update_trajectory(iEvent,trajectorylist,trajectory_type):
     _matched = filter(lambda x: x.match(iEvent.pth,iEvent.pph),trajectorylist)
     if len(_matched) == 0:
         trajectorynew = trajectory(trajectory_type,iEvent.pth,iEvent.pph)
-        trajectorynew.update(iEvent.X0)
+        inpoint  = getposition(iEvent.thIn,iEvent.phIn,iEvent.dIn)
+        outpoint = getposition(iEvent.thEnd,iEvent.phEnd,iEvent.dEnd)
+        trajectorynew.update(iEvent.X0,inpoint,outpoint)
         trajectorylist.append(trajectorynew)
     else:
         for traj in _matched:
-            traj.update(iEvent.X0)
+            inpoint  = getposition(iEvent.thIn,iEvent.phIn,iEvent.dIn)
+            outpoint = getposition(iEvent.thEnd,iEvent.phEnd,iEvent.dEnd)
+            traj.update(iEvent.X0,inpoint,outpoint)
         trajectorynew = None
 
     return trajectorynew
@@ -357,7 +439,7 @@ def build_trajectory_lists(fullfilename,fastfilename):
     for iEvent in tfast:
         ipb +=1 
         # Progress bar 
-        sys.stdout.write("\r\033[1;34mINFO\033[1;m Evaluating FULL geometry"+\
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m Evaluating FAST geometry"+\
                 " file [ "+"\b"+str(int(float(ipb)/point)).rjust(3)+"%]")
         sys.stdout.flush()
         # Only MS
