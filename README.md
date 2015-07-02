@@ -12,13 +12,17 @@ email : jorge.duarte.campderros@cern
 INSTALLATION
 ----------------
 The package provides a (Distutils) 'setup.py' to build and install it. Just 
+```bash
   % python setup.py install [--user] 
+```
 The --user option is used when you don't have root privilegies (or you 
 don't want to install the package in the global site-packages directories). 
 The package will be installed inside of the user directory '$HOME/.local'. 
 You have to modify the enviroment variables: 
+```bash
   % export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
   % export PATH=$PATH:$HOME/.local/bin
+```
 in order to use the new scripts and modules.
 
 CONTENT
