@@ -66,7 +66,7 @@ def squaredStyle():
 	# Axis
 	#----------------------------------------------------------------------------
 	squaredStyle.SetLabelFont  (   42, "xyz")
-	squaredStyle.SetLabelOffset(0.015, "xyz")
+	#squaredStyle.SetLabelOffset(0.015, "xyz")
 	squaredStyle.SetLabelSize  (0.050, "xyz")
 	squaredStyle.SetNdivisions (  505, "xyz")
 	squaredStyle.SetTitleFont  (   42, "xyz")
@@ -74,7 +74,8 @@ def squaredStyle():
 	
 	#  squaredStyle.SetNdivisions ( -503, "y")
 	squaredStyle.SetTitleOffset(  1.4,   "x")
-	squaredStyle.SetTitleOffset(  1.2,   "y")
+	squaredStyle.SetTitleOffset(  1.4,   "y")
+        squaredStyle.SetTitleOffset(  1.4,   "z")
 	squaredStyle.SetPadTickX   (           1)  # Tick marks on the opposite side of the frame
 	squaredStyle.SetPadTickY   (           1)  # Tick marks on the opposite side of the frame
 	
@@ -83,10 +84,11 @@ def squaredStyle():
 	#----------------------------------------------------------------------------
 	squaredStyle.SetTitleBorderSize(    0)
 	squaredStyle.SetTitleFillColor (   10)
-	#squaredStyle.SetTitleAlign     (   12)
+	squaredStyle.SetTitleAlign     (   23)
 	squaredStyle.SetTitleFontSize  (0.045)
 	squaredStyle.SetTitleX         (0.560)
-	squaredStyle.SetTitleY         (0.860)
+        squaredStyle.SetTitleOffset    (  1.0)
+	squaredStyle.SetTitleY         (0.99)
 	squaredStyle.SetTitleFont(42, "")
 	
 	squaredStyle.SetPalette(1)
