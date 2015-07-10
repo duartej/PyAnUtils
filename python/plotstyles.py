@@ -20,6 +20,12 @@ def squaredStyle():
 	squaredStyle = ROOT.TStyle("squaredStyle", "squaredStyle")
 	ROOT.gStyle = squaredStyle
 	
+        #----------------------------------------------------------------------------
+	# Font Legend?
+	#----------------------------------------------------------------------------
+        squaredStyle.SetTextFont(52)
+        squaredStyle.SetTextSize(0.025)
+	
 	#----------------------------------------------------------------------------
 	# Canvas
 	#----------------------------------------------------------------------------
@@ -136,8 +142,10 @@ def atlasStyle():
 	
 	# use large fonts
 	#font=72
-	font=42
-	tsize=0.05
+	#font=42
+        font=52
+	#tsize=0.05
+	tsize=0.025
 	atlasStyle.SetTextFont(font)
 	
 	atlasStyle.SetTextSize(tsize)
@@ -244,7 +252,7 @@ def njStyle():
 	njStyle.SetStatFontSize(0.09);
 	njStyle.SetTitleBorderSize(0);
 	njStyle.SetStatBorderSize(0);
-	njStyle.SetTextFont(42);
+	njStyle.SetTextFont(52);
 	
 	#set line widths
 	njStyle.SetFrameLineWidth(2);
