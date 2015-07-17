@@ -247,6 +247,50 @@ def drawlegend(legend,where,ystart,**kwd):
     legend.Draw()
 
 
+def set_attr_plotobject(gr,**kwd):
+    """Set some attributes to a ROOT.THX or ROOT.TGraphXX
+    objects
+
+    Parameters
+    ----------
+    gr: ROOT.TObject (should be TGraph or THX)
+        The object to set the attributes
+    color: int, optional [Default: a random color is provided]
+    linestyle: int, optional [Default: 1]
+    markerstyle: int, optional [Default: 20]
+    linewidth: int, optional [Default: 2]
+    """
+    opt = ExtraOpt( [ ('color',None), ('linestyle',1),
+        ('markerstyle',20), ('linewidth',2),
+        ('markersize',0.7),
+        ('title', ''), 
+        ('xtitle', None), ('ytitle',None), ('ztitle',None)] )
+    opt.setkwd(kwd)
+
+    if not opt.color:
+        import random
+        color = int(random.uniform(1,1000))
+    else:
+        color = opt.color
+    
+    gr.SetMarkerStyle(opt.markerstyle)
+    gr.SetMarkerSize(opt.markersize)
+    gr.SetMarkerColor(color)
+
+    gr.SetLineStyle(opt.linestyle)
+    gr.SetLineColor(color)
+    gr.SetLineWidth(opt.linewidth)
+
+    # Titles 
+    gr.SetTitle(opt.title)
+    titlesandacces = map(lambda x: (x+'title','Get'+x.upper()+'axis'), \
+            [ 'x', 'y', 'z' ])
+    for (title,method) in titlesandacces:
+        # if defined (i.e. not None)
+        if getattr(opt,title):
+            getattr(gr,method)().SetTitle(getattr(opt,title))
+
+
 def psitest(predicted,observed):
     """.. function:: psitest(predicted,observed) -> value
     Function which evaluate the amount of plausability a hypothesis has (i.e., 
