@@ -70,9 +70,11 @@ class ExtraOpt:
         can be called as well to update his values using the 'setkwd'
         method
         """
-        self.validkwd = validkwd
-        for name,initval in self.validkwd:
+        self._validkwd = validkwd
+        self._defaults = {}
+        for name,initval in self._validkwd:
             setattr(self,name,initval)
+            self._defaults[name]=initval
     def setkwd(self,kwddict):
         """.. method::setkwd(kwddict) 
 
@@ -81,10 +83,19 @@ class ExtraOpt:
         the attributes to be modified
         """
         for key,val in kwddict.iteritems():
-            if key not in map(lambda (x,y): x,self.validkwd):
+            if key not in map(lambda (x,y): x,self._validkwd):
                 raise RuntimeError("not valid '%s' when calling '%s'" %
                 (key,self.__class__))
             setattr(self,key,val)
+    def reset(self):
+        """Reset the attributes to their original initialization
+        values. This method is useful when the class is used other
+        than just initialization and setkwd.
+        """
+        for key,initval in self._defaults.iteritems():
+            setattr(self,key,initval)
+
+        
 
 def graphtohist(graph,binning=1000):
     """.. function:: graphtohist(graph,binning=1000) -> ROOT.TH1F
