@@ -13,5 +13,6 @@ setup(name='PyAnUtils',
 		packages = ['PyAnUtils','dvAnUtils','jobSender','mtgAnUtils' ],
 		scripts=['bin/mtgfastfullcmp','bin/lazycmt','dvAnUtils/bin/dvtrigeff',
                     'dvAnUtils/bin/roibasisconverter', 'dvAnUtils/bin/fitmodel',
-                    'jobSender/bin/clustermanager','mtgAnUtils/bin/mtg_gs_summary'],
+                    'jobSender/bin/clustermanager','mtgAnUtils/bin/mtg_gs_summary',
+                    'dvAnUtils/bin/quickTrackPlotter'],
 		)

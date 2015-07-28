@@ -1,0 +1,451 @@
+#!/usr/bin/env python
+""" Just check the tracks in the xAOD
+FIXME-- Work in progress to be documented
+"""
+
+class HistoContainer():
+    """TO BE PROMOTED ----
+    """
+    def __init__(self):
+        """
+        """
+        from PyAnUtils.pyanfunctions import ExtraOpt
+        
+        self._histos = {}
+        self.__class  = {}
+        self.__associated = {}
+        self.__description= {}
+        self.__opts   = { 'bookhisto': ExtraOpt( [('npoints_y',None),('ylow',None), ('yhigh',None),
+                                    ('npoints_z',None), ('zlow',None), ('zhigh',None),
+                                    ('description','')] ),
+                          'fill': ExtraOpt( [('weight',None)] ),
+                          'plot': ExtraOpt( [('options',''), ('legend',True),
+                                    ('legposition','RIGHT'),('legy',0.85),('textlength',0.31) ] )
+                          }
+
+    def bookhisto(self,name,title,npoints,xlow,xhigh,**kwd):
+        """
+        """
+        import ROOT
+        opt = self.__opts['bookhisto']
+        opt.reset()
+        opt.setkwd(kwd)
+        
+        if name in self._histos.keys():
+            raise KeyError("Histogram name already in used" %  name)
+        
+        if opt.npoints_y: 
+            if not opt.ylow or not opt.yhigh:
+                raise RuntimeError("npoints_z option needs also"\
+                        " ylow and yhigh")
+            if opt.npoints_z:
+                if not opt.zlow or not opt.zhigh:
+                    raise RuntimeError("npoints_z option needs also"\
+                            " zlow and zhigh")
+                histoclass = "TH3F"
+                h = ROOT.TH3F(name,title,npoints,xlow,xhigh,\
+                        opt.npoints_y,opt.ylow,opt.yhigh,\
+                        opt.npoints_z,opt.zlow,opt.zhigh)
+            else:
+                histoclass = "TH2F"
+                h = ROOT.TH2F(name,title,npoints,xlow,xhigh,\
+                        opt.npoints_y,opt.ylow,opt.yhigh)
+        else:
+            histoclass = "TH1F"
+            h = ROOT.TH1F(name,title,npoints,xlow,xhigh)
+        self._histos[name] = h
+        setattr(self,name,self._histos[name])
+        self.__class[name]  = histoclass
+        self.__description[name] = opt.description
+    
+    def removehistos(self):
+        """
+        """
+        for name,h in self._histos.iteritems():
+            h.Delete()
+            delattr(self,name)
+            h = None
+        names = self._histos.keys()
+        for name in names:
+            self._histos.pop(name)
+    
+    def checkhisto(self,name):
+        """
+        """
+        if name not in self._histos.keys():
+            raise RuntimeError("No histogram booked with the name '%s'" % name)
+
+    def associated(self,histonamelist):
+        """ Histos which are intented to be plotted together in the same 
+        Canvas. The x,y and z are the same.
+        The user take cares of the normalization
+        """
+        for name in histonamelist:
+            self.checkhisto(name)
+            self.__associated[name] = filter(lambda x: x != name, histonamelist)
+            self.__associated[name] += [name]
+
+    def getassociated(self,name):
+        """
+        """
+        return [name]+self.__associated[name]
+
+    def fill(self,name,x,y=None,z=None,**kwd):
+        """
+        """
+        opt = self.__opts['fill']
+        opt.reset()
+        opt.setkwd(kwd)
+
+        self.checkhisto(name)
+        if y:
+            if z:
+                self._histos[name].Fill(x,y,z)
+            else:
+                self._histos[name].Fill(x,y)
+            return 
+        self._histos[name].Fill(x)
+
+    def plot(self,name,plotname,canvas=None,**kwd):
+        """ 
+        """
+        from PyAnUtils.pyanfunctions import drawlegend
+        from PyAnUtils.plotstyles import njStyle,setpalette
+        
+        stl = njStyle()
+        stl.cd()
+        #ROOT.gROOT.ForceStyle()
+        setpalette('gray')
+
+        opt = self.__opts['plot']
+        opt.reset()
+        opt.setkwd(kwd)
+        self.checkhisto(name)
+        
+        canvascreatedhere=False
+        if not canvas:
+            import ROOT
+            canvas = ROOT.TCanvas()
+            canvascreatedhere=True
+        # Check the associated histos to be plot with him
+        # and draw the higher y-value as the first one
+        orderednames = [name]
+        if self.__associated.has_key(name):
+            unorderednames = self.__associated[name]
+            # Normalization
+            oldintegral = dict(map(lambda n: (n,self._histos[n].Integral()),unorderednames))
+            __dummy = map(lambda n: self._histos[n].Scale(1.0/oldintegral[n]), unorderednames)
+            orderednames   = sorted(unorderednames,key=lambda n: self._histos[n].GetMaximum(),reverse=True)
+
+        self._histos[orderednames[0]].Draw(opt.options)
+        for anotherh in orderednames[1:]:
+            self._histos[anotherh].Draw("SAME"+opt.options)
+
+        if opt.legend:
+            import ROOT
+            leg=ROOT.TLegend()
+            for n in orderednames:
+                leg.AddEntry(self._histos[n],self.__description[n],"LF")
+                drawlegend(leg,opt.legposition,opt.legy,textlength=opt.textlength)
+        canvas.SaveAs(plotname)
+        # Deattach the legend from this canvas, otherwise violation segmentation
+        canvas.Clear()
+        leg.Delete()
+        del leg
+        if canvascreatedhere:
+            del canvas
+        # Reset the actual normalization, if there was more than one histo
+        if self.__associated.has_key(name):
+            __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
+
+
+def getcollection(tree,name):
+    """
+    """
+    k =  filter(lambda x: x.GetName().lower().find(name.lower()) != -1,\
+            tree.GetListOfBranches())
+    # not including auxiliar
+    return filter(lambda x: x.GetName().lower().find('aux.') == -1, k)# not including auxiliar
+
+
+def getfileinfo(filename):
+    """
+    """
+    import ROOT
+    import PyCintex
+    PyCintex.Cintex.Enable()
+    from AthenaROOTAccess import transientTree
+    
+    f = ROOT.TFile(filename)
+    if f.IsZombie():
+        raise IOError("Not found root file '%s'" % filename)
+    t = transientTree.makeTree(f)
+
+    branchnames = list(set(map(lambda x: x.GetName(), getcollection(t,'track'))))
+    
+    return branchnames,t,f
+   
+
+def setuphistos(hcont,name,nbins,xlow,xmax):
+    """
+    """
+    regtitle = "regular tracking"
+    highd0tl = "High-d_{0}  retracking"
+    hcont.bookhisto(name      ,regtitle,nbins,xlow,xmax,description='Regular reco tracks')
+    hcont.bookhisto(name+"_h" ,highd0tl,nbins,xlow,xmax,description='re-tracked (not-matched)')
+    hcont.bookhisto(name+"_hA",highd0tl,nbins,xlow,xmax,description='re-tracked (all)')
+    # -- Associated histograms: plotted in the same canvas
+    hcont.associated([name,name+'_h',name+'_hA'])
+
+def doplothistos(hcont,name,xtitle,ytitle,plotname,**kwd):
+    """Prepare and plot the associated histos
+    """
+    
+    from PyAnUtils.pyanfunctions import set_attr_plotobject
+    from PyAnUtils.plotstyles import njStyle
+    import ROOT
+
+    stl = njStyle()
+    stl.cd()
+    ROOT.gROOT.ForceStyle()
+
+    c = ROOT.TCanvas()
+    rt_color = ROOT.TColor.GetColor(48,70,116)
+    hd_color = ROOT.TColor.GetColor(87,152,52)
+    hm_color = ROOT.TColor.GetColor(174,136,60)
+    
+    h   = getattr(hcont,name)
+    h.SetFillColorAlpha(rt_color,0.3)
+    
+    h_h = getattr(hcont,name+"_h")
+    h_h.SetFillColorAlpha(hd_color,0.3)
+    
+    h_hA= getattr(hcont,name+"_hA")
+    h_hA.SetFillColorAlpha(hm_color,0.3)
+
+    set_attr_plotobject(h,   xtitle=xtitle,ytitle=ytitle,color=rt_color)
+    set_attr_plotobject(h_h, xtitle=xtitle,ytitle=ytitle,color=hd_color,linestyle=5)
+    set_attr_plotobject(h_hA,xtitle=xtitle,ytitle=ytitle,color=hm_color,linestyle=2)
+    c.SetLogy()
+    plotnamelog = plotname.replace(".","_log.")
+    hcont.plot(name,plotnamelog,c,**kwd)
+    c.SetLogy(0)
+    hcont.plot(name,plotname,c,**kwd)
+
+def main(filenames,plotsuf,**kwd):
+    """
+    """
+    import sys
+    import ROOT
+    from math import sqrt
+    from struct import unpack
+    from PyAnUtils.pyanfunctions import ExtraOpt,set_attr_plotobject
+    from PyAnUtils.plotstyles import njStyle,setpalette
+
+    opt = ExtraOpt( [('d0range',80), ('z0range',1500.)] )
+    opt.setkwd(kwd)
+    
+    ROOT.gROOT.SetBatch()
+
+    out = []
+    for i in filenames:
+        out.append(getfileinfo(i))
+    # Get tree     
+    t = out[0][1]
+    t.GetEntry(0)
+    # Set the track particle
+    tracks_normal = t.InDetTrackParticles
+    tracks_highd0 = t.InDetHighD0TrackParticles
+    
+    # ----------------------------------------
+    # --- Histograming 
+    h = HistoContainer()
+    # D0
+    setuphistos(h,"d0",200,-opt.d0range,opt.d0range)
+    setuphistos(h,"err_d0",100,-3.,3.)
+    
+    # Z0
+    setuphistos(h,"z0",200,-opt.z0range,opt.z0range)
+    setuphistos(h,"err_z0",100,-1.,1.)
+
+    # 2d d0 vs z0
+    h.bookhisto("d0z0_h","High-d_{0} retracking",100,-opt.d0range,opt.d0range,\
+            npoints_y=100,ylow=-opt.z0range,yhigh=opt.z0range)
+    
+    # number of tracks per event
+    setuphistos(h,"nt",100,0,101)
+
+    # Quality
+    setuphistos(h,"chi2Nof",100,0,12.)
+
+    # Hits 
+    setuphistos(h,"radFirstHit",500,0,500.)
+
+    # -- Pixel hits
+    setuphistos(h,"nPixelHits",11,0,10.)
+
+    # -- SCT hits
+    setuphistos(h,"nSCTHits",21,0,20.)
+
+    # -- TRT hits
+    setuphistos(h,"nTRTHits",51,0,50.)
+
+    # -- Total hits
+    setuphistos(h,"nHits",71,0,70.)
+    # ------
+    
+    print "------------------------------------------------------"
+    totalregrec   = 0
+    totalrechighd0= 0 
+    realnewhighd0 = 0
+    # --- Progress bar :)
+    pointpb = float(t.GetEntries())/100.0
+    for i in xrange(t.GetEntries()):
+        t.GetEntry(i)
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m Extracting track info"+\
+                    " [ "+"\b"+\
+                    str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+        sys.stdout.flush()
+        #print "[%i] Number of particles:      %i       %i" % (i,tracksInDet_normal.size(),tracksInDet_highd0.size())
+        reg_etaphi = []
+        sametracks = []
+        for k in xrange(tracks_normal.size()):
+            track = tracks_normal[k]
+            # Perigee parameters
+            h.d0.Fill(track.d0())
+            h.err_d0.Fill(track.definingParametersCovMatrixVec()[0]/track.d0())
+            h.z0.Fill(track.z0())
+            h.err_z0.Fill(track.definingParametersCovMatrixVec()[1]/track.z0())
+            # quality
+            h.chi2Nof.Fill(track.chiSquared()/track.numberDoF())
+            # hits
+            h.radFirstHit.Fill(track.radiusOfFirstHit())
+            pixel = unpack('B',track.auxdataConst('unsigned char')('numberOfPixelHits'))[0]
+            sct   = unpack('B',track.auxdataConst('unsigned char')('numberOfSCTHits'))[0]
+            trt   = unpack('B',track.auxdataConst('unsigned char')('numberOfTRTHits'))[0]
+            h.nPixelHits.Fill(pixel)
+            h.nSCTHits.Fill(sct)
+            h.nTRTHits.Fill(trt)
+            h.nHits.Fill(pixel+sct+trt)
+            # Keep the dR of this track
+            reg_etaphi.append( (track.eta(),track.phi()) )
+        nmatched = 0
+        for k in xrange(tracks_highd0.size()):
+            trackH = tracks_highd0[k]
+            # Fill all the tracks
+            # Perigee parameters
+            h.d0_hA.Fill(trackH.d0())
+            h.err_d0_hA.Fill(trackH.definingParametersCovMatrixVec()[0]/trackH.d0())
+            h.z0_hA.Fill(trackH.z0())
+            h.err_z0_hA.Fill(trackH.definingParametersCovMatrixVec()[1]/trackH.z0())
+            # quality
+            h.chi2Nof_hA.Fill(trackH.chiSquared()/trackH.numberDoF())
+            # hits
+            h.radFirstHit_hA.Fill(trackH.radiusOfFirstHit())
+            pixel = unpack('B',trackH.auxdataConst('unsigned char')('numberOfPixelHits'))[0]
+            sct   = unpack('B',trackH.auxdataConst('unsigned char')('numberOfSCTHits'))[0]
+            trt   = unpack('B',trackH.auxdataConst('unsigned char')('numberOfTRTHits'))[0]
+            h.nPixelHits_hA.Fill(pixel)
+            h.nSCTHits_hA.Fill(sct)
+            h.nTRTHits_hA.Fill(trt)
+            h.nHits_hA.Fill(pixel+sct+trt)
+            # Just care about the new ones
+            matched = filter(lambda (eta,phi): sqrt((trackH.eta()-eta)**2.+(trackH.phi()-phi)**2.) < 0.05,reg_etaphi)
+            nmatched += len(matched)
+            if len(matched) == 0:
+                h.d0_h.Fill(trackH.d0())
+                h.err_d0_h.Fill(trackH.definingParametersCovMatrixVec()[0]/trackH.d0())
+                h.z0_h.Fill(trackH.z0())
+                h.err_z0_h.Fill(trackH.definingParametersCovMatrixVec()[1]/trackH.z0())
+                h.chi2Nof_h.Fill(trackH.chiSquared()/trackH.numberDoF())
+                h.radFirstHit_h.Fill(trackH.radiusOfFirstHit())
+                h.d0z0_h.Fill(trackH.d0(),trackH.z0())
+                h.nPixelHits_h.Fill(pixel)
+                h.nSCTHits_h.Fill(sct)
+                h.nTRTHits_h.Fill(trt)
+                h.nHits_h.Fill(pixel+sct+trt)
+        # Total number of reco-tracks
+        h.nt.Fill(tracks_normal.size())
+        nt_non_matched =tracks_highd0.size()-nmatched
+        h.nt_h.Fill(nt_non_matched)
+        h.nt_hA.Fill(tracks_highd0.size())
+        # --- Not needed anymore with the nt-histos...
+        totalregrec += tracks_normal.size()
+        totalrechighd0+=tracks_highd0.size()
+        realnewhighd0+= nt_non_matched
+        #print " --- Total matched high-d0/regular: %i" % nmatched
+        #print " --- Therefore %i new high-d0" % (tracksInDet_highd0.size()-nmatched)
+    print 
+    print " --- Total Regular reconstructed tracks                                     : %i" %totalregrec
+    print " --- Total high-d0 reconstructed tracks                                     : %i" %totalrechighd0
+    print " --- Total high-d0 tracks really news (not matched with regular reco tracks): %i" % realnewhighd0
+
+
+    #==========================================================================
+    # Drawing
+    
+    # -- D0
+    doplothistos(h,"d0",'d_{0} [mm]','A.U.',"regular_vs_highd0_tracks_d0."+plotsuf)
+    doplothistos(h,"err_d0",'\sigma_{d_{0}}/d_{0}','A.U.',"regular_vs_highd0_tracks_errd0."+plotsuf)
+    
+    # -- Z0
+    doplothistos(h,"z0",'z_{0} [mm]','A.U.',"regular_vs_highd0_tracks_z0."+plotsuf,legy=0.9)
+    doplothistos(h,"err_z0",'\sigma_{z_{0}}/z_{0}','A.U.',"regular_vs_highd0_tracks_errz0."+plotsuf)
+    
+    # -- Chi2Nof
+    doplothistos(h,"chi2Nof",'\chi^{2}/N_{dof}','A.U.',"regular_vs_highd0_tracks_chi2Nof."+plotsuf)
+    
+    # -- First hit radius
+    doplothistos(h,"radFirstHit",'r_{first hit} [mm]','A.U.',"regular_vs_highd0_tracks_radFirstHit."+plotsuf)
+    
+    # -- Pixel hit
+    doplothistos(h,"nPixelHits",'N_{Pixel hits}','A.U.',"regular_vs_highd0_tracks_nPixelHits."+plotsuf)
+    
+    # -- SCT hit
+    doplothistos(h,"nSCTHits",'N_{SCT hits}','A.U.',"regular_vs_highd0_tracks_nSCTHits."+plotsuf)
+    
+    # -- TRT hit
+    doplothistos(h,"nTRTHits",'N_{TRT hits}','A.U.',"regular_vs_highd0_tracks_nTRTHits."+plotsuf)
+    
+    # -- Number of total hits
+    doplothistos(h,"nHits",'N_{hits}','A.U.',"regular_vs_highd0_tracks_nHits."+plotsuf)
+    
+    # -- Nt
+    doplothistos(h,"nt",'N_{t}','A.U.',"regular_vs_highd0_tracks_nt."+plotsuf,options="H")
+    
+    # Special 2D
+    from PyAnUtils.plotstyles import njStyle,setpalette
+    stl = njStyle()
+    stl.cd()
+    ROOT.gROOT.ForceStyle()
+    setpalette('gray')
+
+    c = ROOT.TCanvas()
+    set_attr_plotobject(h.d0z0_h,xtitle='d_{0} [mm]',ytitle='z_{0} [mm]',color=None)
+    h.d0z0_h.Draw("COLZ")
+    regularrecophase = ROOT.TBox(-10.0,-250,10.,250.)
+    regularrecophase.SetLineWidth(2)
+    regularrecophase.SetLineStyle(3)
+    regularrecophase.SetLineColor(ROOT.kRed+2)
+    regularrecophase.SetFillStyle(0)
+    regularrecophase.Draw()
+    c.SaveAs("highd0tracks_d0z0."+plotsuf)
+
+    h.removehistos()
+
+if __name__ == '__main__':
+    from optparse import OptionParser
+    
+    usage = "quickTrackPlotter xAODROOTFILE [OPTIONS]"
+    parser = OptionParser(usage=usage)
+    parser.set_defaults(suffix="pdf")
+    parser.add_option( "-s",action='store',dest='suffix',\
+            metavar="SUFFIX",help="Suffix for the plot files [PDF]")
+
+    (opt,args) = parser.parse_args()
+    if len(args) != 1:
+        message = "\033[31mquickTrackPlotter ERROR\033[m Missing input"\
+                " root file to process"
+        raise RuntimeError(message)
+
+    main(args,opt.suffix.lower())
