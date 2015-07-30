@@ -9,8 +9,9 @@
 	  .. packageauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 # Used when 'from PyAnUtils import *'
-__all__ = [ 'plotsytles', 'pyanfunctions' ,'unit', 'getavailableunits' ]
+__all__ = [ 'plotsytles', 'pyanfunctions' ,'histocontainer','unit', 'getavailableunits' ]
 # Used when 'import PyAnUtils'
 import plotstyles
 import pyanfunctions
+import histocontainer
 from systemofunits import unit,getavailableunits

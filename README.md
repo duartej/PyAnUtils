@@ -29,14 +29,15 @@ CONTENT
 -------
   1. Modules
   ----------
-   * PyAnUtils.plotsytyles:   ROOT styles 
-   * PyAnUtils.pyanfunctions: bunch of functions
-   * jobSender: [Subpackage]  bunch of class, functions and scripts related 
-                              with sending jobs to a scientific cluster
-   * dvAnUtils: [Subpackage]  software specific for the displaced vertex
-                              ATLAS' analysis
-   * mtgAnUtils:[Subpackge]   software specific for the Muon Spectrometer
-                              Geometry ATLAS' analysis
+   * PyAnUtils.plotsytyles:    ROOT styles 
+   * PyAnUtils.pyanfunctions:  bunch of functions
+   * PyAnUtils.histocontainer: helper class to plot histograms
+   * jobSender: [Subpackage]   bunch of classes, functions and scripts related 
+                               with sending jobs to a scientific cluster
+   * dvAnUtils: [Subpackage]   software specific for the displaced vertex
+                               ATLAS' analysis
+   * mtgAnUtils:[Subpackge]    software specific for the Muon Spectrometer
+                               Geometry ATLAS' analysis
 
   2. Scripts
   ------------
