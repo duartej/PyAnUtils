@@ -32,10 +32,10 @@ class HistoContainer():
         
         self._histos = {}
         self._usercreated = {}
-        self.__class  = {}
-        self.__associated = {}
-        self.__description= {}
-        self.__opts   = { 'create_and_book_histo': ExtraOpt( [('npoints_y',None),('ylow',None), ('yhigh',None),
+        self._class  = {}
+        self._associated = {}
+        self._description= {}
+        self._opts   = { 'create_and_book_histo': ExtraOpt( [('npoints_y',None),('ylow',None), ('yhigh',None),
                                     ('npoints_z',None), ('zlow',None), ('zhigh',None),
                                     ('description','')] ),
                           'book_histo': ExtraOpt( [('description',''), ('title',None)] ),
@@ -72,7 +72,7 @@ class HistoContainer():
             
         """
         import ROOT
-        opt = self.__opts['create_and_book_histo']
+        opt = self._opts['create_and_book_histo']
         opt.reset()
         opt.setkwd(kwd)
         
@@ -86,9 +86,9 @@ class HistoContainer():
         
         self._histos[name] = h
         setattr(self,name,self._histos[name])
-        self.__class[name]  = h.ClassName()
-        self.__description[name] = opt.description
-        self.__usercreated[name] = True
+        self._class[name]  = h.ClassName()
+        self._description[name] = opt.description
+        self._usercreated[name] = True
 
     def create_and_book_histo(self,name,title,npoints,xlow,xhigh,**kwd):
         """Create and book the ROOT.THX histogram uniquely identified 
@@ -135,7 +135,7 @@ class HistoContainer():
             y(z)low and y(z)high
         """
         import ROOT
-        opt = self.__opts['create_and_book_histo']
+        opt = self._opts['create_and_book_histo']
         opt.reset()
         opt.setkwd(kwd)
         
@@ -163,9 +163,9 @@ class HistoContainer():
             h = ROOT.TH1F(name,title,npoints,xlow,xhigh)
         self._histos[name] = h
         setattr(self,name,self._histos[name])
-        self.__class[name]  = histoclass
-        self.__description[name] = opt.description
-        self.__usercreated[name] = False
+        self._class[name]  = histoclass
+        self._description[name] = opt.description
+        self._usercreated[name] = False
     
     def removehistos(self,memory=False):
         """Remove the histograms from the class.
@@ -184,8 +184,8 @@ class HistoContainer():
             by this method
         """
         for name,h in self._histos.iteritems():
-            if not self.__usercreated[name] or \
-                    (self.__usercreated[name] and memory):
+            if not self._usercreated[name] or \
+                    (self._usercreated[name] and memory):
                 h.Delete()
             delattr(self,name)
             h = None
@@ -227,8 +227,8 @@ class HistoContainer():
         """
         for name in histonamelist:
             self.checkhisto(name)
-            self.__associated[name] = filter(lambda x: x != name, histonamelist)
-            self.__associated[name] += [name]
+            self._associated[name] = filter(lambda x: x != name, histonamelist)
+            self._associated[name] += [name]
 
     def getassociated(self,name):
         """Return the full list of histograms associated with this one plus
@@ -244,7 +244,7 @@ class HistoContainer():
             list of the associated histograms, where the first
             element is the name of the current histo
         """
-        return [name]+self.__associated[name]
+        return [name]+self._associated[name]
 
     def fill(self,name,x,y=None,z=None,**kwd):
         """Wrapper to the ROOT.THX.Fill method
@@ -253,7 +253,7 @@ class HistoContainer():
         Parameters
         ---------
         """
-        opt = self.__opts['fill']
+        opt = self._opts['fill']
         opt.reset()
         opt.setkwd(kwd)
 
@@ -304,7 +304,7 @@ class HistoContainer():
         #ROOT.gROOT.ForceStyle()
         setpalette('gray')
 
-        opt = self.__opts['plot']
+        opt = self._opts['plot']
         opt.reset()
         opt.setkwd(kwd)
         self.checkhisto(name)
@@ -317,8 +317,8 @@ class HistoContainer():
         # Check the associated histos to be plot with him
         # and draw the higher y-value as the first one
         orderednames = [name]
-        if self.__associated.has_key(name):
-            unorderednames = self.__associated[name]
+        if self._associated.has_key(name):
+            unorderednames = self._associated[name]
             # Normalization
             oldintegral = dict(map(lambda n: (n,self._histos[n].Integral()),unorderednames))
             __dummy = map(lambda n: self._histos[n].Scale(1.0/oldintegral[n]), unorderednames)
@@ -332,7 +332,7 @@ class HistoContainer():
             import ROOT
             leg=ROOT.TLegend()
             for n in orderednames:
-                leg.AddEntry(self._histos[n],self.__description[n],"LF")
+                leg.AddEntry(self._histos[n],self._description[n],"LF")
                 drawlegend(leg,opt.legposition,opt.legy,textlength=opt.textlength)
         canvas.SaveAs(plotname)
         # Deattach the legend from this canvas, otherwise violation segmentation
@@ -342,6 +342,6 @@ class HistoContainer():
         if canvascreatedhere:
             del canvas
         # Reset the actual normalization, if there was more than one histo
-        if self.__associated.has_key(name):
+        if self._associated.has_key(name):
             __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
 
