@@ -42,7 +42,8 @@ class HistoContainer():
 
                           'fill': ExtraOpt( [('weight',None)] ),
                           'plot': ExtraOpt( [('options',''), ('legend',True),
-                                    ('legposition','RIGHT'),('legy',0.85),('textlength',0.31) ] )
+                                    ('legposition','RIGHT'),('legy',0.85),('textlength',0.31),
+                                    ('normalize',True)] )
                           }
     
     def book_histo(self,h,**kwd):
@@ -72,7 +73,7 @@ class HistoContainer():
             
         """
         import ROOT
-        opt = self._opts['create_and_book_histo']
+        opt = self._opts['book_histo']
         opt.reset()
         opt.setkwd(kwd)
         
@@ -320,8 +321,9 @@ class HistoContainer():
         if self._associated.has_key(name):
             unorderednames = self._associated[name]
             # Normalization
-            oldintegral = dict(map(lambda n: (n,self._histos[n].Integral()),unorderednames))
-            __dummy = map(lambda n: self._histos[n].Scale(1.0/oldintegral[n]), unorderednames)
+            if opt.normalize: 
+                oldintegral = dict(map(lambda n: (n,self._histos[n].Integral()),unorderednames))
+                __dummy = map(lambda n: self._histos[n].Scale(1.0/oldintegral[n]), unorderednames)
             orderednames   = sorted(unorderednames,key=lambda n: self._histos[n].GetMaximum(),reverse=True)
 
         self._histos[orderednames[0]].Draw(opt.options)
@@ -342,6 +344,7 @@ class HistoContainer():
         if canvascreatedhere:
             del canvas
         # Reset the actual normalization, if there was more than one histo
-        if self._associated.has_key(name):
-            __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
+        if opt.normalize:
+            if self._associated.has_key(name):
+                __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
 
