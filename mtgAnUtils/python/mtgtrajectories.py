@@ -221,7 +221,10 @@ class trajectory:
             The x,y,z of the out point (of the 
             considered updatedv volume)
         """
-        self._X0 += x0
+        # Averaging the radiation lenght
+        previousX0 = self._X0
+        newX0 = (self._X0+x0)/2.0
+        self._X0 += newX0
         self._x_position.append((xinit[0],xend[0]))
         self._y_position.append((xinit[1],xend[1]))
         self._z_position.append((xinit[2],xend[1]))
@@ -344,10 +347,11 @@ def create_or_update_trajectory(iEvent,trajectorylist,trajectory_type):
     trajectory list if there was none trajectory in the input list 
     before matched with the (theta,phi) values of the current
     tree entry. On the other hand, if there is already a trajectory
-    with the same (theta,phi)-values it means that it is entering
-    in another sub-volume of the Muon System. Therefore, the stored
-    trajectory is updated with the radiation length recorred on that
-    volumen and the entry and exit points.
+    with the same (theta,phi)-values [--> it means that it is entering
+    in another sub-volume of the Muon System <-- NOT TRUE]. 
+    it means that was created a particle with the same (inside tolerance)
+    topology. Therefore, the stored trajectory is updated with the radiation 
+    length averaged between the measured previously and the current one-
 
     Parameters
     ----------
