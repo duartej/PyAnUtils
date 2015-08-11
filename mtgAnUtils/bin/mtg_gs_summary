@@ -192,7 +192,8 @@ def plot_radlength(trajectorylist,variable,**kwd):
     if not variable in ['theta','phi','eta']:
         raise AttributeError("Not valid variable '%s' to plot" % variable)
 
-    opt = ExtraOpt( [('xmin',0),('xmax',3.1416),('doplot',True)] )
+    opt = ExtraOpt( [('xmin',0),('xmax',3.1416),('doplot',True) , 
+        ('relative_diff',False)] )
     opt.setkwd(kwd)
 
     geometry = trajectorylist[0].origin()
