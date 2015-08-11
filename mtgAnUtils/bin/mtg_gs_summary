@@ -418,10 +418,10 @@ def main(fullfn,fastfn,verbose,do_validation,rel_diffs):
     print "-"*80
     print "2. Radiation length 1-d plots (phi and eta)"
     print "-"*80
-    g_full_eta = plot_radlength(fulllist,'eta',xmin=-4.5,xmax=4.5)
-    g_full_phi = plot_radlength(fulllist,'phi',xmin=-3.1416,xmax=3.1416)
-    g_fast_eta = plot_radlength(fastlist,'eta',xmin=-4.5,xmax=4.5)
-    g_fast_phi = plot_radlength(fastlist,'phi',xmin=-3.1416,xmax=3.1416)
+    g_full_eta = plot_radlength(fulllist,'eta',xmin=-4.5,xmax=4.5,relative_diff=rel_diffs)
+    g_full_phi = plot_radlength(fulllist,'phi',xmin=-3.1416,xmax=3.1416,relative_diff=rel_diffs)
+    g_fast_eta = plot_radlength(fastlist,'eta',xmin=-4.5,xmax=4.5,relative_diff=rel_diffs)
+    g_fast_phi = plot_radlength(fastlist,'phi',xmin=-3.1416,xmax=3.1416,relative_diff=rel_diffs)
     # --- Plot radiation length plots 2D with respect eta and phi
     print "-"*80
     print "3. Radiation length 2-d plots"
