@@ -224,7 +224,7 @@ class trajectory:
         # Averaging the radiation lenght
         previousX0 = self._X0
         newX0 = (self._X0+x0)/2.0
-        self._X0 += newX0
+        self._X0 = newX0
         self._x_position.append((xinit[0],xend[0]))
         self._y_position.append((xinit[1],xend[1]))
         self._z_position.append((xinit[2],xend[1]))
