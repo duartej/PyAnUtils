@@ -137,7 +137,7 @@ def graphtohist(graph,binning=1000):
     
     return h
 
-def graphtohist2D(graph,binning=1000):
+def graphtohist2D(graph,binning_x,binning_y):
     """.. function:: graphtohist2D(graph,binning=1000) -> ROOT.TH2F
     
     2-dimensional version of the graphtohist2D function
@@ -161,7 +161,7 @@ def graphtohist2D(graph,binning=1000):
     ymin = graph.GetYmin()
     ymax = graph.GetYmax()
     histoname = graph.GetName()+'_histo'
-    h = TH2F(histoname,'',binning,xmin,xmax,binning,ymin,ymax)
+    h = TH2F(histoname,'',binning_x,xmin,xmax,binning_y,ymin,ymax)
     #xbins = [ h.GetXaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsX()+2) ]
     #ybins = [ h.GetYaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsY()+2) ]
     #yval = Double(0.0)
