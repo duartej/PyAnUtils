@@ -200,11 +200,19 @@ class trajectory:
             the circle defined with this instance
         """
         from math import sqrt
+
+        # First checks to 
+        Dtheta =  self._theta-theta
+        if abs(Dtheta) > dRMax:
+            return False
+        Dphi   = self._phi-phi
+        if abs(Dphi) > dRMax:
+            return False
         
-        dR = sqrt( (self._theta-theta)**2.+(self._phi-phi)**2. ) 
-        if dR < dRMax:
+        if sqrt( Dtheta**2.+Dphi**2. ) < dRMax:
             return True
-        return False
+        else:
+            return False
 
     
     def update(self,x0,xinit,xend):
@@ -444,8 +452,16 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     `create_or_update_trajectory`
     """
     import sys
+    import os
+    from ROOT import TFile
 
-    tfull,rfull = gettreefile(fullfilename)
+    tfull_raw,rfull = gettreefile(fullfilename)
+    
+    # Just create to associate the copied trees
+    _dummyname = '__d.root'
+    _dummyf = TFile(_dummyname,'RECREATE')
+
+    tfull = tfull_raw.CopyTree('geoID==4')
     
     # Progress bar
     ipb=0
@@ -464,7 +480,8 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     print
     rfull.Close()
 
-    tfast,rfast = gettreefile(fastfilename)
+    tfast_raw,rfast = gettreefile(fastfilename)
+    tfast = tfast_raw.CopyTree('geoID==4')
     # Progress bar
     ipb=0
     point = float(tfast.GetEntries()-1)/100.0    
@@ -499,6 +516,8 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
                             " FAST trajectory. The dR cone should be lowered!")
     print
     rfast.Close()
+    _dummyf.Close()
+    os.remove(_dummyname)
     
     # Verbosity
     if verbose:
