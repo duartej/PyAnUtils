@@ -187,32 +187,45 @@ def plot_radlength(trajectorylist,variable,**kwd):
     style = dfStyle()
     style.cd()
     style.SetOptStat(0)
-
+    
+    ctevardict = { 'theta': 'phi', 'eta': 'phi', 'phi': 'eta'}
     # Only theta,phi,eta
-    if not variable in ['theta','phi','eta']:
+    if not variable in ctevardict.keys():
         raise AttributeError("Not valid variable '%s' to plot" % variable)
+    othervar = ctevardict[variable]
 
     opt = ExtraOpt( [('xmin',0),('xmax',3.1416),('doplot',True) , 
         ('relative_diff',False)] )
     opt.setkwd(kwd)
 
     geometry = trajectorylist[0].origin()
+    # -- Plot the variable at constant othervar (isovar)
+    iso_other = {}
+    for traj in trajectorylist:
+        # Convert to string to deal with floating keys
+        othervarstr = '%.4f' % getattr(traj,othervar)()
+        try:
+            iso_other[othervarstr].append((getattr(traj,variable)(),traj.getX0()))
+        except KeyError:
+            iso_other[othervarstr] = [(getattr(traj,variable)(),traj.getX0())]
     # --- Prepare to plot
-    tordered = sorted(trajectorylist,key=lambda x: getattr(x,variable)())
-    gt = ROOT.TGraph()
-    set_attr_plotobject(gt,color=ROOT.kBlack)
+    iso_graphs = dict(map(lambda x: (x,ROOT.TGraph()),iso_other.keys()))
     ymax = -1e99
     ymin = 0
-    for (i,t) in enumerate(tordered):
-        x0 = t.getX0()
-        gt.SetPoint(i,getattr(t,variable)(),x0)
-        if ymax < x0:
-            ymax = x0
-        if ymin > x0:
-            ymin = x0
+    k=0
+    for ovstr,gt in iso_graphs.iteritems():
+        set_attr_plotobject(gt,color=ROOT.kBlack+k)
+        k+=2
+        for (i,(varvalue,x0)) in enumerate(sorted(iso_other[ovstr],key=lambda (x,y): x)):
+            gt.SetPoint(i,varvalue,x0)
+            if ymax < x0:
+                ymax = x0
+            if ymin > x0:
+               ymin = x0
     if not opt.doplot:
-        return gt
+        return iso_graphs
 
+    # Actual plotting
     ROOT.gROOT.SetBatch()
     c = ROOT.TCanvas()
     frame = ROOT.TH2F('frame','',1,opt.xmin,opt.xmax,1,ymin,1.1*ymax)
@@ -221,15 +234,47 @@ def plot_radlength(trajectorylist,variable,**kwd):
             xtitle='#'+variable,ytitle='Radiation Length/X_{0}')
     ROOT.gStyle.SetOptStat(0)
     frame.Draw()
-    gt.Draw("PL")
+    for gt in iso_graphs.values():
+        gt.Draw("PL")
     c.SaveAs('radlength_'+variable+'_'+geometry+'.png')
     c.Close()
+    # Logarithmic scale
+    c = ROOT.TCanvas()
+    c.SetLogy()
+    #gt.Draw()
+    #newframe = gt.GetHistogram()
+    if ymin < 1e-6:
+        ymin = 5e-3
+    newframe = ROOT.TH2F('newframe','',1,opt.xmin,opt.xmax,1,ymin,1.1*ymax)
+    newframe.Draw()
+    set_attr_plotobject(newframe,title='Radiation lenght vs #'+variable+
+            ', %s' % geometry,\
+            xtitle='#'+variable,ytitle='Radiation Length/X_{0}')
+    for gt in iso_graphs.values():
+        gt.Draw("PL")
+    c.SaveAs('radlength_'+variable+'_'+geometry+'_log.png')
+    c.Close()
 
-    return gt
+    # Another Plot just to draw the legend
+    c = ROOT.TCanvas()
+    leg = ROOT.TLegend(0.05,0.1,0.95,.8)
+    #leg.SetHeader('Title')
+    leg.SetFillColor(0)
+    leg.SetBorderSize(0)
+    leg.SetNColumns(4)
+    getlegendlabel = lambda x: '%s: %s' % (othervar,x)
+    for ctvarstr,gt in sorted(iso_graphs.iteritems(),key=lambda (x,y): float(x)):
+        leg.AddEntry(gt,getlegendlabel(ctvarstr),'P')
+    leg.Draw()
+    c.SaveAs('color_legend_'+variable+'_'+geometry+'.png')
+    c.Close()
+
+    return iso_graphs
 
 def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     """
     """
+
     import ROOT
     from PyAnUtils.pyanfunctions import ExtraOpt
     from PyAnUtils.plotstyles import squaredStyle as dfStyle
@@ -351,6 +396,21 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     frame3d.Draw()
     gt.Draw("LEGO2SAME")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO.png')
+    # Logarithm scale
+    c.Close()
+    c = ROOT.TCanvas()
+    c.SetLogy()
+    gt.Draw()
+    newframe3d = gt.GetHistogram()
+    newframe3d.SetContour(99)
+    set_attr_plotobject(newframe3d,title='Radiation lenght vs #'+var1+' #'+var2+
+            ', %s' % geometry,\
+            xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
+    newframe3d.Draw()
+    gt.Draw("LEGO2SAME")
+    c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO_log.png')
+    c.Close()
+    c = ROOT.TCanvas()
     # --- End Radiation length 2D LEGO
     
     # --- Rad. length diff plots
