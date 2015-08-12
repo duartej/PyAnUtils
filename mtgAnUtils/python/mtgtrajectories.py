@@ -461,6 +461,7 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     _dummyname = '__d.root'
     _dummyf = TFile(_dummyname,'RECREATE')
 
+    _dummyf.cd()
     tfull = tfull_raw.CopyTree('geoID==4')
     
     # Progress bar
@@ -479,7 +480,8 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
             dummy = create_or_update_trajectory(iEvent,traj_in_MS_full,"FULL")
     print
     rfull.Close()
-
+    
+    _dummyf.cd()
     tfast_raw,rfast = gettreefile(fastfilename)
     tfast = tfast_raw.CopyTree('geoID==4')
     # Progress bar
@@ -521,7 +523,7 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     
     # Verbosity
     if verbose:
-        SPOTIF = 20
+        SPOTIF = 10
         verblist = []
         for traj in traj_in_MS_full:
             if traj.get_rad_length_diff()[0]*100. > SPOTIF \
