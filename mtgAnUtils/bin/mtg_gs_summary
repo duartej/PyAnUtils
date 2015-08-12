@@ -180,6 +180,7 @@ def validation(trajectorylist,**kwd):
 def plot_radlength(trajectorylist,variable,**kwd):
     """
     """
+    return None
     import ROOT
     from PyAnUtils.pyanfunctions import ExtraOpt
     from PyAnUtils.plotstyles import squaredStyle as dfStyle
@@ -277,6 +278,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
 
     import ROOT
     from PyAnUtils.pyanfunctions import ExtraOpt
+    from PyAnUtils.pyanfunctions import graphtohist2D
     from PyAnUtils.plotstyles import squaredStyle as dfStyle
     from PyAnUtils.plotstyles import setpalette
 
@@ -292,23 +294,30 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     opt = ExtraOpt( [('xmin_var1',-4.1),('xmax_var1',4.1),
             ('xmin_var2',-3.1416), ('xmax_var2',3.1416), 
             ('doplot',True), ('relative_diff',False),
-            ('verbose',False)] )
+            ('verbose',False), ('do_diff',True)] )
     opt.setkwd(kwd)
+
+    # Just a coherency check
+    if opt.relative_diff and not opt.do_diff:
+        raise AttributeError("It is necessary to activate the 'do_diff'"\
+                " optional argument when asking for 'relative_diff'")
 
     geometry = trajectorylist[0].origin()
     # --- Prepare to plot
     tordered = sorted(trajectorylist,key=lambda x: getattr(x,var1)())
-    # --- Fill the 2D and the difference between them (just when FAST?)
+    # --- Fill the 2D and the difference between them (if asked for)
     gt    = ROOT.TGraph2D()
-    gdiff = ROOT.TGraph2D()
-    gnopresent = ROOT.TGraph()
-    idiff = 0
+    gdiff = None
+    if opt.do_diff:
+        gdiff = ROOT.TGraph2D()
+        idiff = 0
+        zmaxdiff = -1e99
+        zmindiff = 0
+        denominator = 1.0
+        gnopresent = ROOT.TGraph()
+        inpresent = 0
     zmax = -1e99
     zmin = 0
-    zmaxdiff = -1e99
-    zmindiff = 0
-    denominator = 1.0
-    inpresent = 0
     for (i,t) in enumerate(tordered):
         x0 = t.getX0()
         if opt.relative_diff:
@@ -321,7 +330,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
         if zmin > x0:
             zmin = x0
         # differences 
-        if t.getmirror():
+        if opt.do_diff and t.getmirror():
             x0mirror = t.getmirror().getX0()
             try:
                 x0diff = (x0-x0mirror)/denominator
@@ -332,14 +341,14 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
                 # Print a warning if in x0mirror THERE IS
                 # radiation lenght != 0
                 if abs(x0diff) > TOLERANCE:
-                    if opt.verbose:
-                        print "\033[1;33mWARNING\033[1;m The trajectory (%6.4f,%6.4f)"\
-                                " do not passed through any material in" \
-                                % (var1value,var2value)
-                        print "%s geometry. In its counterpart "\
-                                "simulation x0=%6.4f" % (geometry,x0mirror)
-                        gnopresent.SetPoint(inpresent,var1value,var2value)
-                        inpresent+=1
+                    #if opt.verbose:
+                    #    print "\033[1;33mWARNING\033[1;m The trajectory (%6.4f,%6.4f)"\
+                    #            " do not passed through any material in" \
+                    #            % (var1value,var2value)
+                    #    print "%s geometry. In its counterpart "\
+                    #            "simulation x0=%6.4f" % (geometry,x0mirror)
+                    gnopresent.SetPoint(inpresent,var1value,var2value)
+                    inpresent+=1
             gdiff.SetPoint(idiff,var1value,var2value,x0diff)
             idiff += 1
             if zmaxdiff < x0diff:
@@ -359,25 +368,26 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     frame = ROOT.TH2F('frame','',1,opt.xmin_var1,opt.xmax_var1,1,\
                          opt.xmin_var2,opt.xmax_var2)
     
-    # -- No present graph
-    if gnopresent.GetN() > 0:
-        set_attr_plotobject(frame,title='Trajectories not present at %s'\
-                ' but at %s' % (geometry,counterpart),\
-                xtitle='#'+var1,ytitle='#'+var2)
-        set_attr_plotobject(gnopresent,color=ROOT.kRed+3)
-        frame.Draw()
-        gnopresent.Draw("P")
-        c.SaveAs('nopresent_'+var1+'_'+var2+'_'+geometry+'.png')
-        print "="*80
-        print "%i points in %s"\
-                " have no radiation lenght"\
-                " (from a total of %i)" % (gnopresent.GetN(),geometry,len(trajectorylist))
-        print "="*80
-    # --- End no present graph
+    if opt.do_diff:
+        # -- No present graph
+        if gnopresent.GetN() > 0:
+            set_attr_plotobject(frame,title='Trajectories not present at %s'\
+                    ' but at %s' % (geometry,counterpart),\
+                    xtitle='#'+var1,ytitle='#'+var2)
+            set_attr_plotobject(gnopresent,color=ROOT.kRed+3)
+            frame.Draw()
+            gnopresent.Draw("P")
+            c.SaveAs('nopresent_'+var1+'_'+var2+'_'+geometry+'.png')
+            print "="*80
+            print "%i points in %s"\
+                    " have no radiation lenght"\
+                    " (from a total of %i)" % (gnopresent.GetN(),geometry,len(trajectorylist))
+            print "="*80
+        # --- End no present graph
 
     # --- Radiation lenght (COLZ) 
-    set_attr_plotobject(frame,title='Radiation lenght vs #'+var1+' #'+var2+
-            ', %s' % geometry,\
+    set_attr_plotobject(frame,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
+            ', %s]' % geometry,\
             xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
     frame.Draw()
     setpalette('inv_darkbody')
@@ -388,8 +398,8 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     # --- Radiation length 2D LEGO
     frame3d = ROOT.TH3F('frame3d','',1,opt.xmin_var1,opt.xmax_var1,1,\
                          opt.xmin_var2,opt.xmax_var2,1,zmin,1.1*zmax)
-    set_attr_plotobject(frame3d,title='Radiation lenght vs #'+var1+' #'+var2+
-            ', %s' % geometry,\
+    set_attr_plotobject(frame3d,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
+            ', %s]' % geometry,\
             xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
     gt.Draw()
     gt.GetHistogram().SetContour(99)
@@ -397,55 +407,56 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     gt.Draw("LEGO2SAME")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO.png')
     # Logarithm scale
-    c.Close()
-    c = ROOT.TCanvas()
-    c.SetLogy()
-    gt.Draw()
-    newframe3d = gt.GetHistogram()
-    newframe3d.SetContour(99)
-    set_attr_plotobject(newframe3d,title='Radiation lenght vs #'+var1+' #'+var2+
-            ', %s' % geometry,\
-            xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
-    newframe3d.Draw()
-    gt.Draw("LEGO2SAME")
-    c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO_log.png')
-    c.Close()
-    c = ROOT.TCanvas()
+    #c.Close()
+    #c = ROOT.TCanvas()
+    #c.SetLogy()
+    #gt.Draw()
+    #newframe3d = gt.GetHistogram()
+    #newframe3d.SetContour(99)
+    #set_attr_plotobject(newframe3d,title='Radiation lenght vs #'+var1+' #'+var2+
+    #        ', %s' % geometry,\
+    #        xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
+    #newframe3d.Draw()
+    #gt.Draw("LEGO2SAME")
+    #c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO_log.png')
+    #c.Close()
+    #c = ROOT.TCanvas()
     # --- End Radiation length 2D LEGO
     
-    # --- Rad. length diff plots
-    if abs(zmindiff) > abs(zmaxdiff):
-        setpalette('darkbody')
-    plottitle = 'Difference between simulations %s - %s ' % (geometry,counterpart)
-    ztitle    = 'Radiation Length '+geometry+'-'+counterpart+'/X_{0}'
-    plotname  = 'radlength_'+var1+'_'+var2+'_'+geometry+'_DIFF'
-    if opt.relative_diff:
-        plottitle = plottitle+'[%s]' % ('%')
-        ztitle = ztitle+' [%s]' % ('%') 
-        plotname+= '_REL'
-    plotname+='.png'
-    frame.SetTitle(plottitle)
-    frame.GetZaxis().SetTitle(ztitle)
-    gdiff.Draw()
-    gdiff.GetHistogram().SetContour(99)
-    frame.Draw()
-    gdiff.Draw("SAMECOLZ")
-    c.SaveAs(plotname)
-    # --- End Rad. length diff plots
+    if opt.do_diff:
+        # --- Rad. length diff plots
+        if abs(zmindiff) > abs(zmaxdiff):
+            setpalette('darkbody')
+        plottitle = 'Difference between simulations %s - %s ' % (geometry,counterpart)
+        ztitle    = 'Radiation Length '+geometry+'-'+counterpart+'/X_{0}'
+        plotname  = 'radlength_'+var1+'_'+var2+'_'+geometry+'_DIFF'
+        if opt.relative_diff:
+            plottitle = plottitle+'[%s]' % ('%')
+            ztitle = ztitle+' [%s]' % ('%') 
+            plotname+= '_REL'
+        plotname+='.png'
+        frame.SetTitle(plottitle)
+        frame.GetZaxis().SetTitle(ztitle)
+        gdiff.Draw()
+        gdiff.GetHistogram().SetContour(99)
+        frame.Draw()
+        gdiff.Draw("SAMECOLZ")
+        c.SaveAs(plotname)
+        # --- End Rad. length diff plots
     
-    # --- Rad. length diff plots 2D lego
-    frame3d.GetZaxis().SetLimits(zmindiff,zmaxdiff)
-    frame3d.SetTitle(plottitle)
-    frame3d.GetZaxis().SetTitle(ztitle)
-    c.SetPhi(45)
-    c.SetTheta(14)
-    frame3d.Draw()
-    gdiff.Draw("SURF3SAME")
-    pname,suffix = plotname.split('.')
-    legoplotname = pname+'_LEGO.'+suffix
-    c.SaveAs(legoplotname)
-    c.Close()
-    # --- Rad. length diff plots 2D lego
+        # --- Rad. length diff plots 2D lego
+        frame3d.GetZaxis().SetLimits(zmindiff,zmaxdiff)
+        frame3d.SetTitle(plottitle)
+        frame3d.GetZaxis().SetTitle(ztitle)
+        c.SetPhi(45)
+        c.SetTheta(14)
+        frame3d.Draw()
+        gdiff.Draw("SURF3SAME")
+        pname,suffix = plotname.split('.')
+        legoplotname = pname+'_LEGO.'+suffix
+        c.SaveAs(legoplotname)
+        c.Close()
+        # --- Rad. length diff plots 2D lego
 
     return gt,gdiff
 
@@ -492,7 +503,7 @@ def main(fullfn,fastfn,verbose,do_validation,rel_diffs):
             relative_diff=rel_diffs,verbose=verbose)
     g_fast,g_fast_diff = plot_radlength_2d(fastlist,'eta','phi',\
             xmin_var1=-4.5,xmax_var1=4.5,xmin_var2=-3.1416,xmax_var2=3.1416,\
-            relative_diff=rel_diffs,verbose=verbose)
+            verbose=verbose,do_diff=False)
 
     print "FINISHED! Bye.."
 
