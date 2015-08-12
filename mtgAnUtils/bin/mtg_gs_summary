@@ -365,46 +365,36 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     
     ROOT.gROOT.SetBatch()
     c = ROOT.TCanvas()
-    frame = ROOT.TH2F('frame','',1,opt.xmin_var1,opt.xmax_var1,1,\
-                         opt.xmin_var2,opt.xmax_var2)
-    
-    if opt.do_diff:
-        # -- No present graph
-        if gnopresent.GetN() > 0:
-            set_attr_plotobject(frame,title='Trajectories not present at %s'\
-                    ' but at %s' % (geometry,counterpart),\
-                    xtitle='#'+var1,ytitle='#'+var2)
-            set_attr_plotobject(gnopresent,color=ROOT.kRed+3)
-            frame.Draw()
-            gnopresent.Draw("P")
-            c.SaveAs('nopresent_'+var1+'_'+var2+'_'+geometry+'.png')
-            print "="*80
-            print "%i points in %s"\
-                    " have no radiation lenght"\
-                    " (from a total of %i)" % (gnopresent.GetN(),geometry,len(trajectorylist))
-            print "="*80
-        # --- End no present graph
-
-    # --- Radiation lenght (COLZ) 
-    set_attr_plotobject(frame,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
+    #frame = ROOT.TH2F('frame','',1,opt.xmin_var1,opt.xmax_var1,1,\
+    #                     opt.xmin_var2,opt.xmax_var2)
+    # Convert graphs to histograms
+    gt.SetName(geometry+'_'+var1+'_'+var2)
+    hgt = graphtohist2D(gt,20)
+    set_attr_plotobject(hgt,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
             ', %s]' % geometry,\
             xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
-    frame.Draw()
+
+    # --- Radiation lenght (COLZ) 
+    #set_attr_plotobject(frame,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
+    #        ', %s]' % geometry,\
+    #        xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
+    #frame.Draw()
     setpalette('inv_darkbody')
-    gt.Draw("SAMECOLZ")
+    hgt.Draw("COLZ")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'.png')
     # --- End Radiation lenght (COLZ) 
     
     # --- Radiation length 2D LEGO
-    frame3d = ROOT.TH3F('frame3d','',1,opt.xmin_var1,opt.xmax_var1,1,\
-                         opt.xmin_var2,opt.xmax_var2,1,zmin,1.1*zmax)
-    set_attr_plotobject(frame3d,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
-            ', %s]' % geometry,\
-            xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
-    gt.Draw()
-    gt.GetHistogram().SetContour(99)
-    frame3d.Draw()
-    gt.Draw("LEGO2SAME")
+    #frame3d = ROOT.TH3F('frame3d','',1,opt.xmin_var1,opt.xmax_var1,1,\
+    #                     opt.xmin_var2,opt.xmax_var2,1,zmin,1.1*zmax)
+    #set_attr_plotobject(frame3d,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
+    #        ', %s]' % geometry,\
+    #        xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
+    #gt.Draw()
+    #gt.GetHistogram().SetContour(99)
+    hgt.SetContour(99)
+    #frame3d.Draw()
+    hgt.Draw("LEGO2")
     c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO.png')
     # Logarithm scale
     #c.Close()
@@ -424,6 +414,27 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     # --- End Radiation length 2D LEGO
     
     if opt.do_diff:
+        # -- No present graph
+        if gnopresent.GetN() > 0:
+            gnopresent.SetName(geometry+'_'+var1+'_'+var2+'_nopresent')
+            hgn = graphtohist2D(gnopresent,20)
+            set_attr_plotobject(hgn,title='Trajectories not present at %s'\
+                    ' but at %s' % (geometry,counterpart),\
+                    xtitle='#'+var1,ytitle='#'+var2,color=ROOT.kRed+3)
+            #set_attr_plotobject(frame,title='Trajectories not present at %s'\
+            #        ' but at %s' % (geometry,counterpart),\
+            #        xtitle='#'+var1,ytitle='#'+var2)
+            #set_attr_plotobject(gnopresent,color=ROOT.kRed+3)
+            #frame.Draw()
+            gnopresent.Draw("P")
+            c.SaveAs('nopresent_'+var1+'_'+var2+'_'+geometry+'.png')
+            print "="*80
+            print "%i points in %s"\
+                    " have no radiation lenght"\
+                    " (from a total of %i)" % (gnopresent.GetN(),geometry,len(trajectorylist))
+            print "="*80
+        # --- End no present graph
+
         # --- Rad. length diff plots
         if abs(zmindiff) > abs(zmaxdiff):
             setpalette('darkbody')
@@ -435,23 +446,32 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
             ztitle = ztitle+' [%s]' % ('%') 
             plotname+= '_REL'
         plotname+='.png'
-        frame.SetTitle(plottitle)
-        frame.GetZaxis().SetTitle(ztitle)
-        gdiff.Draw()
-        gdiff.GetHistogram().SetContour(99)
-        frame.Draw()
-        gdiff.Draw("SAMECOLZ")
+        gdiff.SetName(geometry+'_'+var1+'_'+var2+'_differences')
+        hgdiff = graphtohist2D(gdiff,20)
+        set_attr_plotobject(hgdiff,title=plottitle,
+                xtitle=hgt.GetXaxis().GetTitle(),
+                ytitle=hgt.GetYaxis().GetTitle(),
+                ztitle=ztitle)
+        #frame.SetTitle(plottitle)
+        #frame.GetZaxis().SetTitle(ztitle)
+        #gdiff.Draw()
+        hgdiff.SetContour(99)
+        #frame.Draw()
+        hgdiff.Draw("COLZ")
         c.SaveAs(plotname)
         # --- End Rad. length diff plots
     
         # --- Rad. length diff plots 2D lego
-        frame3d.GetZaxis().SetLimits(zmindiff,zmaxdiff)
-        frame3d.SetTitle(plottitle)
-        frame3d.GetZaxis().SetTitle(ztitle)
+        #frame3d.GetZaxis().SetLimits(zmindiff,zmaxdiff)
+        #frame3d.SetTitle(plottitle)
+        #frame3d.GetZaxis().SetTitle(ztitle)
+        hgdiff.GetZaxis().SetLimits(zmindiff,zmaxdiff)
+        hgdiff.SetTitle(plottitle)
+        hgdiff.GetZaxis().SetTitle(ztitle)
         c.SetPhi(45)
         c.SetTheta(14)
-        frame3d.Draw()
-        gdiff.Draw("SURF3SAME")
+        #frame3d.Draw()
+        hgdiff.Draw("SURF3")
         pname,suffix = plotname.split('.')
         legoplotname = pname+'_LEGO.'+suffix
         c.SaveAs(legoplotname)
