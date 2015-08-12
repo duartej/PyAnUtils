@@ -153,23 +153,38 @@ def graphtohist2D(graph,binning=1000):
     FIXME: Possible can be absorved by the graphtohist function
     just minor addition are needed
     """
-    from ROOT import Double,TH2F
+    from ROOT import TH2F#,Double
+
     # Extract limits to build the histo
     xmin = graph.GetXmin()
     xmax = graph.GetXmax()
     ymin = graph.GetYmin()
     ymax = graph.GetYmax()
-    h = TH2F(graph.GetName()+'_histo','',binning,xmin,xmax,binning,ymin,ymax)
+    histoname = graph.GetName()+'_histo'
+    h = TH2F(histoname,'',binning,xmin,xmax,binning,ymin,ymax)
     #xbins = [ h.GetXaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsX()+2) ]
     #ybins = [ h.GetYaxis().GetBinLowEdge(i) for i in xrange(1,h.GetNbinsY()+2) ]
-    yval = Double(0.0)
-    xval = Double(0.0)
-    zval = Double(0.0)
+    #yval = Double(0.0)
+    #xval = Double(0.0)
+    #zval = Double(0.0)
+    # The TGraph2D::GetPoint has been deprecated (Not worth it to keep a
+    # backward compatibility...)
+    # Note the returning value of GetX[YZ]() -> ROOT.PyDoubleBuffer,
+    # using the method SetSize, you can use it as a standard list
+    xvals = graph.GetX()
+    xvals.SetSize(graph.GetN())
+    
+    yvals = graph.GetY()
+    yvals.SetSize(graph.GetN())
+    
+    zvals = graph.GetZ()
+    zvals.SetSize(graph.GetN())
     # dict to count how many entries are pushed in the same bin, in order to
     # make an average later
     hdict = {}
     for i in xrange(graph.GetN()):
-    	point = graph.GetPoint(i,xval,yval,zval)
+    	#point = graph.GetPoint(i,xval,yval,zval)
+        xval,yval,zval = xvals[i],yvals[i],zvals[i]
     	_hbin = h.Fill(xval,yval,zval)
     	try:
     		hdict[_hbin] +=1 
