@@ -180,7 +180,6 @@ def validation(trajectorylist,**kwd):
 def plot_radlength(trajectorylist,variable,**kwd):
     """
     """
-    return None
     import ROOT
     from PyAnUtils.pyanfunctions import ExtraOpt
     from PyAnUtils.plotstyles import squaredStyle as dfStyle
@@ -294,7 +293,9 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     opt = ExtraOpt( [('xmin_var1',-4.1),('xmax_var1',4.1),
             ('xmin_var2',-3.1416), ('xmax_var2',3.1416), 
             ('doplot',True), ('relative_diff',False),
-            ('verbose',False), ('do_diff',True)] )
+            ('verbose',False), ('do_diff',True),
+            ('npoints_eta',100), ('npoints_phi',100),
+            ('npoints_phi',100)] )
     opt.setkwd(kwd)
 
     # Just a coherency check
@@ -369,7 +370,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
     #                     opt.xmin_var2,opt.xmax_var2)
     # Convert graphs to histograms
     gt.SetName(geometry+'_'+var1+'_'+var2)
-    hgt = graphtohist2D(gt,20)
+    hgt = graphtohist2D(gt,opt.npoints_eta,opt.npoints_phi)
     set_attr_plotobject(hgt,title='[GS: Radiation lenght vs #'+var1+' #'+var2+
             ', %s]' % geometry,\
             xtitle='#'+var1,ytitle='#'+var2,ztitle='Radiation Length/X_{0}')
@@ -417,7 +418,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
         # -- No present graph
         if gnopresent.GetN() > 0:
             gnopresent.SetName(geometry+'_'+var1+'_'+var2+'_nopresent')
-            hgn = graphtohist2D(gnopresent,20)
+            hgn = graphtohist2D(gnopresent,opt.npoints_eta,opt.npoints_phi)
             set_attr_plotobject(hgn,title='Trajectories not present at %s'\
                     ' but at %s' % (geometry,counterpart),\
                     xtitle='#'+var1,ytitle='#'+var2,color=ROOT.kRed+3)
@@ -447,7 +448,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
             plotname+= '_REL'
         plotname+='.png'
         gdiff.SetName(geometry+'_'+var1+'_'+var2+'_differences')
-        hgdiff = graphtohist2D(gdiff,20)
+        hgdiff = graphtohist2D(gdiff,opt.npoints_eta,opt.npoints_phi)
         set_attr_plotobject(hgdiff,title=plottitle,
                 xtitle=hgt.GetXaxis().GetTitle(),
                 ytitle=hgt.GetYaxis().GetTitle(),
@@ -515,14 +516,23 @@ def main(fullfn,fastfn,verbose,do_validation,rel_diffs):
     g_fast_eta = plot_radlength(fastlist,'eta',xmin=-4.5,xmax=4.5,relative_diff=rel_diffs)
     g_fast_phi = plot_radlength(fastlist,'phi',xmin=-3.1416,xmax=3.1416,relative_diff=rel_diffs)
     # --- Plot radiation length plots 2D with respect eta and phi
+    # ---- Extract the number of phi-points per each eta
+    #      Be careful, the info is obtained through the trajectory-list from eta,
+    #      so the notation seems to cheat, but it is correct
+    npoints_phi = len(g_full_eta)
+    # ---- Extract the number of eta-points per each phi
+    npoints_eta = len(g_full_phi)
     print "-"*80
     print "3. Radiation length 2-d plots"
     print "-"*80
     g_full,g_full_diff = plot_radlength_2d(fulllist,'eta','phi',\
             xmin_var1=-4.5,xmax_var1=4.5,xmin_var2=-3.1416,xmax_var2=3.1416,\
-            relative_diff=rel_diffs,verbose=verbose)
+            relative_diff=rel_diffs,\
+            npoints_eta=npoints_eta, npoints_phi=npoints_phi,\
+            verbose=verbose)
     g_fast,g_fast_diff = plot_radlength_2d(fastlist,'eta','phi',\
             xmin_var1=-4.5,xmax_var1=4.5,xmin_var2=-3.1416,xmax_var2=3.1416,\
+            npoints_eta=npoints_eta, npoints_phi=npoints_phi,\
             verbose=verbose,do_diff=False)
 
     print "FINISHED! Bye.."
