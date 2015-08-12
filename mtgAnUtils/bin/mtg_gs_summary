@@ -244,7 +244,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
         if not variable in ['theta','phi','eta']:
             raise AttributeError("Not valid variable '%s' to plot" % variable)
 
-    opt = ExtraOpt( [('xmin_var1',-4.5),('xmax_var1',4.5),
+    opt = ExtraOpt( [('xmin_var1',-4.1),('xmax_var1',4.1),
             ('xmin_var2',-3.1416), ('xmax_var2',3.1416), 
             ('doplot',True), ('relative_diff',False),
             ('verbose',False)] )
