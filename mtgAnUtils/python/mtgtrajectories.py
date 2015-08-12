@@ -208,7 +208,8 @@ class trajectory:
 
     
     def update(self,x0,xinit,xend):
-        """Update the radiation lenght datamember
+        """Update the radiation lenght datamember by averaging
+        each contribution 
 
         Parameters
         ----------
@@ -260,10 +261,36 @@ class trajectory:
         else:
             return None
 
+    def get_rad_length_diff(self):
+        """Get the radiation length difference between this 
+        trajectory and its mirror if exists
+
+        Return
+        ------
+        ntuple with the absolute and relative (with respect this
+        instance, i.e., ..math:\frac{X0-X0_{mirror}}{X0}) differences
+    
+        """
+        mirror = self.getmirror()
+        if not mirror:
+            return 0.0,0.0
+        d    = self._X0-mirror.getX0()
+        if self._X0 < 1e-10:
+            drel = 0.0
+        else:
+            drel = d/self._X0
+
+        return d,drel
+
+
     def number_of_crossed_volumes(self):
         """Number of volumes the trajectory crossed.
         Note that actually is checking how many updates
         have received.
+        TO BE DEPRACATED: There is no volumes, what
+        it can be checked is how many trajectories were
+        found compatibles with the (eta+Delta_eta,phi+Delta_phi)
+        cone
         """
         return self._updates
 
@@ -347,11 +374,10 @@ def create_or_update_trajectory(iEvent,trajectorylist,trajectory_type):
     trajectory list if there was none trajectory in the input list 
     before matched with the (theta,phi) values of the current
     tree entry. On the other hand, if there is already a trajectory
-    with the same (theta,phi)-values [--> it means that it is entering
-    in another sub-volume of the Muon System <-- NOT TRUE]. 
-    it means that was created a particle with the same (inside tolerance)
-    topology. Therefore, the stored trajectory is updated with the radiation 
-    length averaged between the measured previously and the current one-
+    with the same (theta,phi)-values it means that was created a 
+    particle with the same (inside tolerance) topology. Therefore, 
+    the stored trajectory is updated with the radiation length 
+    averaged between the measured previously and the current one
 
     Parameters
     ----------
@@ -387,7 +413,7 @@ def create_or_update_trajectory(iEvent,trajectorylist,trajectory_type):
 
     return trajectorynew
 
-def build_trajectory_lists(fullfilename,fastfilename):
+def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     """Given the full and fast geometries ROOT filenames, a trajectory
     instances list is created for each geometry, by calling the 
     `create_or_update_trajectory` function at each event. 
@@ -403,6 +429,10 @@ def build_trajectory_lists(fullfilename,fastfilename):
     fastfilename: str
         The path to the ROOT file which contains the RPVMCInfoTree built
         with the FAST geometry (using Track Geometry)
+    verbose: bool
+        Whether to activate the print of extra information about the found
+        trajectories. In particular the trajectories with higher differences
+        are reported.
 
     Return
     ------
@@ -433,7 +463,7 @@ def build_trajectory_lists(fullfilename,fastfilename):
             dummy = create_or_update_trajectory(iEvent,traj_in_MS_full,"FULL")
     print
     rfull.Close()
-    
+
     tfast,rfast = gettreefile(fastfilename)
     # Progress bar
     ipb=0
@@ -443,7 +473,8 @@ def build_trajectory_lists(fullfilename,fastfilename):
     for iEvent in tfast:
         ipb +=1 
         # Progress bar 
-        sys.stdout.write("\r\033[1;34mINFO\033[1;m Evaluating FAST geometry"+\
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m Evaluating FAST geometry "+\
+                " (and associating with trajectories with FULL) "+\
                 " file [ "+"\b"+str(int(float(ipb)/point)).rjust(3)+"%]")
         sys.stdout.flush()
         # Only MS
@@ -468,6 +499,35 @@ def build_trajectory_lists(fullfilename,fastfilename):
                             " FAST trajectory. The dR cone should be lowered!")
     print
     rfast.Close()
+    
+    # Verbosity
+    if verbose:
+        SPOTIF = 20
+        verblist = []
+        for traj in traj_in_MS_full:
+            if traj.get_rad_length_diff()[0]*100. > SPOTIF \
+                    or not traj.getmirror():
+                verblist.append(traj)
+        ordverb = sorted(verblist,reverse=True)
+        message=''
+        if len(ordverb) > 0:
+            message  = "="*80
+            message += "\nSUMMARY OF MAIN DISCREPANCIES\n"
+            message += "[relative diff. higher than %i%s and not-found points]\n" % (SPOTIF,"%")
+            message +=  " [%5s,%5s] | %s | %s | %s | %s\n" % \
+                    ('eta','phi', 'rel. diff [%]', 'abs. diff', 'X0 (FULL)', 'X0 (FAST)')
+            for traj in ordverb:
+                diff,reldiff = traj.get_rad_length_diff()
+                try:
+                    x0mirrorfloat = traj.getmirror().getX0()
+                    x0mirror = '%10.3f' % x0mirrorfloat
+                except AttributeError:
+                    x0mirror = 'NOT FOUND'
+                message += " [%5.2f,%5.2f]     %5.2f   %15.2f   %10.3f   %10s\n" % \
+                    (traj.eta(),traj.phi(), diff,reldiff,traj.getX0(), x0mirror)
+            message += "="*80+"\n"
+        print message
+    
 
     return traj_in_MS_full,traj_in_MS_fast
     

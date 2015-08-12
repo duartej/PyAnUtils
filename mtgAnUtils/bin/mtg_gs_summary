@@ -407,7 +407,7 @@ def main(fullfn,fastfn,verbose,do_validation,rel_diffs):
 
     # -- Getting the trajectories
     print "Getting trajectories"
-    fulllist,fastlist = build_trajectory_lists(fullfn,fastfn)
+    fulllist,fastlist = build_trajectory_lists(fullfn,fastfn,verbose)
     if do_validation:
         # -- Plot some validation plots
         print "-"*80
