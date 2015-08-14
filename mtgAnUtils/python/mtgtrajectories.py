@@ -482,14 +482,15 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     import os
     from ROOT import TFile
 
-    tfull_raw,rfull = gettreefile(fullfilename)
+    tfull,rfull = gettreefile(fullfilename)
+    #tfull_raw,rfull = gettreefile(fullfilename)
     
     # Just create to associate the copied trees
-    _dummyname = '__d.root'
-    _dummyf = TFile(_dummyname,'RECREATE')
+    #_dummyname = '__d.root'
+    #_dummyf = TFile(_dummyname,'RECREATE')
 
-    _dummyf.cd()
-    tfull = tfull_raw.CopyTree('geoID==4')
+    #_dummyf.cd()
+    #tfull = tfull_raw.CopyTree('geoID==4')
     
     # Progress bar
     ipb=0
@@ -508,9 +509,10 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     print
     #rfull.Close()
 
-    _dummyf.cd()
-    tfast_raw,rfast = gettreefile(fastfilename)
-    tfast = tfast_raw.CopyTree('geoID==4')
+    #_dummyf.cd()
+    tfast,rfast = gettreefile(fastfilename)
+    #tfast_raw,rfast = gettreefile(fastfilename)
+    #tfast = tfast_raw.CopyTree('geoID==4')
     # Progress bar
     ipb=0
     point = float(tfast.GetEntries()-1)/100.0    
@@ -547,8 +549,8 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
     print
     rfast.Close()
     rfull.Close()
-    _dummyf.Close()
-    os.remove(_dummyname)
+    #_dummyf.Close()
+    #os.remove(_dummyname)
     
     # Verbosity
     if verbose:
