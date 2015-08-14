@@ -71,6 +71,8 @@ class trajectory:
         self._eta   = None
         self._phi   = phi
 
+        self._tolerance = 0.01
+
         self._fast = False
         self._full = False
         if _type == "FAST":
@@ -96,30 +98,47 @@ class trajectory:
 
         return out
 
-    def __lt__(self,other):
-        """Ordered with respect theta angle
-        """
-        return self.theta() < other.theta()
-    def __le__(self,other):
-        """Ordered with respect theta angle
-        """
-        return self.theta() <= other.theta()
+    # FIXME: Incluir eta y phi de tal forma que pueda
+    # usar sets en las trajectory list?
+
+    #def __lt__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() < other.theta()
+    #def __le__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() <= other.theta()
+    #def __eq__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() == other.theta()
     def __eq__(self,other):
-        """Ordered with respect theta angle
+        """Ordered with respect eta and phi
+        given a tolerance
         """
-        return self.theta() == other.theta()
-    def __ne__(self,other):
-        """Ordered with respect theta angle
-        """
-        return self.theta() != other.theta()
-    def __gt__(self,other):
-        """Ordered with respect theta angle
-        """
-        return self.theta() > other.theta()
-    def __ge__(self,other):
-        """Ordered with respect theta angle
-        """
-        return self.theta() >= other.theta()
+        from math import sqrt
+
+        if abs(self.eta()-other.eta()) > self._tolerance:
+            return False
+        if abs(self.phi()-other.phi()) > self._tolerance:
+            return False
+        if sqrt((self.eta()-other.eta())**2.+
+                (self.phi()-other.phi())**2.) > self._tolerance:
+            return False
+        return True
+    #def __ne__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() != other.theta()
+    #def __gt__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() > other.theta()
+    #def __ge__(self,other):
+    #    """Ordered with respect theta angle
+    #    """
+    #    return self.theta() >= other.theta()
 
     def theta(self):
         """ theta angle getter
@@ -143,9 +162,17 @@ class trajectory:
         -----
         The pseudorapidity is defined as .. math:: \eta = -\log{(\tan{(theta/2.0)})}
         """
-        if not self._eta:
-            from math import pi,log,tan
-            self._eta   = -log(tan(self.theta()/2.0))
+        from math import pi,log,tan
+        self._eta   = -log(tan(self.theta()/2.0))
+        
+        # Once initialized, re-map  
+        self.eta = self._eta_post
+        
+        return self._eta
+
+    def _eta_post(self):
+        """ pseudorapity 
+        """
         return self._eta
     
     def phi(self):
@@ -178,6 +205,7 @@ class trajectory:
         """
         return self._origin
 
+    
     def match(self,theta,phi,dRMax=0.01):
         """Extend the trajectory from a point (theta,phi) to a 
         circle defined by dRMax, i.e. theta**2 + phi**2 < dRMax**2,
@@ -201,18 +229,17 @@ class trajectory:
         """
         from math import sqrt
 
-        # First checks to 
-        Dtheta =  self._theta-theta
-        if abs(Dtheta) > dRMax:
+        # FIXME: coherence
+        dRMax=self._tolerance
+
+        if abs(self.theta()-theta) > dRMax:
             return False
-        Dphi   = self._phi-phi
-        if abs(Dphi) > dRMax:
+        if abs(self.phi()-phi) > dRMax:
             return False
-        
-        if sqrt( Dtheta**2.+Dphi**2. ) < dRMax:
-            return True
-        else:
+
+        if sqrt((self.theta()-theta)**2.+(self.phi()-phi)**2.) > dRMax:
             return False
+        return True
 
     
     def update(self,x0,xinit,xend):
@@ -479,8 +506,8 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
         if iEvent.geoID == 4:            
             dummy = create_or_update_trajectory(iEvent,traj_in_MS_full,"FULL")
     print
-    rfull.Close()
-    
+    #rfull.Close()
+
     _dummyf.cd()
     tfast_raw,rfast = gettreefile(fastfilename)
     tfast = tfast_raw.CopyTree('geoID==4')
@@ -501,8 +528,9 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
             newtrajectory = create_or_update_trajectory(iEvent,traj_in_MS_fast,"FAST")
             # link with the full counterpart (if any)
             if newtrajectory:
-                _matched = filter(lambda x: x.match(newtrajectory.theta(),
-                                newtrajectory.phi()),traj_in_MS_full)
+                #_matched = filter(lambda x: x.match(newtrajectory.theta(),
+                #                newtrajectory.phi()),traj_in_MS_full)
+                _matched = filter(lambda x: x == newtrajectory,traj_in_MS_full)
                 nmatchs = len(_matched)
                 if nmatchs == 1:
                     newtrajectory.setmirror(_matched[0])
@@ -518,15 +546,16 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
                             " FAST trajectory. The dR cone should be lowered!")
     print
     rfast.Close()
+    rfull.Close()
     _dummyf.Close()
     os.remove(_dummyname)
     
     # Verbosity
     if verbose:
-        SPOTIF = 10
+        SPOTIF = 10.0
         verblist = []
         for traj in traj_in_MS_full:
-            if traj.get_rad_length_diff()[0]*100. > SPOTIF \
+            if traj.get_rad_length_diff()[1]*100. > SPOTIF \
                     or not traj.getmirror():
                 verblist.append(traj)
         ordverb = sorted(verblist,reverse=True)
@@ -535,19 +564,25 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
             message  = "="*80
             message += "\nSUMMARY OF MAIN DISCREPANCIES\n"
             message += "[relative diff. higher than %i%s and not-found points]\n" % (SPOTIF,"%")
-            message +=  " [%5s,%5s] | %s | %s | %s | %s\n" % \
-                    ('eta','phi', 'rel. diff [%]', 'abs. diff', 'X0 (FULL)', 'X0 (FAST)')
+            #message +=  " [%5s,%5s] | %s | %s | %s | %s\n" % \
+            #        ('eta','phi', 'rel. diff [%]', 'abs. diff', 'X0 (FULL)', 'X0 (FAST)')
+            message +=  " [{0:5},{1:5}] | {2} | {3} | {4} | {5}\n".format('eta','phi',\
+                         'rel. diff [%]', 'abs. diff', 'X0 (FULL)', 'X0 (FAST)')
             for traj in ordverb:
                 diff,reldiff = traj.get_rad_length_diff()
+                reldiff*=100.
                 try:
                     x0mirrorfloat = traj.getmirror().getX0()
                     x0mirror = '%10.3f' % x0mirrorfloat
                 except AttributeError:
                     x0mirror = 'NOT FOUND'
-                message += " [%5.2f,%5.2f]     %5.2f   %15.2f   %10.3f   %10s\n" % \
-                    (traj.eta(),traj.phi(), diff,reldiff,traj.getX0(), x0mirror)
+                message += " [%5.2f,%5.2f]     %6.2f   %11.2f   %10.3f   %10s\n" % \
+                    (traj.eta(),traj.phi(), reldiff, diff,traj.getX0(), x0mirror)
             message += "="*80+"\n"
         print message
+        with open('summary.txt','w') as _out:
+            _out.write(message)
+
     
 
     return traj_in_MS_full,traj_in_MS_fast
