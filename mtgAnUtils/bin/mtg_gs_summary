@@ -295,7 +295,7 @@ def plot_radlength_2d(trajectorylist,var1,var2,**kwd):
             ('doplot',True), ('relative_diff',False),
             ('verbose',False), ('do_diff',True),
             ('npoints_eta',100), ('npoints_phi',100),
-            ('npoints_phi',100)] )
+            ('npoints_theta',100)] )
     opt.setkwd(kwd)
 
     # Just a coherency check
