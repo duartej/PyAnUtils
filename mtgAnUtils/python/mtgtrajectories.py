@@ -560,7 +560,7 @@ def build_trajectory_lists(fullfilename,fastfilename,verbose=False):
             if traj.get_rad_length_diff()[1]*100. > SPOTIF \
                     or not traj.getmirror():
                 verblist.append(traj)
-        ordverb = sorted(verblist,reverse=True)
+        ordverb = sorted(verblist,key=lambda x: x.eta,reverse=True)
         message=''
         if len(ordverb) > 0:
             message  = "="*80
