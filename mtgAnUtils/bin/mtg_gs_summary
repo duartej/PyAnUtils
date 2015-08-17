@@ -201,7 +201,10 @@ def summary(full,fast,**kwd):
         for phi,x0full in phix0list:
             _phidummy,x0fast = filter(lambda (_p,_x): abs(_p-phi) < 1e-9, fast[etastr])[0]
             absdif = x0full-x0fast
-            reldif = absdif/x0full
+            try:
+                reldif = absdif/x0full
+            except ZeroDivisionError:
+                reldif = 0.0
             max_x0 = (max(max_x0[0],x0full),max(max_x0[1],x0fast))
             if opt.min_reldif < abs(reldif) and (opt.min_x0 <= x0full or opt.min_x0 <= x0fast):
                 # summary info
@@ -235,12 +238,87 @@ def summary(full,fast,**kwd):
         with open('summarytable.tex','w') as f:
             f.write(latex)
 
-def main(fullfn,fastfn,(justsum,min_x0,min_reldif),dotable,rel_diffs):
+
+def getdata(treefiles,h2d,preprocessheta,preprocesshphi):
+    """
+    """
+    from math import log,tan
+
+    eta = lambda theta: -log(tan(theta/2.0))
+    # -- Loops 
+    # -- Two equivalent files
+    x0max = 0.0
+    for (sim,(t,f)) in treefiles.iteritems():
+        print "\033[1;34mINFO\033[1;m Evaluating {0} geometry"\
+                " file...".format(sim)
+        
+        for iEvent in t:
+            if t.geoID != 4:
+                continue
+            # Filling histograms
+            ps = eta(t.pth)
+            fill2d(h2d[sim],ps,t.pph,t.X0)
+            # -- tengo la info en el 2d-...
+            # eta curves (at phi-ct)
+            try:
+                preprocessheta[sim]['{0:.6f}'.format(t.pph)].append([ps,t.X0])
+            except KeyError:
+                preprocessheta[sim]['{0:.6f}'.format(t.pph)] = [[ps,t.X0]]
+            # phi curves (at eta-ct)
+            try:
+                preprocesshphi[sim]['{0:.6f}'.format(ps)].append([t.pph,t.X0])
+            except KeyError:
+                preprocesshphi[sim]['{0:.6f}'.format(ps)] = [[t.pph,t.X0]]
+            x0max = max(x0max,t.X0)
+    return x0max
+
+def subtract_empty_geometry(emptyf_full,emptyf_fast,h2d,etadict,phidict):
+    """Patch to deal with the substraction of the geometry
+    place in the simulation even with explicitly was requested
+    to be empty of material
+    """
+    from math import log,tan
+    import ROOT
+
+    # Histograms definition
+    empty_h2d  = dict(map(lambda x: (x,ROOT.TH2F('EMPTY_2d_{0}'.format(x),'',\
+            100,-4.1,4.0,100,-3.1416,3.1416)),['FULL','FAST','DIFF']))
+    treefiles = dict(map(lambda x: (x[0],gettreefile(x[1])), \
+                    [('FULL',emptyf_full), ('FAST',emptyf_fast)]))
+
+    eta = lambda theta: -log(tan(theta/2.0))
+    empty_eta = dict(map(lambda x: (x,{}), ['FULL','FAST']))
+    empty_phi = dict(map(lambda x: (x,{}), ['FULL','FAST']))
+    # -- Getting the data from the empty geometry
+    print "\033[1;34mINFO\033[1;m Appliying empty geometry patch"\
+            ". Getting data from files"
+    empty_x0max = getdata(treefiles,empty_h2d,empty_eta,empty_phi)
+    # Perform the subtraction
+    # -- 2D
+    for sim,h in h2d.iteritems():
+        h.Add(empty_h2d[sim],-1.0)
+    # -- 1D::eta
+    new_xmax = 0.0
+    for sim,phictdict in empty_eta.iteritems():
+        for phict,empty_etalist in phictdict.iteritems():
+            # Modify: Assume the same list length, we can check!!
+            for (i,(eta,X0)) in enumerate(empty_etalist):
+                etadict[sim][phict][i][1] -= X0
+                new_xmax = max(new_xmax,etadict[sim][phict][i][1])
+    # -- 1D::eta
+    for sim,etactdict in empty_phi.iteritems():
+        for etact,empty_philist in etactdict.iteritems():
+            # Modify: Assume the same list length, we can check!!
+            for (i,(phi,X0)) in enumerate(empty_philist):
+                phidict[sim][etact][i][1] -= X0
+
+    return new_xmax
+
+def main(fullfn,fastfn,(justsum,min_x0,min_reldif),dotable,rel_diffs,emptyfiles):
     """Steering funtion. Performs the validation plots and 
     the 1 and 2-D plots
     """
     import ROOT
-    from math import log,tan
     # To initialize the style ---
     from PyAnUtils.plotstyles import squaredStyle as dfStyle
     gs = dfStyle()
@@ -257,32 +335,13 @@ def main(fullfn,fastfn,(justsum,min_x0,min_reldif),dotable,rel_diffs):
     preprocessheta = dict(map(lambda x: (x,{}), ['FULL','FAST']))
     preprocesshphi = dict(map(lambda x: (x,{}), ['FULL','FAST']))
     
-    # -- Loops 
-    # -- Two equivalent files
-    x0max = 0.0
-    for (sim,(t,f)) in treefiles.iteritems():
-        # Progress bar 
-        print "\033[1;34mINFO\033[1;m Evaluating {0} geometry"\
-                " file...".format(sim)
-        # end progress bar
-        for iEvent in t:
-            if t.geoID != 4:
-                continue
-            # Filling histograms
-            ps = eta(t.pth)
-            fill2d(h2d[sim],ps,t.pph,t.X0)
-            # -- tengo la info en el 2d-...
-            # eta curves (at phi-ct)
-            try:
-                preprocessheta[sim]['{0:.6f}'.format(t.pph)].append((ps,t.X0))
-            except KeyError:
-                preprocessheta[sim]['{0:.6f}'.format(t.pph)] = [(ps,t.X0)]
-            # phi curves (at eta-ct)
-            try:
-                preprocesshphi[sim]['{0:.6f}'.format(ps)].append((t.pph,t.X0))
-            except KeyError:
-                preprocesshphi[sim]['{0:.6f}'.format(ps)] = [(t.pph,t.X0)]
-            x0max = max(x0max,t.X0)
+    # -- Get data and fill histograms and lists
+    x0max = getdata(treefiles,h2d,preprocessheta,preprocesshphi)
+
+    # Apply empty geometry patch
+    emptyf_full,emptyf_fast = emptyfiles
+    if emptyf_full:
+        x0max = subtract_empty_geometry(emptyf_full,emptyf_fast,h2d,preprocessheta,preprocesshphi)
     # Plots 
     etacolors = getcolors(preprocessheta['FULL'])
     phicolors = getcolors(preprocesshphi['FULL'])
@@ -307,7 +366,8 @@ if __name__ == '__main__':
     parser.set_defaults(fullsim=os.path.join(cwd,'ISFG4SimKernel.root'),\
     		fastsim=os.path.join(cwd,'ISFFatras.root'),\
                 justsummary=False,min_x0=1.0,min_reldif=10.0,
-                relative_diff=False,)
+                relative_diff=False,
+                subtractempty=None)
     
     parser.add_option( '--full', action='store', type='string', dest='fullsim',\
     		help="Full (Geant4) simulation root file [ISFG4SimKernel.root]")
@@ -326,8 +386,23 @@ if __name__ == '__main__':
     parser.add_option( '--min-reldif', action='store', dest='min_reldif',\
     		help="Just show in the summary entries with a relative-difference"\
                     " between FULL and FAST less than MIN_reldif (in %) [10.%]")
-    
+    parser.add_option('--subtract-empty',action='store',dest='subtractempty',\
+                metavar='FULLFILENAME,FASTFILENAME',help='Perform the subtraction'\
+                ' of the empty geometry (provisional patch), the option needs the'\
+                ' path of the full and fast empty root filenames')
     (opt, args)=parser.parse_args()	
+    
+    if opt.subtractempty:
+        # Extract the filenames: expected format FULLFILENAME,FASTFILENAME
+        try:
+            emptyf_full,emptyf_fast = opt.subtractempty.split(',')
+        except ValueError:
+            raise RuntimeError('Improper format for option "--subtract-empty". See help')
+    else:
+        emptyf_full,emptyf_fast = None,None
+
+
     # See main function
-    main(opt.fullsim,opt.fastsim,(opt.justsummary,opt.min_x0,opt.min_reldif),opt.tablelatex,opt.relative_diff)
+    main(opt.fullsim,opt.fastsim,(opt.justsummary,opt.min_x0,opt.min_reldif),\
+            opt.tablelatex,opt.relative_diff,(emptyf_full,emptyf_fast))
 
