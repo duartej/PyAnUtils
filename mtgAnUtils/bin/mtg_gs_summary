@@ -1,0 +1,333 @@
+#!/usr/bin/env python
+""":script:`mtg_gs_summary` -- Geantino shoots related plots
+============================================================
+
+.. script:: mtg_gs_summary [OPTIONS]    
+      :platform: Unix
+      :synopsis: Perform some useful plots from the root
+      files created with geantino shoots in full and 
+      fast simulation. 
+      
+      .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+"""
+
+def gettreefile(filename,treename='particles'):
+    """Auxiliary function to create from the input filename,
+    the 'particle tree' [TO BE PROMOTED, adding the tree name
+    as argument]
+    
+    Parameters
+    ----------
+    filename: str
+        The ROOT file path
+
+    Return
+    ------
+    (ROOT.TFile,ROOT.TTree)
+    """
+    import ROOT
+    f = ROOT.TFile(filename)
+    if f.IsZombie():
+        raise IOError("Root file not found '%s'" % filename)
+    t = f.Get(treename)
+    return t,f
+
+def getcolors(keys,palette='rainbow'):
+    """
+    """
+    import ROOT
+    from PyAnUtils.plotstyles import setpalette
+    
+    # How many colors need?
+    nneed = len(keys)
+    # How many colors available
+    n = ROOT.TColor.GetNumberOfColors()
+    #color = lambda x: (len(keys)-x)/n
+    color = lambda x: ROOT.gStyle.GetColorPalette(x)
+    return dict(map(lambda (i,gname): (gname,color(i)),\
+            enumerate(keys)))
+    
+
+def fill1d(h,v1,x0):
+    """
+    """
+    nbin = h.FindBin(v1)
+    prev_x0 = h.GetBinContent(nbin)
+    if prev_x0 > 0.0:
+        # Averaged
+        _dummy = h.SetBinContent(nbin,(prev_x0+x0)/2.0)
+    else:
+        _dummy = h.Fill(v1,x0)
+
+def fill2d(h,eta,phi,x0):
+    """
+    """
+    nbin = h.FindBin(eta,phi)
+    prev_x0 = h.GetBinContent(nbin)
+    if prev_x0 > 0.0:
+        # Averaged
+        _dummy = h.SetBinContent(nbin,(prev_x0+x0)/2.0)
+    else:
+        _dummy = h.Fill(eta,phi,x0)
+
+def plot1d(hcurves,var1,geometry,**kwd):
+    """
+    """
+    import ROOT
+    from PyAnUtils.pyanfunctions import set_attr_plotobject, ExtraOpt
+    from PyAnUtils.plotstyles import squaredStyle as dfStyle
+    
+    gs = dfStyle()
+    gs.cd()
+
+    opt = ExtraOpt( [('doplot',True),('verbose',False),
+                    ('ytitle','Radiation Length/X_{0}'),
+                    ('xlow',-3.1416), ('xhigh',2.1416),
+                    ('ymax',None), ('colors',None)] )
+    opt.setkwd(kwd)
+    
+    ROOT.gROOT.SetBatch()
+    ROOT.gStyle.SetOptStat(0)
+    
+    #colorsgraph = getcolors(hcurves.keys(),'rainbow')
+    graphs = {}
+    for othervarct, varlist in hcurves.iteritems():
+        graphs[othervarct] = ROOT.TGraph()
+        graphs[othervarct].SetName('{0}_at_ct_{1}'.format(var1,othervarct))
+        set_attr_plotobject(graphs[othervarct],color=opt.colors[othervarct])
+        for (i,(var1val,x0)) in enumerate(sorted(varlist,key=lambda (x,y): x)):
+            graphs[othervarct].SetPoint(i,var1val,x0)
+    
+    if not opt.ymax:
+        ymax = max(map(lambda (x,vlist): \
+            max(vlist,key=lambda (v,_x0): _x0), hcurves.iteritems()))[1]*1.1
+    else:
+        ymax = opt.ymax*1.1
+    
+    # -- Linear plot
+    c = ROOT.TCanvas()
+    h = c.DrawFrame(opt.xlow,5e-3,opt.xhigh,ymax)
+    set_attr_plotobject(h,title='[GS: Radiation lenght vs #'+var1+
+            ', %s]' % geometry, xtitle='#'+var1,ytitle=opt.ytitle)
+    h.Draw()
+    for _theothervar,g in graphs.iteritems():
+        g.Draw("L")
+    c.SaveAs('radlength_'+var1+'_'+geometry+'.png')
+    c.Close()
+    
+    # -- Logarithm plot
+    c = ROOT.TCanvas()
+    c.SetLogy()
+    h = c.DrawFrame(opt.xlow,5e-3,opt.xhigh,ymax)
+    set_attr_plotobject(h,title='[GS: Radiation lenght vs #'+var1+
+            ', %s]' % geometry, xtitle='#'+var1,ytitle=opt.ytitle)
+    h.Draw()
+    for _theothervar,g in graphs.iteritems():
+        g.Draw("L")
+    c.SaveAs('radlength_'+var1+'_'+geometry+'_log.png')
+    c.Close()
+    
+    # Another Plot just to draw the legend
+    c = ROOT.TCanvas()
+    leg = ROOT.TLegend(0.05,0.1,0.95,.8)
+    #leg.SetHeader('Title')
+    leg.SetFillColor(0)
+    leg.SetBorderSize(0)
+    leg.SetNColumns(4)
+    if var1 == 'eta':
+        othervar = 'phi'
+    elif var1 == 'phi':
+        othervar = 'eta'
+    getlegendlabel = lambda x: '%s: %s' % (othervar,x)
+    for ctvarstr,gt in sorted(graphs.iteritems(),key=lambda (x,y): float(x)):
+        leg.AddEntry(gt,getlegendlabel(ctvarstr),'P')
+    leg.Draw()
+    c.SaveAs('color_legend_'+var1+'_'+geometry+'.png')
+    c.Close()
+
+def plot2d(h,var1,var2,geometry,**kwd):
+    """
+    """
+    import ROOT
+    from PyAnUtils.pyanfunctions import set_attr_plotobject, ExtraOpt
+    from PyAnUtils.plotstyles import setpalette
+    #from PyAnUtils.plotstyles import squaredStyle as dfStyle
+
+    opt = ExtraOpt( [('doplot',True),('verbose',False),
+                    ('ztitle','Radiation Length/X_{0}'),
+                    ('title','[GS: Radiation lenght vs #'+var1+' #'+var2+\
+                                    ', %s]' % geometry)] )
+    opt.setkwd(kwd)
+    
+    ROOT.gROOT.SetBatch()
+    #gs = dfStyle()
+    #gs.cd()
+    ROOT.gStyle.SetOptStat(0)
+
+    set_attr_plotobject(h,title=opt.title,xtitle='#'+var1,ytitle='#'+var2,ztitle=opt.ztitle)
+
+    if geometry == 'DIFF':
+        setpalette('darkbody')
+    else:
+        setpalette('inv_darkbody')
+    c = ROOT.TCanvas()
+    h.Draw('COLZ')
+    c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'.png')
+    # LEGO PLOT
+    #h.SetContour(99)
+    #h.Draw("LEGO2")
+    #c.SaveAs('radlength_'+var1+'_'+var2+'_'+geometry+'_LEGO.png')
+    #c.Close()
+
+def summary(full,fast,**kwd):
+    """
+    """
+    from PyAnUtils.pyanfunctions import ExtraOpt
+
+    opt = ExtraOpt( [('min_reldif',0.0), ('min_x0', 0.0), ('dotable',False)] )
+    opt.setkwd(kwd)
+    
+    max_x0 = (0.0,0.0)
+    max_diff = (0.0,None,None)
+    max_reld = (0.0,None,None)
+    
+    latex   = '\\begin{tabular}{l r r r r}\\\\\\hline\\hline\n'
+    latex   +=' $(\\eta,\\phi)$ & $\\frac{\Delta^{FULL-FAST}_{X_0}}{X_0^{FULL}$'
+    latex   +='  & $\Delta^{FULL-FAST}_{X_0}$ & $X_0^{FULL}$ & $X_0^{FAST} \\\\\\hline \n'
+    message =  "(eta,phi)     |  rel. diff [%] |  abs. diff  |  X_0 FULL  |  X_0 FAST\n"
+    message += "-"*70+'\n'
+    for etastr,phix0list in sorted(full.iteritems()):
+        eta = float(etastr)
+        for phi,x0full in phix0list:
+            _phidummy,x0fast = filter(lambda (_p,_x): abs(_p-phi) < 1e-9, fast[etastr])[0]
+            absdif = x0full-x0fast
+            reldif = absdif/x0full
+            max_x0 = (max(max_x0[0],x0full),max(max_x0[1],x0fast))
+            if opt.min_reldif < abs(reldif) and (opt.min_x0 <= x0full or opt.min_x0 <= x0fast):
+                # summary info
+                if abs(max_diff[0]) < abs(absdif):
+                    max_diff = (absdif,eta,phi)
+                if abs(max_reld[0]) < abs(reldif):
+                    max_reld = (reldif,eta,phi)
+                # tables
+                message += "({0:5.2f},{1:5.2f})   {2:10.2f}   {3:12.3f}   {4:11.3f}"\
+                        "   {5:10.3f}\n".format(eta,phi,reldif,absdif,x0full,x0fast)
+                latex   += " ({0:5.2f},{1:5.2f}) & {2:.2f} &  {3:.3f} &  {4:.3f} &"\
+                        " {5:.3f}\\\\\n".format(eta,phi,reldif,absdif,x0full,x0fast)
+    latex += '\\hline\\end{tabular}\n'
+    message += "="*80+"\n"
+    message += "\n+ FOUND Maximum X0 at FULL: {0:.2f}\n".format(max_x0[0])
+    message += "+ FOUND Maximum X0 at FAST: {0:.2f}\n".format(max_x0[1])
+    message += "|-                                                                  -|\n"
+    message += "+ SETUP Minimum X0 either on FAST or FULL:             {0:.2f}\n".format(opt.min_x0)
+    message += "+ SETUP Minimum relative difference between FULL-FAST: {0:.2f}%\n".format(opt.min_reldif)
+    message += "+ FOUND Maximum X0 difference:          {0:6.2f} @ "\
+                "(eta={1:5.2f},phi={2:5.2f})\n".format(max_diff[0],max_diff[1],max_diff[2])
+    message += "+ FOUND Maximum X0 relative difference: {0:6.2f} @ "\
+                "(eta={1:5.2f},phi={2:5.2f})\n".format(max_reld[0],max_reld[1],max_reld[2])
+
+    print message
+    
+    with open('summary.txt','w') as _f:
+        _f.write(message)
+
+    if opt.dotable:
+        with open('summarytable.tex','w') as f:
+            f.write(latex)
+
+def main(fullfn,fastfn,(justsum,min_x0,min_reldif),dotable,rel_diffs):
+    """Steering funtion. Performs the validation plots and 
+    the 1 and 2-D plots
+    """
+    import ROOT
+    from math import log,tan
+    # To initialize the style ---
+    from PyAnUtils.plotstyles import squaredStyle as dfStyle
+    gs = dfStyle()
+    gs.cd()
+    # ---------------------------
+    
+    # Histograms definition
+    h2d  = dict(map(lambda x: (x,ROOT.TH2F('2d_{0}'.format(x),'',\
+            100,-4.1,4.0,100,-3.1416,3.1416)),['FULL','FAST','DIFF']))
+    treefiles = dict(map(lambda x: (x[0],gettreefile(x[1])), \
+                    [('FULL',fullfn), ('FAST',fastfn)]))
+
+    eta = lambda theta: -log(tan(theta/2.0))
+    preprocessheta = dict(map(lambda x: (x,{}), ['FULL','FAST']))
+    preprocesshphi = dict(map(lambda x: (x,{}), ['FULL','FAST']))
+    
+    # -- Loops 
+    # -- Two equivalent files
+    x0max = 0.0
+    for (sim,(t,f)) in treefiles.iteritems():
+        # Progress bar 
+        print "\033[1;34mINFO\033[1;m Evaluating {0} geometry"\
+                " file...".format(sim)
+        # end progress bar
+        for iEvent in t:
+            if t.geoID != 4:
+                continue
+            # Filling histograms
+            ps = eta(t.pth)
+            fill2d(h2d[sim],ps,t.pph,t.X0)
+            # -- tengo la info en el 2d-...
+            # eta curves (at phi-ct)
+            try:
+                preprocessheta[sim]['{0:.6f}'.format(t.pph)].append((ps,t.X0))
+            except KeyError:
+                preprocessheta[sim]['{0:.6f}'.format(t.pph)] = [(ps,t.X0)]
+            # phi curves (at eta-ct)
+            try:
+                preprocesshphi[sim]['{0:.6f}'.format(ps)].append((t.pph,t.X0))
+            except KeyError:
+                preprocesshphi[sim]['{0:.6f}'.format(ps)] = [(t.pph,t.X0)]
+            x0max = max(x0max,t.X0)
+    # Plots 
+    etacolors = getcolors(preprocessheta['FULL'])
+    phicolors = getcolors(preprocesshphi['FULL'])
+    for (sim,(t,f)) in treefiles.iteritems():
+        plot2d(h2d[sim],'eta','phi',sim)
+        plot1d(preprocessheta[sim],'eta',sim,xlow=-4.1,xhigh=4.1,ymax=x0max,colors=etacolors)
+        plot1d(preprocesshphi[sim],'phi',sim,xlow=-3.1416,xhigh=3.1416,ymax=x0max,colors=phicolors)
+    # -- differences
+    h2d['DIFF'].Add(h2d['FULL'],h2d['FAST'],1.0,-1.0)
+    plot2d(h2d['DIFF'],'eta','phi','DIFF',\
+            ztitle='Rad. Lenght/X_{0}',
+            title='Difference between simulations FULL-FAST')
+    
+    summary(preprocesshphi['FULL'],preprocesshphi['FAST'],dotable=dotable)
+
+if __name__ == '__main__':
+    import os
+    from optparse import OptionParser,OptionGroup
+    
+    cwd = os.getcwd()
+    parser = OptionParser()
+    parser.set_defaults(fullsim=os.path.join(cwd,'ISFG4SimKernel.root'),\
+    		fastsim=os.path.join(cwd,'ISFFatras.root'),\
+                justsummary=False,min_x0=1.0,min_reldif=10.0,
+                relative_diff=False,)
+    
+    parser.add_option( '--full', action='store', type='string', dest='fullsim',\
+    		help="Full (Geant4) simulation root file [ISFG4SimKernel.root]")
+    parser.add_option( '--fast', action='store', type='string', dest='fastsim',\
+    		help="Fast simulation root file [ISFFatras.root]")
+    parser.add_option( '-t','--table', action='store_true', dest='tablelatex',\
+    		help="Dump the results in a table in latex [False]")
+    parser.add_option( '-r','--relative-diff', action='store_true', dest='relative_diff',\
+    		help="Perform the 2D plots plotting the relative differences"\
+                       " between geometries [False]")
+    parser.add_option( '-s','--summary', action='store_true', dest='justsummary',\
+    		help="Perform just the summary. See '-x0' '-rd' options [False]")
+    parser.add_option( '--min-x0', action='store', dest='min_x0',\
+    		help="Just show in the summary entries with x0 > min_x0 (either on"\
+                    " FULL or FAST) [1.0]")
+    parser.add_option( '--min-reldif', action='store', dest='min_reldif',\
+    		help="Just show in the summary entries with a relative-difference"\
+                    " between FULL and FAST less than MIN_reldif (in %) [10.%]")
+    
+    (opt, args)=parser.parse_args()	
+    # See main function
+    main(opt.fullsim,opt.fastsim,(opt.justsummary,opt.min_x0,opt.min_reldif),opt.tablelatex,opt.relative_diff)
+
