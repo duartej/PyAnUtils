@@ -237,7 +237,7 @@ class cerncluster(clusterspec):
         super(cerncluster,self).__init__(**kw)#joblist,**kw)
         self.sendcom   = 'bsub'
         self.statecom  = 'bjobs'
-        self.statuskill= 'bkill'
+        self.killcom   = 'bkill'
         if kw.has_key('queue'):
             queue = kw['queue']
         else:
