@@ -255,6 +255,70 @@ class job(object):
         """
         for jb in self.tasklist:
             self.cluster.submit(jb)
+    
+    def resubmit(self,joblist):
+        """..method ::resubmit(joblist) 
+
+        wrapper to the clusterspec resubmit method.
+        Note that only 'finished' with 'fail' status,
+        'aborted' and 'configured' states are sensitives 
+        to be resubmitted
+        """
+        # Get the list of jobs-to-be-resubmitted (jtbr) from the 
+        # ('finished','fail') or 'aborted' ones
+        jobindexlist = map(lambda x: x.index,joblist)
+        abortedindexlist  = map(lambda x: x,self.getdictof('aborted').keys())
+        configuredindexlist  = map(lambda x: x,self.getdictof('configured').keys())
+        finishedindexlist  = map(lambda x: x[0],\
+                filter(lambda (ind,(state,status)): status == 'fail', self.getdictof('finished').iteritems()))
+        totalindexlist = abortedindexlist+finishedindexlist+configuredindexlist
+        toresubmitindices = list(set(jobindexlist).intersection(totalindexlist))
+        # Eliminated from the jtbr list the finished (fail) and aborted ones 
+        # (picked them up above)
+        renmant = set(jobindexlist).difference(toresubmitindices)
+        if len(renmant) != 0:
+            premessage = "\033[1;33mWARNING\033[1;m JOBS ["
+            for i in sorted(renmant):
+                premessage+='%i,' % i
+            message =  premessage[:-1]
+            message += "] are not in 'ABORTED' nor 'FINISHED' (and 'fail') nor 'CONFIGURED'"
+            message += " state, resubmit has no sense in them, so they're ignored..."
+            print message
+
+        toresubmit = filter(lambda x: x.index in toresubmitindices,joblist)
+        print "Resubmitting jobs..."
+        for ik in toresubmit:
+            self.cluster.submit(ik)
+
+    def reconfigure(self,joblist):
+        """..method ::reconfigure(joblist) 
+
+        reconfigure method, just convert a job from 'None' state
+        to 'configure' state
+        """
+        # Get the list of jobs-to-be-reconfigured (jtbrc) from the submitted ones
+        jobindexlist = map(lambda x: x.index,joblist)
+        indexlist  = map(lambda x: x,self.getdictof(None).keys())
+        toreconfigureindices = list(set(jobindexlist).intersection(indexlist))
+        # Eliminated from the jtbrc list the above ones
+        renmant = set(jobindexlist).difference(toreconfigureindices)
+        # Get the list of jtbrc from the running ones
+        if len(renmant) != 0:
+            premessage = "\033[1;33mWARNING\033[1;m JOBS ["
+            for i in sorted(renmant):
+                premessage+='%i,' % i
+            message =  premessage[:-1]
+            message += "] are not in 'SUBMITTED' nor 'RUNNING' state, kill has"
+            message += " no sense in them, so they're ignored..."
+            print message
+
+        toreconfigure = filter(lambda x: x.index in toreconfigureindices,joblist)
+        print "Reconfiguring ..."
+        for ik in toreconfigure:
+            # FIXME: Sure? or must it be called from the self.workenv.reconfigure ??
+            #        in this way is more coherent
+            ik.state = 'configured'
+            ik.status= 'ok'        
 
     def kill(self,joblist):
         """..method ::kill(joblist) 

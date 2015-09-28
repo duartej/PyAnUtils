@@ -135,6 +135,8 @@ class clusterspec(object):
                     self.status = self.simulatedresponse('finishing')
                 else:
                     jobdsc.status = checkfinishedjob(jobdsc)
+        #elif (jobdsc.state == 'finished' and jobdsc.status = 'fail') \
+        #        or jobdsc.state == 'aborted':
 
     @abstractmethod
     def simulatedresponse(self,action):
