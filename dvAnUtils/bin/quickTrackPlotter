@@ -1,162 +1,49 @@
 #!/usr/bin/env python
-""" Just check the tracks in the xAOD
-FIXME-- Work in progress to be documented
+""":script:`quickTrackPlotter` -- perform some quick plots related with tracks
+==============================================================================
+
+.. script:: quickTrackPlotter [OPTIONS]    
+      :platform: Unix
+      :synopsis: Perform some quick plots related with tracks 
+
+	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
-class HistoContainer():
-    """TO BE PROMOTED ----
+def ismatchedtrack(track,tracksOther,verbose,dRcut = 0.01):
+    """xAOD::TrackParticle inputs
     """
-    def __init__(self):
-        """
-        """
-        from PyAnUtils.pyanfunctions import ExtraOpt
-        
-        self._histos = {}
-        self.__class  = {}
-        self.__associated = {}
-        self.__description= {}
-        self.__opts   = { 'bookhisto': ExtraOpt( [('npoints_y',None),('ylow',None), ('yhigh',None),
-                                    ('npoints_z',None), ('zlow',None), ('zhigh',None),
-                                    ('description','')] ),
-                          'fill': ExtraOpt( [('weight',None)] ),
-                          'plot': ExtraOpt( [('options',''), ('legend',True),
-                                    ('legposition','RIGHT'),('legy',0.85),('textlength',0.31) ] )
-                          }
+    from math import sqrt
 
-    def bookhisto(self,name,title,npoints,xlow,xhigh,**kwd):
-        """
-        """
-        import ROOT
-        opt = self.__opts['bookhisto']
-        opt.reset()
-        opt.setkwd(kwd)
-        
-        if name in self._histos.keys():
-            raise KeyError("Histogram name already in used" %  name)
-        
-        if opt.npoints_y: 
-            if not opt.ylow or not opt.yhigh:
-                raise RuntimeError("npoints_z option needs also"\
-                        " ylow and yhigh")
-            if opt.npoints_z:
-                if not opt.zlow or not opt.zhigh:
-                    raise RuntimeError("npoints_z option needs also"\
-                            " zlow and zhigh")
-                histoclass = "TH3F"
-                h = ROOT.TH3F(name,title,npoints,xlow,xhigh,\
-                        opt.npoints_y,opt.ylow,opt.yhigh,\
-                        opt.npoints_z,opt.zlow,opt.zhigh)
-            else:
-                histoclass = "TH2F"
-                h = ROOT.TH2F(name,title,npoints,xlow,xhigh,\
-                        opt.npoints_y,opt.ylow,opt.yhigh)
-        else:
-            histoclass = "TH1F"
-            h = ROOT.TH1F(name,title,npoints,xlow,xhigh)
-        self._histos[name] = h
-        setattr(self,name,self._histos[name])
-        self.__class[name]  = histoclass
-        self.__description[name] = opt.description
+    tlength   = len(tracksOther)
+
+    eta = track.eta()
+    phi = track.phi()
     
-    def removehistos(self):
-        """
-        """
-        for name,h in self._histos.iteritems():
-            h.Delete()
-            delattr(self,name)
-            h = None
-        names = self._histos.keys()
-        for name in names:
-            self._histos.pop(name)
-    
-    def checkhisto(self,name):
-        """
-        """
-        if name not in self._histos.keys():
-            raise RuntimeError("No histogram booked with the name '%s'" % name)
-
-    def associated(self,histonamelist):
-        """ Histos which are intented to be plotted together in the same 
-        Canvas. The x,y and z are the same.
-        The user take cares of the normalization
-        """
-        for name in histonamelist:
-            self.checkhisto(name)
-            self.__associated[name] = filter(lambda x: x != name, histonamelist)
-            self.__associated[name] += [name]
-
-    def getassociated(self,name):
-        """
-        """
-        return [name]+self.__associated[name]
-
-    def fill(self,name,x,y=None,z=None,**kwd):
-        """
-        """
-        opt = self.__opts['fill']
-        opt.reset()
-        opt.setkwd(kwd)
-
-        self.checkhisto(name)
-        if y:
-            if z:
-                self._histos[name].Fill(x,y,z)
-            else:
-                self._histos[name].Fill(x,y)
-            return 
-        self._histos[name].Fill(x)
-
-    def plot(self,name,plotname,canvas=None,**kwd):
-        """ 
-        """
-        from PyAnUtils.pyanfunctions import drawlegend
-        from PyAnUtils.plotstyles import njStyle,setpalette
-        
-        stl = njStyle()
-        stl.cd()
-        #ROOT.gROOT.ForceStyle()
-        setpalette('gray')
-
-        opt = self.__opts['plot']
-        opt.reset()
-        opt.setkwd(kwd)
-        self.checkhisto(name)
-        
-        canvascreatedhere=False
-        if not canvas:
-            import ROOT
-            canvas = ROOT.TCanvas()
-            canvascreatedhere=True
-        # Check the associated histos to be plot with him
-        # and draw the higher y-value as the first one
-        orderednames = [name]
-        if self.__associated.has_key(name):
-            unorderednames = self.__associated[name]
-            # Normalization
-            oldintegral = dict(map(lambda n: (n,self._histos[n].Integral()),unorderednames))
-            __dummy = map(lambda n: self._histos[n].Scale(1.0/oldintegral[n]), unorderednames)
-            orderednames   = sorted(unorderednames,key=lambda n: self._histos[n].GetMaximum(),reverse=True)
-
-        self._histos[orderednames[0]].Draw(opt.options)
-        for anotherh in orderednames[1:]:
-            self._histos[anotherh].Draw("SAME"+opt.options)
-
-        if opt.legend:
-            import ROOT
-            leg=ROOT.TLegend()
-            for n in orderednames:
-                leg.AddEntry(self._histos[n],self.__description[n],"LF")
-                drawlegend(leg,opt.legposition,opt.legy,textlength=opt.textlength)
-        canvas.SaveAs(plotname)
-        # Deattach the legend from this canvas, otherwise violation segmentation
-        canvas.Clear()
-        leg.Delete()
-        del leg
-        if canvascreatedhere:
-            del canvas
-        # Reset the actual normalization, if there was more than one histo
-        if self.__associated.has_key(name):
-            __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
+    for i in xrange(tlength):
+        etaOther = tracksOther[i].eta()
+        phiOther = tracksOther[i].phi()
+        if sqrt( (eta-etaOther)**2.+(phi-phiOther)**2. ) < dRcut:# and \
+                    #tracks['nHits'] == tracksOther["nHits"] :
+            if verbose:
+                print "="*80
+                print "HighD0 track matched with a regular one!"
+                print "dR between tracks: %.5f" % sqrt( (eta-etaOther)**2.+(phi-phiOther)**2. )
+                #print "Other parameters:"
+                #header = "       "
+                #for _obs in parameters.keys():
+                #    header += ("%s%is  " % ('%',lengths[_obs])) % _obs
+                #tracksd0line = "Highd0 :"
+                #tracksline   = "Regular:"
+                #for _obs in tracks.keys():
+                #    tracksd0line   += ("%s%i.3f  ") % ('%',lengths[_obs]) % tracks[_obs][i] 
+                #    tracksline += ("%s%i.3f  ") % ('%',lengths[_obs]) % tracksOther[_obs][k] 
+                #print header
+                #print tracksd0line
+                #print tracksline
+            # one match is enough to discard the track
+            return True
+            # Extra info to be matched?
+    return False
 
 
 def getcollection(tree,name):
@@ -168,32 +55,15 @@ def getcollection(tree,name):
     return filter(lambda x: x.GetName().lower().find('aux.') == -1, k)# not including auxiliar
 
 
-def getfileinfo(filename):
-    """
-    """
-    import ROOT
-    import PyCintex
-    PyCintex.Cintex.Enable()
-    from AthenaROOTAccess import transientTree
-    
-    f = ROOT.TFile(filename)
-    if f.IsZombie():
-        raise IOError("Not found root file '%s'" % filename)
-    t = transientTree.makeTree(f)
-
-    branchnames = list(set(map(lambda x: x.GetName(), getcollection(t,'track'))))
-    
-    return branchnames,t,f
-   
 
 def setuphistos(hcont,name,nbins,xlow,xmax):
     """
     """
     regtitle = "regular tracking"
     highd0tl = "High-d_{0}  retracking"
-    hcont.bookhisto(name      ,regtitle,nbins,xlow,xmax,description='Regular reco tracks')
-    hcont.bookhisto(name+"_h" ,highd0tl,nbins,xlow,xmax,description='re-tracked (not-matched)')
-    hcont.bookhisto(name+"_hA",highd0tl,nbins,xlow,xmax,description='re-tracked (all)')
+    hcont.create_and_book_histo(name      ,regtitle,nbins,xlow,xmax,description='Regular reco tracks')
+    hcont.create_and_book_histo(name+"_h" ,highd0tl,nbins,xlow,xmax,description='re-tracked (not-matched)')
+    hcont.create_and_book_histo(name+"_hA",highd0tl,nbins,xlow,xmax,description='re-tracked (all)')
     # -- Associated histograms: plotted in the same canvas
     hcont.associated([name,name+'_h',name+'_hA'])
 
@@ -239,22 +109,25 @@ def main(filenames,plotsuf,**kwd):
     import ROOT
     from math import sqrt
     from struct import unpack
+    from PyAnUtils.retrievetrees import xaodtree
     from PyAnUtils.pyanfunctions import ExtraOpt,set_attr_plotobject
     from PyAnUtils.plotstyles import njStyle,setpalette
+    from PyAnUtils.histocontainer import HistoContainer
 
-    opt = ExtraOpt( [('d0range',80), ('z0range',1500.)] )
+    opt = ExtraOpt( [('d0range',80), ('z0range',1500.), ('normalize', True)] )
     opt.setkwd(kwd)
     
     ROOT.gROOT.SetBatch()
 
     out = []
     for i in filenames:
-        out.append(getfileinfo(i))
-    # Get tree     
-    t = out[0][1]
-    t.GetEntry(0)
+        out.append(xaodtree(i))
     # Set the track particle
-    tracks_normal = t.InDetTrackParticles
+    t = out[0]
+    # And the collection we are going to use
+    t.activate_variable("InDetTrackParticles")
+    tracks_normal  = t.InDetTrackParticles
+    t.activate_variable("InDetHighD0TrackParticles")
     tracks_highd0 = t.InDetHighD0TrackParticles
     
     # ----------------------------------------
@@ -269,11 +142,11 @@ def main(filenames,plotsuf,**kwd):
     setuphistos(h,"err_z0",100,-1.,1.)
 
     # 2d d0 vs z0
-    h.bookhisto("d0z0_h","High-d_{0} retracking",100,-opt.d0range,opt.d0range,\
+    h.create_and_book_histo("d0z0_h","High-d_{0} retracking",100,-opt.d0range,opt.d0range,\
             npoints_y=100,ylow=-opt.z0range,yhigh=opt.z0range)
     
     # number of tracks per event
-    setuphistos(h,"nt",100,0,101)
+    setuphistos(h,"nt",200,0,701)
 
     # Quality
     setuphistos(h,"chi2Nof",100,0,12.)
@@ -299,16 +172,15 @@ def main(filenames,plotsuf,**kwd):
     totalrechighd0= 0 
     realnewhighd0 = 0
     # --- Progress bar :)
-    pointpb = float(t.GetEntries())/100.0
-    for i in xrange(t.GetEntries()):
-        t.GetEntry(i)
+    pointpb = float(t.getentries())/100.0
+    for i in xrange(t.getentries()):
+        t.getentry(i)
         sys.stdout.write("\r\033[1;34mINFO\033[1;m Extracting track info"+\
                     " [ "+"\b"+\
                     str(int(float(i)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
         #print "[%i] Number of particles:      %i       %i" % (i,tracksInDet_normal.size(),tracksInDet_highd0.size())
-        reg_etaphi = []
-        sametracks = []
+        regulartracks = []
         for k in xrange(tracks_normal.size()):
             track = tracks_normal[k]
             # Perigee parameters
@@ -327,8 +199,8 @@ def main(filenames,plotsuf,**kwd):
             h.nSCTHits.Fill(sct)
             h.nTRTHits.Fill(trt)
             h.nHits.Fill(pixel+sct+trt)
-            # Keep the dR of this track
-            reg_etaphi.append( (track.eta(),track.phi()) )
+            # Keep the track to compare
+            regulartracks.append(track)
         nmatched = 0
         for k in xrange(tracks_highd0.size()):
             trackH = tracks_highd0[k]
@@ -350,9 +222,8 @@ def main(filenames,plotsuf,**kwd):
             h.nTRTHits_hA.Fill(trt)
             h.nHits_hA.Fill(pixel+sct+trt)
             # Just care about the new ones
-            matched = filter(lambda (eta,phi): sqrt((trackH.eta()-eta)**2.+(trackH.phi()-phi)**2.) < 0.05,reg_etaphi)
-            nmatched += len(matched)
-            if len(matched) == 0:
+            #matched = filter(lambda (eta,phi): sqrt((trackH.eta()-eta)**2.+(trackH.phi()-phi)**2.) < 0.001,reg_etaphi)
+            if not ismatchedtrack(trackH,regulartracks,False,0.05):
                 h.d0_h.Fill(trackH.d0())
                 h.err_d0_h.Fill(trackH.definingParametersCovMatrixVec()[0]/trackH.d0())
                 h.z0_h.Fill(trackH.z0())
@@ -364,17 +235,19 @@ def main(filenames,plotsuf,**kwd):
                 h.nSCTHits_h.Fill(sct)
                 h.nTRTHits_h.Fill(trt)
                 h.nHits_h.Fill(pixel+sct+trt)
+            else:
+                nmatched += 1
         # Total number of reco-tracks
         h.nt.Fill(tracks_normal.size())
         nt_non_matched =tracks_highd0.size()-nmatched
+        if nt_non_matched < 0:
+            nt_non_matched = 0
         h.nt_h.Fill(nt_non_matched)
         h.nt_hA.Fill(tracks_highd0.size())
         # --- Not needed anymore with the nt-histos...
         totalregrec += tracks_normal.size()
         totalrechighd0+=tracks_highd0.size()
         realnewhighd0+= nt_non_matched
-        #print " --- Total matched high-d0/regular: %i" % nmatched
-        #print " --- Therefore %i new high-d0" % (tracksInDet_highd0.size()-nmatched)
     print 
     print " --- Total Regular reconstructed tracks                                     : %i" %totalregrec
     print " --- Total high-d0 reconstructed tracks                                     : %i" %totalrechighd0
@@ -385,33 +258,33 @@ def main(filenames,plotsuf,**kwd):
     # Drawing
     
     # -- D0
-    doplothistos(h,"d0",'d_{0} [mm]','A.U.',"regular_vs_highd0_tracks_d0."+plotsuf)
-    doplothistos(h,"err_d0",'\sigma_{d_{0}}/d_{0}','A.U.',"regular_vs_highd0_tracks_errd0."+plotsuf)
+    doplothistos(h,"d0",'d_{0} [mm]','A.U.',"regular_vs_highd0_tracks_d0."+plotsuf,normalize=opt.normalize)
+    doplothistos(h,"err_d0",'\sigma_{d_{0}}/d_{0}','A.U.',"regular_vs_highd0_tracks_errd0."+plotsuf,normalize=opt.normalize)
     
     # -- Z0
-    doplothistos(h,"z0",'z_{0} [mm]','A.U.',"regular_vs_highd0_tracks_z0."+plotsuf,legy=0.9)
-    doplothistos(h,"err_z0",'\sigma_{z_{0}}/z_{0}','A.U.',"regular_vs_highd0_tracks_errz0."+plotsuf)
+    doplothistos(h,"z0",'z_{0} [mm]','A.U.',"regular_vs_highd0_tracks_z0."+plotsuf,legy=0.9,normalize=opt.normalize)
+    doplothistos(h,"err_z0",'\sigma_{z_{0}}/z_{0}','A.U.',"regular_vs_highd0_tracks_errz0."+plotsuf,normalize=opt.normalize)
     
     # -- Chi2Nof
-    doplothistos(h,"chi2Nof",'\chi^{2}/N_{dof}','A.U.',"regular_vs_highd0_tracks_chi2Nof."+plotsuf)
+    doplothistos(h,"chi2Nof",'\chi^{2}/N_{dof}','A.U.',"regular_vs_highd0_tracks_chi2Nof."+plotsuf,normalize=opt.normalize)
     
     # -- First hit radius
-    doplothistos(h,"radFirstHit",'r_{first hit} [mm]','A.U.',"regular_vs_highd0_tracks_radFirstHit."+plotsuf)
+    doplothistos(h,"radFirstHit",'r_{first hit} [mm]','A.U.',"regular_vs_highd0_tracks_radFirstHit."+plotsuf,normalize=opt.normalize)
     
     # -- Pixel hit
-    doplothistos(h,"nPixelHits",'N_{Pixel hits}','A.U.',"regular_vs_highd0_tracks_nPixelHits."+plotsuf)
+    doplothistos(h,"nPixelHits",'N_{Pixel hits}','A.U.',"regular_vs_highd0_tracks_nPixelHits."+plotsuf,normalize=opt.normalize)
     
     # -- SCT hit
-    doplothistos(h,"nSCTHits",'N_{SCT hits}','A.U.',"regular_vs_highd0_tracks_nSCTHits."+plotsuf)
+    doplothistos(h,"nSCTHits",'N_{SCT hits}','A.U.',"regular_vs_highd0_tracks_nSCTHits."+plotsuf,normalize=opt.normalize)
     
     # -- TRT hit
-    doplothistos(h,"nTRTHits",'N_{TRT hits}','A.U.',"regular_vs_highd0_tracks_nTRTHits."+plotsuf)
+    doplothistos(h,"nTRTHits",'N_{TRT hits}','A.U.',"regular_vs_highd0_tracks_nTRTHits."+plotsuf,normalize=opt.normalize)
     
     # -- Number of total hits
-    doplothistos(h,"nHits",'N_{hits}','A.U.',"regular_vs_highd0_tracks_nHits."+plotsuf)
+    doplothistos(h,"nHits",'N_{hits}','A.U.',"regular_vs_highd0_tracks_nHits."+plotsuf,normalize=opt.normalize)
     
     # -- Nt
-    doplothistos(h,"nt",'N_{t}','A.U.',"regular_vs_highd0_tracks_nt."+plotsuf,options="H")
+    doplothistos(h,"nt",'N_{t}','A.U.',"regular_vs_highd0_tracks_nt."+plotsuf,options="H",normalize=opt.normalize)
     
     # Special 2D
     from PyAnUtils.plotstyles import njStyle,setpalette
@@ -438,9 +311,11 @@ if __name__ == '__main__':
     
     usage = "quickTrackPlotter xAODROOTFILE [OPTIONS]"
     parser = OptionParser(usage=usage)
-    parser.set_defaults(suffix="pdf")
+    parser.set_defaults(suffix="pdf",notnormalize=False)
     parser.add_option( "-s",action='store',dest='suffix',\
             metavar="SUFFIX",help="Suffix for the plot files [PDF]")
+    parser.add_option( "--not-normalize",action='store_true',dest='notnormalize',\
+            help="Flag to make same-canvas plots using not-normalized histograms [False]")
 
     (opt,args) = parser.parse_args()
     if len(args) != 1:
@@ -448,4 +323,4 @@ if __name__ == '__main__':
                 " root file to process"
         raise RuntimeError(message)
 
-    main(args,opt.suffix.lower())
+    main(args,opt.suffix.lower(),normalize=(not opt.notnormalize))
