@@ -35,6 +35,7 @@ def main(filename,collections):
     """
     import ROOT
     from AthenaROOTAccess import transientTree
+    # use cppy instead, but how to deal with the persistent-transient cols?
     
     f = ROOT.TFile.Open(filename)
     if f.IsZombie():
