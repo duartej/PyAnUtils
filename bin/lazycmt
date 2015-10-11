@@ -51,7 +51,7 @@ def convert_list_to_str(inputlines):
 
     return out
 
-def iscompiled(p):
+def iscompiled(p,status="error"):
     """.. function:: iscompiled(p) --> bool
 
     Checks the output of the Popen.communicate call, contains
@@ -63,8 +63,8 @@ def iscompiled(p):
     :return: If the error word was found (False) or not (True)
     :rtype: bool
     """
-    if p[0].lower().find('error') != -1 or \
-            p[1].lower().find('error') != -1:
+    if p[0].lower().find(status) != -1 or \
+            p[1].lower().find(status) != -1:
         return False
     return True
 
@@ -118,14 +118,17 @@ def sendshellcommand(command,d,shell=True,verbose=False,message=""):
             break
         i+=1
     out,err = p.communicate()
-    if not iscompiled( (out,err) ):
+    if not iscompiled( (out,err),"error" ):
         print "\b "+message+" "+colored("FAILED!","red")
-        message = colored("lazycmt {0} ERROR".format(MSG),"red")+\
-                " [{0}]".format(d.split('/')[-2])
-        print "===================== Dumping output ==========================="
-        print err
+        if not verbose:
+            print "===================== Dumping output ==========================="
+            print err
     else:
-        print "\b {0} DONE!".format(message)
+        finalprint = "\b {0} DONE!".format(message)
+        if not iscompiled( (out,err), "warning"):
+            finalprint = finalprint+\
+                    "... although some {0} present".format(colored("WARNINGS","yellow"))
+        print finalprint
 
 def config(wd):
     """.. function:: config(wd)
