@@ -7,183 +7,256 @@
       :synopsis: Search the cmt directories presents in a release Athena directory
    and perform the compilation, cleaning or other programmed action. 
 
-	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+      .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 DEBUG=False
+COLOR = { 'red': 91, 'green': 92, 'yellow': 93, 'blue':94 ,\
+        'magenta':95, 'blue2': 96, 'gray': 90, 'bold': 1,\
+        'blinking': 5 }
+
+SPINNING = [ "-","\\","|","/"]
+
+def colored(message,color='blue'):
+    """.. function:: colored(message) --> str
+
+    Returns a coloured str
+
+    :message     : the message to color
+    :type message: str
+
+    :return: the message colored with the introduced color
+    :rtype : str
+
+    """
+    try:
+        return "\033[{0:d}m{1:s}\033[0m".format(COLOR[color],message)
+    except AttributeError:
+        raise RuntimeError("color {0} not defined".format(color))
+
+def convert_list_to_str(inputlines):
+    """.. function:: convert_list_to_str(inputlines) --> str
+
+    Converts a list of strings output of a readlines method of a file
+    into a formatted string
+
+    :inputlines     : the output of a file.readlines()
+    :type inputlines: list(str)
+
+    :return: a formatted string
+    :rtype : str
+    """
+    out = [(" " if line.startswith(" ") else "\n") + line.strip() \
+            for line in inputlines]
+    out = ''.join(out)[1:]
+
+    return out
 
 def iscompiled(p):
-	""".. function:: iscompiled(p) --> bool
+    """.. function:: iscompiled(p) --> bool
 
-	Checks the output of the Popen.communicate call, contains
-	an error.
+    Checks the output of the Popen.communicate call, contains
+    an error.
 
-	:p: The ouput of the subprocess.Popen.communicate call, (stdout,stderr)
-	:type p: (str, str)
+    :p: The ouput of the subprocess.Popen.communicate call, (stdout,stderr)
+    :type p: (str, str)
 
-	:return: If the error word was found (False) or not (True)
-	:rtype: bool
-	"""
-	if p[0].lower().find('error') != -1 or \
-			p[1].lower().find('error') != -1:
-				return False
-	return True
+    :return: If the error word was found (False) or not (True)
+    :rtype: bool
+    """
+    if p[0].lower().find('error') != -1 or \
+            p[1].lower().find('error') != -1:
+        return False
+    return True
 
 
 def findcmtdirs(pardir,targetdir = 'cmt'):
-	""".. function:: findcmtdir(pardir) --> cmtdir
-	
-	Perform a recursively search down for the cmt directory
-	Return a list of directories
+    """.. function:: findcmtdir(pardir) --> cmtdir
 
-	::FIXME:: Function to be put in a generic module
-	"""
-	import os
-	matches = []
-	for root, dirnames, filenames in os.walk(pardir):
-		if len(filter(lambda x: x == targetdir, dirnames)) == 1:
-			matches.append( os.path.join(root,targetdir))
-	return matches
+    Perform a recursively search down for the cmt directory
+    Return a list of directories
 
-def sendshellcommand(command,d,shell=True):
-	""".. function:: sendshellcommand(command,d) 
+    ::FIXME:: Function to be put in a generic module
+    """
+    import os
+    matches = []
+    for root, dirnames, filenames in os.walk(pardir):
+        if len(filter(lambda x: x == targetdir, dirnames)) == 1:
+            matches.append( os.path.join(root,targetdir))
+    return matches
 
-	Send a shell command using as current working directory d.
-	Checks for any output error, which prints
-	
-	:command: command to be executed
-	:type command: string
-	"""
-	from subprocess import Popen,PIPE
+def sendshellcommand(command,d,shell=True,verbose=False,message=""):
+    """.. function:: sendshellcommand(command,d) 
 
-	p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=shell).communicate()
-	if DEBUG:
-		print p[1],p[0]
-	if not iscompiled(p):
-		print "\033[31mlazycmt CONFIGURATION ERROR\033[m: [%s]" % (d.split('/')[-2])
+    Send a shell command using as current working directory d.
+    Checks for any output error, which prints
+
+    :command: command to be executed
+    :type command: string
+    """
+    from subprocess import Popen,PIPE
+    import sys
+
+    if command.find('config') != -1:
+        MSG='CONFIGURATION'
+    elif command.find('build') != -1:
+        MSG='BUILDING'
+    elif command.find('clean') != -1:
+        MSG='CLEANING'
+    else:
+        MSG='-------'
+    
+    p = Popen(command,cwd=d,stdout=PIPE,stderr=PIPE,shell=shell)#.communicate()
+    i=0
+    while True:
+        line = p.stdout.readline()
+        if verbose:
+            print line[:-1]
+        else:
+            sys.stdout.write( "{0} {1}".format(message,SPINNING[i % len(SPINNING)]))
+            sys.stdout.flush()
+        if not line:
+            break
+        i+=1
+    out,err = p.communicate()
+    if not iscompiled( (out,err) ):
+        print "\b "+message+" "+colored("FAILED!","red")
+        message = colored("lazycmt {0} ERROR".format(MSG),"red")+\
+                " [{0}]".format(d.split('/')[-2])
+        print "===================== Dumping output ==========================="
+        print err
+    else:
+        print "\b {0} DONE!".format(message)
 
 def config(wd):
-	""".. function:: configure(wd)
+    """.. function:: config(wd)
 
-	Configure all packages found inside the wd, by searching the cmt directory
+    Configure all packages found inside the wd, by searching the cmt directory
 
-	:wd: Parent directory where to find recursively 'cmt' directories
-	:type wd: str
-	"""
-	cmtdirs = findcmtdirs(wd)
-	command = 'cmt.exe config'
-	for d in cmtdirs:
-		sendshellcommand(command,d)
+    :wd: Parent directory where to find recursively 'cmt' directories
+    :type wd: str
+    """
+    cmtdirs = findcmtdirs(wd)
+    command = 'cmt.exe config'
+    for d in cmtdirs:
+        premessage = colored("Configuring directory","green")+" '{0}'".format(d)
+        n = len(premessage)+1
+        message = "\r"+premessage
+        sendshellcommand(command,d,message=message)
 
 def build(wd,ncpu):
-	""".. function:: build(wd)
-	
-	Build all packages found inside the wd, by searching the cmt directory
-	
-	:wd: Parent directory where to find recursively 'cmt' directories
-	:type wd: str
-	:ncpu: number of available cpu for make
-	:type ncpu: int
-	"""
-	cmtdirs = findcmtdirs(wd)
-	command = 'cmt.exe make -j'+str(ncpu)
-	for d in cmtdirs:
-		print "Building directory '%s'" % d
-		sendshellcommand(command,d)
-	
+    """.. function:: build(wd)
+
+    Build all packages found inside the wd, by searching the cmt directory
+
+    :wd: Parent directory where to find recursively 'cmt' directories
+    :type wd: str
+    :ncpu: number of available cpu for make
+    :type ncpu: int
+    """
+    cmtdirs = findcmtdirs(wd)
+    command = 'cmt.exe make -j'+str(ncpu)
+    for d in cmtdirs:
+        premessage = colored("Building directory","green")+" '{0}'".format(d)
+        n = len(premessage)+1
+        message = "\r"+premessage
+        sendshellcommand(command,d,message=message)
+
 def clean(wd,ncpu,forcedel=False):
-	"""..function:: clean(wd,ncpu)
+    """..function:: clean(wd,ncpu)
 
-	Clean all packages found inside the wd, by searching the cmt directory
+    Clean all packages found inside the wd, by searching the cmt directory
 
-	:wd: Parent directory where to find recursively 'cmt' directories
-	:type wd: str
-	:ncpu: number of available cpu for make
-	:type ncpu: int
-	"""
-	import os 
-	import shutil
-	import glob
+    :wd: Parent directory where to find recursively 'cmt' directories
+    :type wd: str
+    :ncpu: number of available cpu for make
+    :type ncpu: int
+    """
+    import os 
+    import shutil
+    import glob
 
-	cmtdirs = findcmtdirs(wd)
-	removedirs = [ 'genConf', os.getenv('CMTCONFIG') ]
-	for d in cmtdirs:
-		print "Cleaning directory '%s'" % d
-		command =  'make clean -j'+str(ncpu)
-		p = sendshellcommand(command,d)
-		# Check if there is directories to remove
-		for k in removedirs:
-			rmdir = os.path.join(os.path.join(d,'..'),k)
-			shutil.rmtree(rmdir, ignore_errors=True)
-	# A proper clean will remove the contents of InstallArea
-	# directory
+    cmtdirs = findcmtdirs(wd)
+    removedirs = [ 'genConf', os.getenv('CMTCONFIG') ]
+    for d in cmtdirs:
+        premessage = colored("Cleaning directory","green")+" '{0}'".format(d)
+        n = len(premessage)+1
+        message = "\r"+premessage
+        command =  'make clean -j'+str(ncpu)
+        p = sendshellcommand(command,d,message=message)
+        # Check if there is directories to remove
+        for k in removedirs:
+            rmdir = os.path.join(os.path.join(d,'..'),k)
+            shutil.rmtree(rmdir, ignore_errors=True)
+    # A proper clean will remove the contents of InstallArea
+    # directory
 
-	# -- Extracting the InstallArea directory (assuming all packages are
-	#    under the same main directory--repo dir
-	iadir=os.path.abspath(cmtdirs[0])
-	found = False
-	while (not found) and (len(iadir) != 0):
-		for root,dirs,files in os.walk(iadir):
-			if 'InstallArea' not in dirs:
-				iadir='/'.join(iadir.split('/')[:-1])
-			else:
-			    	iadir+='/InstallArea'
-				found=True
-			break
-	if iadir.find('InstallArea') == -1:
-		message = "\033[31mlazycmt.clean ERROR\033[m Problems finding the InstallArea"
-		message+= " directory"
-		raise RuntimeError(message)
-	# -- Assuming that the package name is in the path, just before cmt
-	pkgnames = map(lambda x: x.split('/')[-2], cmtdirs)
-	# --- I'm assuming we're cleaning all the repo if
-	if len(pkgnames) == len(filter(lambda x: x.find('InstallArea') == -1, \
-			glob.glob(iadir+'/../*'))):
-		shutil.rmtree(iadir,ignore_errors=True)
-		return
-	
-	# Removing the Install area related pkgs (if was not removed everything)
-	for pkg in pkgnames:
-		print "Removing InstallArea related files '%s'" % pkg
-		relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
-		relateddirs+=glob.glob(iadir+"/*/lib/lib"+pkg+"*")
-		for k in relateddirs:
-			shutil.rmtree(k,ignore_errors=True)
+    # -- Extracting the InstallArea directory (assuming all packages are
+    #    under the same main directory--repo dir
+    iadir=os.path.abspath(cmtdirs[0])
+    found = False
+    while (not found) and (len(iadir) != 0):
+        for root,dirs,files in os.walk(iadir):
+            if 'InstallArea' not in dirs:
+                iadir='/'.join(iadir.split('/')[:-1])
+            else:
+                iadir+='/InstallArea'
+                found=True
+            break
+    if iadir.find('InstallArea') == -1:
+        message = "\033[31mlazycmt.clean ERROR\033[m Problems finding the InstallArea"
+        message+= " directory"
+        raise RuntimeError(message)
+    # -- Assuming that the package name is in the path, just before cmt
+    pkgnames = map(lambda x: x.split('/')[-2], cmtdirs)
+    # --- I'm assuming we're cleaning all the repo if
+    if len(pkgnames) == len(filter(lambda x: x.find('InstallArea') == -1, \
+            glob.glob(iadir+'/../*'))):
+        shutil.rmtree(iadir,ignore_errors=True)
+        return
+
+    # Removing the Install area related pkgs (if was not removed everything)
+    for pkg in pkgnames:
+        print "Removing InstallArea related files '%s'" % pkg
+        relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
+        relateddirs+=glob.glob(iadir+"/*/lib/lib"+pkg+"*")
+        for k in relateddirs:
+            shutil.rmtree(k,ignore_errors=True)
 
 
 if __name__ == '__main__':
-	from optparse import OptionParser
-	import os
+    from optparse import OptionParser
+    import os
 
-	usage  = "usage: lazycmt.py <build|clean> [options]"
-	parser = OptionParser(usage=usage)
-	parser.add_option( "-p",action='store',dest='packages', metavar="PKG[,...]",\
-			help="just build|clean this package(s)")
-	parser.add_option( "-d",action='store_true',dest='debug', default=False,\
-			help="print full output from 'cmt'")
+    usage  = "usage: lazycmt.py <build|clean> [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option( "-p",action='store',dest='packages', metavar="PKG[,...]",\
+            help="just build|clean this package(s)")
+    parser.add_option( "-d",action='store_true',dest='debug', default=False,\
+            help="print full output from 'cmt'")
 
-	(opt,args) = parser.parse_args()
-	if len(args) != 1:
-		message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean"
-		raise RuntimeError(message)
-	else:
-		if args[0] != 'build' and args[0] != 'clean':
-			message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean."
-			message+= " (Introduced argument: '%s')" % args[0]
-			raise RuntimeError(message)
+    (opt,args) = parser.parse_args()
+    if len(args) != 1:
+        message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean"
+        raise RuntimeError(message)
+    else:
+        if args[0] != 'build' and args[0] != 'clean':
+            message = "\033[31mlazycmt ERROR\033[m Missing mandatory argument: build|clean."
+            message+= " (Introduced argument: '%s')" % args[0]
+            raise RuntimeError(message)
 
-	if opt.packages:
-		wd = opt.packages
-	else:
-		wd = os.getcwd()
-	# number of cpu's
-	import multiprocessing
-	ncpu=multiprocessing.cpu_count()
-	# do the job
-	if args[0] == 'build':
-		if opt.debug:
-			DEBUG=True
-		config(wd)
-		build(wd,ncpu)
-	elif args[0] == 'clean':
-		clean(wd,ncpu)
+    if opt.packages:
+        wd = opt.packages
+    else:
+        wd = os.getcwd()
+    # number of cpu's
+    import multiprocessing
+    ncpu=multiprocessing.cpu_count()
+    # do the job
+    if args[0] == 'build':
+        if opt.debug:
+            DEBUG=True
+        config(wd)
+        build(wd,ncpu)
+    elif args[0] == 'clean':
+        clean(wd,ncpu)
 
