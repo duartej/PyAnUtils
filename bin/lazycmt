@@ -206,7 +206,7 @@ def clean(wd,ncpu,forcedel=False):
                 found=True
             break
     if iadir.find('InstallArea') == -1:
-        message = "\033[31mlazycmt.clean ERROR\033[m Problems finding the InstallArea"
+        message = colored("lazycmt.clean ERROR","red")+" Problems finding the InstallArea"
         message+= " directory"
         raise RuntimeError(message)
     # -- Assuming that the package name is in the path, just before cmt
@@ -214,17 +214,24 @@ def clean(wd,ncpu,forcedel=False):
     # --- I'm assuming we're cleaning all the repo if
     if len(pkgnames) == len(filter(lambda x: x.find('InstallArea') == -1, \
             glob.glob(iadir+'/../*'))):
-        shutil.rmtree(iadir,ignore_errors=True)
+        if os.path.isfile(iadir):
+            os.remove(iadir)
+        else:
+            shutil.rmtree(iadir,ignore_errors=True)
         return
 
     # Removing the Install area related pkgs (if was not removed everything)
     for pkg in pkgnames:
-        print "Removing InstallArea related files '%s'" % pkg
+        print colored("Removing InstallArea","green")+" related files '%s'" % pkg
         relateddirs=glob.glob(iadir+"/*/*"+pkg+"*")
         relateddirs+=glob.glob(iadir+"/*/lib/lib"+pkg+"*")
         for k in relateddirs:
-            shutil.rmtree(k,ignore_errors=True)
-
+            if os.path.isfile(k):
+                os.remove(k)
+            elif os.path.islink(k):
+                os.unlink(k)
+            else:
+                shutil.rmtree(k,ignore_errors=True)
 
 if __name__ == '__main__':
     from optparse import OptionParser
