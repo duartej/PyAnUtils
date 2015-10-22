@@ -313,8 +313,9 @@ class xaodtree(storedtree):
         RPVMCInfoTree ATLAS package 
         """
         import ROOT
-        import PyCintex
-        PyCintex.Cintex.Enable()
+        import cppyy
+        #import PyCintex
+        #PyCintex.Cintex.Enable()
         # Not use this, just look cyypy, and the other stuff..
         from AthenaROOTAccess import transientTree
 
