@@ -323,7 +323,7 @@ class xaodtree(storedtree):
 
         # re-do the tree, to associate properly auxliar data and so on
         # FIXME:: VERY PROVISIONAL FIXME::
-        self._file = ROOT.TFile(rootfiles)
+        self._file = ROOT.TFile.Open(rootfiles)
         del self._tree
         self._tree = transientTree.makeTree(self._file)
 
