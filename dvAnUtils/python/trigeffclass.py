@@ -789,10 +789,13 @@ class storedeff(object):
                 sorted(variables.iteritems(),key=lambda (name,(var,_type)): _type,reverse=True))
 
         # Set only the variables to read from the old tree
+        # XXX IMPORTANT: any variable needed to be accessed should be activated here!
         self.tree.SetBranchStatus("*",0)
         dum=map(lambda bname: self.tree.SetBranchStatus(bname,1),branches)
         dum=map(lambda bname: self.tree.SetBranchStatus(bname,1),\
                 set(map(lambda x: x.split('_')[0], dvbranches)))
+        # and some auxiliar variables
+        self.tree.SetBranchStatus('jetroimatched',1)
     
         # Prepare the DV-related quantities
         dvbranchespost = []
@@ -842,13 +845,14 @@ class storedeff(object):
                 # Also getting here the cuts for signal,
                 # when dealing with a signal sample
                 # If is not a DV samples it only can be bkg
-                isSignal[0] = 0
-                if dvsample:
-                    phiroi = iEvent.jetroi_phi[k]
-                    etaroi = iEvent.jetroi_eta[k]
-                    dR0 = sqrt((phiroi-iEvent.phi[0])**2.+(etaroi-iEvent.eta[0])**2.) < RCUT
-                    dR1 = sqrt((phiroi-iEvent.phi[1])**2.+(etaroi-iEvent.eta[1])**2.) < RCUT
-                    isSignal[0] = (dR0 or dR1)
+                isSignal[0] = (iEvent.jetroimatched[k] != -1)
+                #isSignal[0] = 0
+                #if dvsample:
+                #    phiroi = iEvent.jetroi_phi[k]
+                #    etaroi = iEvent.jetroi_eta[k]
+                #    dR0 = sqrt((phiroi-iEvent.phi[0])**2.+(etaroi-iEvent.eta[0])**2.) < RCUT
+                #    dR1 = sqrt((phiroi-iEvent.phi[1])**2.+(etaroi-iEvent.eta[1])**2.) < RCUT
+                #    isSignal[0] = (dR0 or dR1)
     
                 for bname in branches:
                     variables[bname][0][0] = getattr(iEvent,bname)[k]
