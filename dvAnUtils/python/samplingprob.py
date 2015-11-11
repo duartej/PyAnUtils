@@ -220,7 +220,7 @@ class ObservableSamplingProb(object):
         """
         # from PyAnUtils.dvAnUtils.pdfmodels import\
         #        negative_binomial_pdf,negative_binomial_sum_pdf
-        from pdfmodels import negative_binomial_pdf,negative_binomial_sum_pdf
+        from pdfmodels import * #negative_binomial_pdf,negative_binomial_sum_pdf
         try:
             model = eval(modelpdfname)
         except NameError:
