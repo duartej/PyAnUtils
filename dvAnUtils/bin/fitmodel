@@ -9,12 +9,12 @@
     .. scriptauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
-TENTATIVEPDF = { 'ntracks': {'bkg':'negative_binomial_pdf', 
-                               'sig': 'negative_binomial_sum_pdf'}
-                               }
-TENTATIVEPDF['ntracksd0uppercut'] = TENTATIVEPDF['ntracksd0lowercut'] = TENTATIVEPDF['ntracks']
+#TENTATIVEPDF = { 'ntracks': {'bkg':'negative_binomial_pdf_conditional', 
+#                               'sig': 'negative_binomial_sum_pdf_conditional'}
+#                               }
+#TENTATIVEPDF['ntracksd0uppercut'] = TENTATIVEPDF['ntracksd0lowercut'] = TENTATIVEPDF['ntracks']
 
-def main(inputfile,obs):
+def main(inputfile,obs,pdfdict):
     """Steering function. Performs a initial tentative fit of the data
     using a predefined pdf models. The output is stored in a ROOT file
     as a ROOT.Workspace.
@@ -39,7 +39,7 @@ def main(inputfile,obs):
         has_signal_content = True
     
     # Setting up the sampling probability model(s)
-    sd.setupmodel('bkg',TENTATIVEPDF[obs]['bkg'])
+    sd.setupmodel('bkg',pdfdict['bkg'])
     
     # Getting the data to be used to fit
     databkg = databkgdict['dvbkg_'+obs]
@@ -52,7 +52,7 @@ def main(inputfile,obs):
     
     # Same for the signal content if any
     if has_signal_content:
-        sd.setupmodel('sig',TENTATIVEPDF[obs]['sig'])
+        sd.setupmodel('sig',pdfdict['sig'])
         datasig = datasigdict['dvsig_'+obs]
         sd.fitTo(datasig,'sig')
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
@@ -78,9 +78,14 @@ if __name__ == '__main__':
     usage +=" start to work with."
 
     parser = OptionParser(usage=usage)
-    parser.set_defaults(obs='ntracks')
+    parser.set_defaults(obs='ntracks',models=None)
     parser.add_option( "-o","--observable",action='store',dest='obs',\
             help="Name of the observable [ntracks]")
+    parser.add_option( "-m","--models",action='store',dest='models',\
+            metavar="COMPONENT1:MODEL1[,COMPONENT2:MODEL2,...]",
+            help="Name of the model(s) to be used (must exits at dVAnUtils.pdfmodels)"\
+                    " [bkg:negative_binomial_pdf_conditional,"\
+                    "sig:negative_binomial_pdf_sum_conditional]")
 
     (opt,args) = parser.parse_args()
     if len(args) != 1:
@@ -90,5 +95,18 @@ if __name__ == '__main__':
     # Check the root file
     if not os.path.isfile(args[0]):
         raise IOError("ROOT file '%s' not found" % args[0])
-    main(args[0],opt.obs)
+    # Parse the model option
+    comp_model_dict = { 'bkg': 'negative_binomial_pdf_conditional',
+            'sig':'negative_binomial_pdf_sum_conditional' }
+    if opt.models:
+        for compmodel in opt.models.split(","):
+            try: 
+                component,model = compmodel.split(":")
+            except ValueError:
+                message = "\033[31mfitmodel ERROR\033[m Invalid format for the option"\
+                        " '-m','--models'. Please see help"
+                raise RuntimeError(message)
+            comp_model_dict[component]=model
+
+    main(args[0],opt.obs,comp_model_dict)
     
