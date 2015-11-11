@@ -9,10 +9,42 @@
     .. scriptauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
-#TENTATIVEPDF = { 'ntracks': {'bkg':'negative_binomial_pdf_conditional', 
-#                               'sig': 'negative_binomial_sum_pdf_conditional'}
-#                               }
-#TENTATIVEPDF['ntracksd0uppercut'] = TENTATIVEPDF['ntracksd0lowercut'] = TENTATIVEPDF['ntracks']
+def preFit(data,obs,premodel,nVars=2):
+    """ Perform a pre-fit using the simple negative binomial (just 2 parameters
+    to fit per binomial, (P, K). In this way, the value of the probability is
+    used it as the initial value of the probability of the conditional one:
+     
+    P <= p <= 1 (using the relation P=p*eff/(1-p*(1-eff)) )
+    """
+    from dvAnUtils.samplingprob import ObservableSamplingProb
+    print 
+    print "\033[1;34mfitmodel.preFit [INFO]\033[m Performing a pre-fit for the "\
+            "'{0}_conditional' function".format(premodel)
+    print
+    
+    sd = ObservableSamplingProb(obs)
+    sd.setupmodel('preFit',premodel)
+    sd.fitTo(data,'preFit')
+
+    if nVars == 2: 
+        # return the relevant observables
+        _p = sd.get_variable_from_model('preFit','p').getVal()
+        _k = sd.get_variable_from_model('preFit','k').getVal()
+        del sd
+        return _p,_k
+    elif nVars == 4:
+        _p1 = sd.get_variable_from_model('preFit','p_1').getVal()
+        _k1 = sd.get_variable_from_model('preFit','k_1').getVal()
+        _p2 = sd.get_variable_from_model('preFit','p_2').getVal()
+        _k2 = sd.get_variable_from_model('preFit','k_2').getVal()
+        del sd
+        return _p1,_k1,_p2,_k2
+    else:
+        message = "\033[31mfitmodel.preFit ERROR\033[m Invalid number of parameters."
+        message=+ " Accepted values 2 [nbd] or 4 [nbd_sum]"
+        del sd
+        raise RuntimeError(message)
+
 
 def main(inputfile,obs,pdfdict):
     """Steering function. Performs a initial tentative fit of the data
@@ -37,12 +69,21 @@ def main(inputfile,obs,pdfdict):
     has_signal_content = False
     if len(datasigdict) != 0:
         has_signal_content = True
-    
+
     # Setting up the sampling probability model(s)
     sd.setupmodel('bkg',pdfdict['bkg'])
     
     # Getting the data to be used to fit
     databkg = databkgdict['dvbkg_'+obs]
+    
+    # In case conditional probability, perform a pre-fit to obtain a
+    # good initial value for p and k
+    if pdfdict['bkg'].find('conditional') != -1:
+            prefitmodelname = pdfdict['bkg'].replace('_conditional','')
+            _pval,_kval = preFit(databkg,obsdict[obs],prefitmodelname,2)
+            sd.get_variable_from_model('bkg','p').setMin(_pval)
+            sd.get_variable_from_model('bkg','k').setVal(_kval)
+    
     # Perform the fit
     sd.fitTo(databkg,'bkg')
     
@@ -53,6 +94,13 @@ def main(inputfile,obs,pdfdict):
     # Same for the signal content if any
     if has_signal_content:
         sd.setupmodel('sig',pdfdict['sig'])
+        if pdfdict['sig'].find('conditional') != -1:
+            prefitmodelname = pdfdict['sig'].replace('_conditional','')
+            _pval1,_kval1,_pval2,_kval2 = preFit(databkg,obsdict[obs],prefitmodelname,4)
+            sd.get_variable_from_model('bkg','p1').setMin(_pval1)
+            sd.get_variable_from_model('bkg','k1').setVal(_kval1)
+            sd.get_variable_from_model('bkg','p2').setMin(_pval2)
+            sd.get_variable_from_model('bkg','k2').setVal(_kval2)
         datasig = datasigdict['dvsig_'+obs]
         sd.fitTo(datasig,'sig')
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
@@ -85,7 +133,7 @@ if __name__ == '__main__':
             metavar="COMPONENT1:MODEL1[,COMPONENT2:MODEL2,...]",
             help="Name of the model(s) to be used (must exits at dVAnUtils.pdfmodels)"\
                     " [bkg:negative_binomial_pdf_conditional,"\
-                    "sig:negative_binomial_pdf_sum_conditional]")
+                    "sig:negative_binomial_sum_pdf_conditional]")
 
     (opt,args) = parser.parse_args()
     if len(args) != 1:
@@ -97,7 +145,7 @@ if __name__ == '__main__':
         raise IOError("ROOT file '%s' not found" % args[0])
     # Parse the model option
     comp_model_dict = { 'bkg': 'negative_binomial_pdf_conditional',
-            'sig':'negative_binomial_pdf_sum_conditional' }
+            'sig':'negative_binomial_sum_pdf_conditional' }
     if opt.models:
         for compmodel in opt.models.split(","):
             try: 
