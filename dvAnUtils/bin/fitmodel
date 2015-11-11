@@ -97,10 +97,10 @@ def main(inputfile,obs,pdfdict):
         if pdfdict['sig'].find('conditional') != -1:
             prefitmodelname = pdfdict['sig'].replace('_conditional','')
             _pval1,_kval1,_pval2,_kval2 = preFit(databkg,obsdict[obs],prefitmodelname,4)
-            sd.get_variable_from_model('bkg','p_1').setMin(_pval1)
-            sd.get_variable_from_model('bkg','k_1').setVal(_kval1)
-            sd.get_variable_from_model('bkg','p_2').setMin(_pval2)
-            sd.get_variable_from_model('bkg','k_2').setVal(_kval2)
+            sd.get_variable_from_model('sig','p_1').setMin(_pval1)
+            sd.get_variable_from_model('sig','k_1').setVal(_kval1)
+            sd.get_variable_from_model('sig','p_2').setMin(_pval2)
+            sd.get_variable_from_model('sig','k_2').setVal(_kval2)
         datasig = datasigdict['dvsig_'+obs]
         sd.fitTo(datasig,'sig')
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
