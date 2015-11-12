@@ -95,14 +95,14 @@ class ObservableSamplingProb(object):
         """
         """
         ms = 'ObservableSamplingProb instance at %s\n' % hex(id(self))
-        ms +=' +-- Associated observable\n'
-        ms += ' +---- %s\n' % self.__observable
-        ms += '+-- Models\n'
+        ms +=' |\n'
+        ms +='  \-- Associated observable: {0:s}\n'.format(self.__observable)
+        ms +=' |\n'
+        ms +='  \-- Models:\n'
         typeandtitle = map(lambda (y,x): (y,x[0].GetName(),x[0].getTitle()),
                 self.__models.iteritems())
         for (_t,_i,_h) in typeandtitle:
-            ms += " +---- [%s]: %s,%s\n" % (_t,_i,_h)
-        ms += '\n'
+            ms += "  |----- [{0}]: {1},{2}\n".format(_t,_i,_h)
         return ms
 
     def update(self,wsname,fname,storelist=[]):
@@ -344,16 +344,28 @@ class ObservableSamplingProb(object):
         return self.__getattribute__(self.__observable)
 
     def get_variable_from_model(self,modeltype,obsname):
-        """TO BE DCOUMENTED FIXME
+        """Gets a copy of the RooRealVar object present in a model.
+        This method just calls to the `get_variable_from_model` 
+        function
+
+        Parameters
+        ----------
+        modeltype: str
+            The type of the model 
+        obsname: str
+            The name of the variable
+
+        Returns
+        -------
+        currentvar: ROOT.RooRealVar
+            A copy of the variable object, if doesn't exist
+            then 'None' is returned
+
+        See Also
+        --------
+        get_variable_from_model: the function where is performed the work
         """
-        model = self.getmodel(modeltype)
-        variables = model.getVariables()
-        itvar = variables.iterator()
-        for i in xrange(len(variables)):
-            currentvar = itvar.Next()
-            if currentvar.GetName() == obsname:
-                return currentvar
-        return None
+        return get_variable_from_model(self.getmodel(modeltype),obsname)
 
 
     def getobservablename(self):
@@ -415,6 +427,52 @@ class DataObsSet(object):
 ####################################
 ## --- Some useful functions  --- ##
 ####################################
+
+def get_variable_from_model(model,varname):
+    """Gets a copy of the RooRealVar object present in a model
+
+    Parameters
+    ----------
+    model: ROOT.RooAbsPdf
+        The model object where the variable lives in.
+    varname: str
+        The name of the variable
+
+    Returns
+    -------
+    currentvar: ROOT.RooRealVar
+        A copy of the variable object, if doesn't exist
+        then 'None' is returned
+    """
+    variables = model.getVariables()
+    itvar = variables.iterator()
+    for i in xrange(len(variables)):
+        currentvar = itvar.Next()
+        if currentvar.GetName() == varname:
+            return currentvar
+    return None
+
+def parameter_names_from_model(model):
+    """Gets a list of the parameters presents in a model
+
+    Parameters
+    ----------
+    model: ROOT.RooAbsPdf
+        The model object where the variable lives in.
+
+    Returns
+    -------
+    variables: list(str)
+        A list of the names of the parameters presents in the
+        model
+    """
+    variables = model.getVariables()
+    itvar = variables.iterator()
+    names = []
+    for i in xrange(len(variables)):
+        currentvar = itvar.Next()
+        names.append(currentvar.GetName())
+    return names
 
 def readfile(filename):
     """Get the ROOT.RooFit objects inside a ROOT file
