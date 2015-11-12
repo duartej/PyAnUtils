@@ -9,41 +9,75 @@
     .. scriptauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
-def preFit(data,obs,premodel,nVars=2):
+def preFit(data,obs,modelname,modeltype,ops_instance):
     """ Perform a pre-fit using the simple negative binomial (just 2 parameters
     to fit per binomial, (P, K). In this way, the value of the probability is
     used it as the initial value of the probability of the conditional one:
      
     P <= p <= 1 (using the relation P=p*eff/(1-p*(1-eff)) )
+    
+    Parameters
+    ----------
+    data: ROOT.RooData
+        The data
+    obs: str
+        The name of the observable
+    modelname: str
+        The name of the model (as in the `pdfmodels` module)
+    modeltype: str
+        The type of the model inside the ops_instance
+    ops_instance:
+        The ObservableSamplingProb instance object used to change the value of the
+        initial parameters
     """
-    from dvAnUtils.samplingprob import ObservableSamplingProb
+    from dvAnUtils.samplingprob import ObservableSamplingProb,parameter_names_from_model
     print 
     print "\033[1;34mfitmodel.preFit [INFO]\033[m Performing a pre-fit for the "\
-            "'{0}_conditional' function".format(premodel)
+            "'{0}' function".format(modelname)
     print
     
+    # pre-processing: the available observable, the model, the parameters for the model
+    premodel = modelname.replace('_conditional','')
+    model    = ops_instance.getmodel(modeltype)
+    parameters = filter(lambda x: x != obs.GetName() and x.find('eff') == -1, 
+            parameter_names_from_model(model))
+
+    # Processing the non-conditional model
     sd = ObservableSamplingProb(obs)
     sd.setupmodel('preFit',premodel)
     sd.fitTo(data,'preFit')
-
-    if nVars == 2: 
-        # return the relevant observables
-        _p = sd.get_variable_from_model('preFit','p').getVal()
-        _k = sd.get_variable_from_model('preFit','k').getVal()
-        del sd
-        return _p,_k
-    elif nVars == 4:
-        _p1 = sd.get_variable_from_model('preFit','p_1').getVal()
-        _k1 = sd.get_variable_from_model('preFit','k_1').getVal()
-        _p2 = sd.get_variable_from_model('preFit','p_2').getVal()
-        _k2 = sd.get_variable_from_model('preFit','k_2').getVal()
-        del sd
-        return _p1,_k1,_p2,_k2
-    else:
-        message = "\033[31mfitmodel.preFit ERROR\033[m Invalid number of parameters."
-        message=+ " Accepted values 2 [nbd] or 4 [nbd_sum]"
-        del sd
-        raise RuntimeError(message)
+    
+    print 
+    print "\033[1;34mfitmodel.preFit [INFO]\033[m Changing initial guessing of "\
+            "the parameters according to the previous fit"
+    print
+    
+    # set the new points
+    for par_name in parameters:
+        par_new_value = sd.get_variable_from_model('preFit',par_name).getVal()
+        # change the initial point
+        ops_instance.get_variable_from_model(modeltype,par_name).setVal(par_new_value)
+        # extra: using the constrain between efficiency and probability of success
+        if par_name.find('p') != -1:
+            ops_instance.get_variable_from_model(modeltype,par_name).setMin(par_new_value)
+    #if nVars == 2: 
+    #    # return the relevant observables
+    #    _p = sd.get_variable_from_model('preFit','p').getVal()
+    #    _k = sd.get_variable_from_model('preFit','k').getVal()
+    #    del sd
+    #    return _p,_k
+    #elif nVars == 4:
+    #    _p1 = sd.get_variable_from_model('preFit','p_1').getVal()
+    #    _k1 = sd.get_variable_from_model('preFit','k_1').getVal()
+    #    _p2 = sd.get_variable_from_model('preFit','p_2').getVal()
+    #    _k2 = sd.get_variable_from_model('preFit','k_2').getVal()
+    #    del sd
+    #    return _p1,_k1,_p2,_k2
+    #else:
+    #    message = "\033[31mfitmodel.preFit ERROR\033[m Invalid number of parameters."
+    #    message=+ " Accepted values 2 [nbd] or 4 [nbd_sum]"
+    #    del sd
+    #    raise RuntimeError(message)
 
 
 def main(inputfile,obs,pdfdict):
@@ -79,10 +113,11 @@ def main(inputfile,obs,pdfdict):
     # In case conditional probability, perform a pre-fit to obtain a
     # good initial value for p and k
     if pdfdict['bkg'].find('conditional') != -1:
-            prefitmodelname = pdfdict['bkg'].replace('_conditional','')
-            _pval,_kval = preFit(databkg,obsdict[obs],prefitmodelname,2)
-            sd.get_variable_from_model('bkg','p').setMin(_pval)
-            sd.get_variable_from_model('bkg','k').setVal(_kval)
+        preFit(databkg,obsdict[obs],pdfdict['bkg'],'bkg',sd)
+        #prefitmodelname = pdfdict['bkg'].replace('_conditional','')
+        #_pval,_kval = preFit(databkg,obsdict[obs],prefitmodelname,2)
+        #sd.get_variable_from_model('bkg','p').setMin(_pval)
+        #sd.get_variable_from_model('bkg','k').setVal(_kval)
     
     # Perform the fit
     sd.fitTo(databkg,'bkg')
@@ -94,14 +129,15 @@ def main(inputfile,obs,pdfdict):
     # Same for the signal content if any
     if has_signal_content:
         sd.setupmodel('sig',pdfdict['sig'])
-        if pdfdict['sig'].find('conditional') != -1:
-            prefitmodelname = pdfdict['sig'].replace('_conditional','')
-            _pval1,_kval1,_pval2,_kval2 = preFit(databkg,obsdict[obs],prefitmodelname,4)
-            sd.get_variable_from_model('sig','p_1').setMin(_pval1)
-            sd.get_variable_from_model('sig','k_1').setVal(_kval1)
-            sd.get_variable_from_model('sig','p_2').setMin(_pval2)
-            sd.get_variable_from_model('sig','k_2').setVal(_kval2)
         datasig = datasigdict['dvsig_'+obs]
+        if pdfdict['sig'].find('conditional') != -1:
+            preFit(datasig,obsdict[obs],pdfdict['sig'],'sig',sd)
+            #prefitmodelname = pdfdict['sig'].replace('_conditional','')
+            #_pval1,_kval1,_pval2,_kval2 = preFit(databkg,obsdict[obs],prefitmodelname,4)
+            #sd.get_variable_from_model('sig','p_1').setMin(_pval1)
+            #sd.get_variable_from_model('sig','k_1').setVal(_kval1)
+            #sd.get_variable_from_model('sig','p_2').setMin(_pval2)
+            #sd.get_variable_from_model('sig','k_2').setVal(_kval2)
         sd.fitTo(datasig,'sig')
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
 
