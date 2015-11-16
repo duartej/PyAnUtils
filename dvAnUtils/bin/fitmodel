@@ -9,6 +9,39 @@
     .. scriptauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
+# INITIAL VALUES FOR PARAMETERS TYPE:
+INIT_VALUES = { 'ptype' : 0.8, 'qtype': 0.2, 'efftype': 0.7, 'ktype' : 3 }
+
+def set_initial_value(parameter_name,parameter,val_min=None,val_max=None):
+    """Set the initial point to the parameter before starts the minimization
+
+    Parameters
+    ----------
+    parameter_name: str
+        The name of the parameter
+    parameter: ROOT.RooAbsReal
+        The actual parameter        
+    val_min,val_max: float|int, optional
+        The minimum and maximum allowed values for the paramater
+    """
+    # Guess from the name the type of the parameter
+    if parameter_name.find('eff') == 0:
+        point_type = 'efftype'
+    elif parameter_name.find('p') == 0:
+        point_type = 'ptype'
+    elif parameter_name.find('k') == 0:
+        point_type = 'ktype'
+    else:
+        # not recognized, don't do anything
+        return
+
+    parameter.setVal(INIT_VALUES[point_type])
+    if val_min:
+        parameter.setMin(val_min)
+    if val_max:
+        parameter.setMax(val_max)
+
+
 def preFit(data,obs,modelname,modeltype,ops_instance):
     """ Perform a pre-fit using the simple negative binomial (just 2 parameters
     to fit per binomial, (P, K). In this way, the value of the probability is
@@ -18,7 +51,7 @@ def preFit(data,obs,modelname,modeltype,ops_instance):
     
     Parameters
     ----------
-    data: ROOT.RooData
+    data: ROOT.RooDataSet|ROOT.RooDatHist
         The data
     obs: str
         The name of the observable
@@ -61,7 +94,6 @@ def preFit(data,obs,modelname,modeltype,ops_instance):
         if par_name.find('p') != -1:
             ops_instance.get_variable_from_model(modeltype,par_name).setMin(par_new_value)
 
-
 def main(inputfile,obs,pdfdict,do_prefit=False):
     """Steering function. Performs a initial tentative fit of the data
     using a predefined pdf models. The output is stored in a ROOT file
@@ -75,7 +107,7 @@ def main(inputfile,obs,pdfdict,do_prefit=False):
     obs: str
         The name of the observable
     """
-    from dvAnUtils.samplingprob import readfile,ObservableSamplingProb
+    from dvAnUtils.samplingprob import readfile,ObservableSamplingProb,parameter_names_from_model
     # Obtaining the info from the root file
     f,obsdict,modeldict,databkgdict,datasigdict = readfile(inputfile)
     if not obsdict.has_key(obs):
@@ -92,10 +124,13 @@ def main(inputfile,obs,pdfdict,do_prefit=False):
     # Getting the data to be used to fit
     databkg = databkgdict['dvbkg_'+obs]
     
-    # In case conditional probability, perform a pre-fit to obtain a
-    # good initial value for p and k
-    if do_prefit and pdfdict['bkg'].find('conditional') != -1:
+    if do_prefit:
+        # Perform a pre-fit to obtain a good initial value for p and k
         preFit(databkg,obsdict[obs],pdfdict['bkg'],'bkg',sd)
+    else:
+        # Otherwise, set the initial values
+        for _parname in parameter_names_from_model(sd.getmodel('bkg')):
+            set_initial_value(_parname,sd.get_variable_from_model('bkg',_parname))
     
     # Perform the fit
     sd.fitTo(databkg,'bkg')
@@ -108,8 +143,13 @@ def main(inputfile,obs,pdfdict,do_prefit=False):
     if has_signal_content:
         sd.setupmodel('sig',pdfdict['sig'])
         datasig = datasigdict['dvsig_'+obs]
-        if do_prefit and pdfdict['sig'].find('conditional') != -1:
+        if do_prefit:
+        # Perform a pre-fit to obtain a good initial value for p and k
             preFit(datasig,obsdict[obs],pdfdict['sig'],'sig',sd)
+        else:
+            # Otherwise, set the initial values
+            for _parname in parameter_names_from_model(sd.getmodel('sig')):
+                set_initial_value(_parname,sd.get_variable_from_model('sig',_parname))
         sd.fitTo(datasig,'sig')
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
 
