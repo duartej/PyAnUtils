@@ -66,7 +66,7 @@ def createdata(obsdetails,outfile,tree):
           be imported
     """
     from ROOT import TFile
-    from ROOT import RooDataSet,RooRealVar, RooCategory, RooArgSet
+    from ROOT import RooDataSet,RooDataHist,RooRealVar, RooCategory, RooArgSet
     from ROOT.RooFit import Import
 
     # Open root file 
@@ -87,6 +87,7 @@ def createdata(obsdetails,outfile,tree):
     obstitle= obsdetails[1]
     obsmin  = obsdetails[2]
     obsmax  = obsdetails[3]
+    obsbins = obsdetails[4]
     # -- Check if no signal and the observable is signal-only
     if not istheresignal and obsname in ['phi_0','phi_1','eta_0','eta_1']:
         # do nothing 
@@ -95,7 +96,7 @@ def createdata(obsdetails,outfile,tree):
     # -- Check if the observable is in the tree
     if obsname not in map(lambda x: x.GetName(),tree.GetListOfBranches()):
         raise RuntimeError("Observable '%s' did not find it in the tree" % obsname)
-
+    
     observable = RooRealVar(obsname,obstitle,obsmin,obsmax)
     isSignal= RooCategory("isSignal","is RoI-signal?")
     isSignal.defineType("RoI_signal")
@@ -104,13 +105,34 @@ def createdata(obsdetails,outfile,tree):
     # ==========================
     # DATASETS
     # --------
-    dvrois  = RooDataSet("dvrois_"+obsname,"dvrois "+obsname, 
+    dvrois_ds  = RooDataSet("dvrois_"+obsname,"dvrois "+obsname, 
             RooArgSet(observable,isSignal),Import(tree))
     # Construct bkg and signal datasets 
-    dvbkg  = dvrois.reduce("isSignal == 0")
-    dvbkg.SetName('dvbkg_'+obsname)
-    dvsign = dvrois.reduce("isSignal == 1")
-    dvsign.SetName("dvsig_"+obsname)
+    dvbkg_ds  = dvrois_ds.reduce("isSignal == 0")
+    dvbkg_ds.SetName('dvbkg_'+obsname)
+    dvsign_ds = dvrois_ds.reduce("isSignal == 1")
+    dvsign_ds.SetName("dvsig_"+obsname)
+
+    if obsbins:
+        # Binning the RooDatasets
+        observable.setBins(obsbins)
+        auxsuffix='_tobedumped'
+        dvrois_ds.SetName(dvrois_ds.GetName()+auxsuffix)
+        dvrois = RooDataHist(dvrois_ds.GetName().replace(auxsuffix,''),
+                dvrois_ds.GetTitle(),
+                RooArgSet(observable,isSignal),dvrois_ds)
+        dvsign_ds.SetName(dvsign_ds.GetName()+auxsuffix)
+        dvsign = RooDataHist(dvsign_ds.GetName().replace(auxsuffix,''),
+                dvsign_ds.GetTitle(),
+                RooArgSet(observable,isSignal),dvsign_ds)
+        dvbkg_ds.SetName(dvbkg_ds.GetName()+auxsuffix)
+        dvbkg = RooDataHist(dvbkg_ds.GetName().replace(auxsuffix,'')
+                ,dvbkg_ds.GetTitle(),
+                RooArgSet(observable,isSignal),dvbkg_ds)
+    else:
+        dvrois = dvrois_ds
+        dvsign = dvsign_ds
+        dvbkg  = dvbkg_ds
 
     # ===========================
     # Persistency
@@ -180,18 +202,21 @@ def main(args,outfiles):
           as the `args`. 
     """
     import os
-
-    obsdetails = [ ("ntracks","N_{t} per RoI",1,100),
-            ("ntracksd0uppercut","RoI #eta",1,30),  # FIXME!!! --> From 0 on
-            ("ntracksd0lowercut","RoI #eta",1,80),  # FIXME!!! --> From 0 on
-            ("sumpttracksd0uppercut","RoI #eta",0,100e6),
-            ("sumpttracksd0lowercut","RoI #eta",0,100e6),
-            ("phi_0","LSP_{0} #phi",-3.15,3.15),
-            ("eta_0","LSP_{0} #eta",-6.5,6.5),
-            ("phi_1","LSP_{1} #phi",-3.15,3.15),
-            ("eta_1","LSP_{1} #eta",-6.5,6.5),
-            ("jetroi_phi","RoI #phi",-3.15,3.15),
-            ("jetroi_eta","RoI #eta",-6.5,6.5)
+    
+    # (varname,title,minval,maxval,Bins|None)
+    # if the Bins!= None, it is implies the the data will be 
+    # built with the RooDataHist, using Bins
+    obsdetails = [ ("ntracks","N_{t} per RoI",1,100,100),
+            ("ntracksd0uppercut","RoI #eta",1,30,30),  # FIXME!!! --> From 0 on
+            ("ntracksd0lowercut","RoI #eta",1,80,80),  # FIXME!!! --> From 0 on
+            ("sumpttracksd0uppercut","RoI #eta",0,100e6,None),
+            ("sumpttracksd0lowercut","RoI #eta",0,100e6,None),
+            ("phi_0","LSP_{0} #phi",-3.15,3.15,None),
+            ("eta_0","LSP_{0} #eta",-6.5,6.5,None),
+            ("phi_1","LSP_{1} #phi",-3.15,3.15,None),
+            ("eta_1","LSP_{1} #eta",-6.5,6.5,None),
+            ("jetroi_phi","RoI #phi",-3.15,3.15,None),
+            ("jetroi_eta","RoI #eta",-6.5,6.5,None)
             ]
 
 

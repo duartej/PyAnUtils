@@ -251,10 +251,21 @@ class ObservableSamplingProb(object):
             The dict with the parameters used in the pdf model (including
             the observable) being the keys the name of those parameters
         """
+        import multiprocessing
+        from ROOT import RooFit,RooAbsReal
+        
+        nCPUs = multiprocessing.cpu_count()
+
         # Just picking the first one
         if not modeltype:
             modeltype = self.__models.keys()[0]
-        self.__models[modeltype][0].fitTo(data)
+        
+        # Integration: set default to MC integrator
+        #RooAbsReal.defaultIntegratorConfig().method1D().setLabel('RooMCIntegrator')
+        
+        #self.__models[modeltype][0].createCdf(RooArgSet(self.getobservable()))
+
+        self.__models[modeltype][0].fitTo(data,RooFit.NumCPU(nCPUs))
         containervar = self.__models[modeltype][0].getVariables()
         vardict = {}
         it = containervar.createIterator()
@@ -505,6 +516,8 @@ def readfile(filename):
     # Retrieve all the stuff
     obsdict   = builddict('RooRealVar')
     data      = builddict('RooDataSet')
+    datahists = builddict('RooDataHist')
+    data.update(datahists)
     modeldict = builddict('RooRealPdf')
 
     databkgdict = dict(filter(lambda (x,y): x.find('dvbkg') == 0, data.iteritems()))
