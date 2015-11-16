@@ -270,7 +270,8 @@ if __name__ == '__main__':
                     " files must be introduced")
         outfiles = opt.outfiles.split(',')
     else:
-        outfiles = map(lambda x: x.replace('.root','_sd_processed.root'),
+        import os
+        outfiles = map(lambda x: os.path.basename(x.replace('.root','_sd_processed.root')),
                 args[0].split(','))
 
     main(args,outfiles)
