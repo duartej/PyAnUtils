@@ -471,6 +471,45 @@ class DataObsSet(object):
 ## --- Some useful functions  --- ##
 ####################################
 
+def array_converter(roodataobject,obs_name):
+    """Converts the RooAbsReal object (RooDataSet|RooDataHist|RooAbsPdf)
+    into an (numpy, if available) array
+
+    FIXME:: 1D case only!!??
+
+    Parameters
+    ----------
+    roodataobject: ROOT.RooDataSet|ROOT.RooDataHist|ROOT.RooAbsPdf
+        The RooAbsVar object to be converted
+    obs_name: str
+        The name of the observable to create the histogram against for
+
+    Returns
+    -------
+    harray: numpy.array|array.array
+        The array containing the elements in each bin of the histogram
+    """
+    try:
+        from numpy import array
+    except ImportError:
+        from array import array as array
+
+    # Create the histogram with respect the observable
+    histo = roodataobject.createHistogram(obs_name)
+    # Normalize
+    histo.Scale(1.0/histo.Integral())
+    _provlist = []
+    for i in xrange(1,histo.GetNbinsX()+1):
+        _provlist.append(histo.GetBinContent(i))
+
+    # the output array
+    try:
+        harray = array([ x for x in _provlist ],dtype='d')
+    except TypeError:
+        harray = array('d',[ x for x in _provlist ])
+    return harray
+
+
 def get_variable_from_model(model,varname):
     """Gets a copy of the RooRealVar object present in a model
 
