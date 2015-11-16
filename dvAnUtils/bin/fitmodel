@@ -165,42 +165,42 @@ def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
     sd.update('w',nfile,containertoupdate)
     
 if __name__ == '__main__':
-    from optparse import OptionParser
+    from argparse import ArgumentParser
     import os
     
-    usage = "fitmodels.py ROOTFILE [options]"
-    usage +="\n\nQuick fitting of a pdf [hardcoded] model  for an observable.\n"
-    usage +="First approximation which can be used to setup the workspace\nto"
+    usage  ="Quick fitting of a pdf [hardcoded] model  for an observable."
+    usage +="First approximation which can be used to setup the workspace to"
     usage +=" start to work with."
 
-    parser = OptionParser(usage=usage)
+    parser = ArgumentParser(prog='fitmodel',description=usage)#,allow_abbrev=False)
+    parser.add_argument('rootfilename',type=str,action='store',\
+            metavar='ROOTFILE',
+            help="ROOT file containing the RooDataSet"\
+            " or RooDataHist data (previously processed by roibasisconverter)")
     parser.set_defaults(obs='ntracks',models=None,do_prefit=False,suffix='pdf')
-    parser.add_option( "-o","--observable",action='store',dest='obs',\
+    parser.add_argument( "-o","--observable",action='store',dest='obs',\
             help="Name of the observable [ntracks]")
-    parser.add_option( "-p","--pre-fit",action='store_true',dest='do_prefit',\
+    parser.add_argument( "-p","--pre-fit",action='store_true',dest='do_prefit',\
             help="Whether or not perform a pre-fit of the binomials using"\
             " the the minimum amount of nuisance parameters, i.e. 'p' and 'k'" )
-    parser.add_option( "-m","--models",action='store',dest='models',\
+    parser.add_argument( "-m","--models",action='store',dest='models',\
             metavar="COMPONENT1:MODEL1[,COMPONENT2:MODEL2,...]",
             help="Name of the model(s) to be used (must exits at dVAnUtils.pdfmodels)"\
                     " [bkg:negative_binomial_pdf_conditional,"\
                     "sig:negative_binomial_sum_pdf_conditional]")
-    parser.add_option( "-s","--suffix-plot",action='store',dest='suffix',\
+    parser.add_argument( "-s","--suffix-plot",action='store',dest='suffix',\
             help="Suffix format for the plots [pdf]")
 
-    (opt,args) = parser.parse_args()
-    if len(args) != 1:
-        message = "\033[31mfitmodel ERROR\033[m Mandatory argument ROOTFILE)"
-        raise RuntimeError(message)
+    args = parser.parse_args()
     
     # Check the root file
-    if not os.path.isfile(args[0]):
-        raise IOError("ROOT file '%s' not found" % args[0])
+    if not os.path.isfile(args.rootfilename):
+        raise IOError("ROOT file '%s' not found" % args.rootfilename)
     # Parse the model option
     comp_model_dict = { 'bkg': 'negative_binomial_pdf_conditional',
             'sig':'negative_binomial_sum_pdf_conditional' }
-    if opt.models:
-        for compmodel in opt.models.split(","):
+    if args.models:
+        for compmodel in args.models.split(","):
             try: 
                 component,model = compmodel.split(":")
             except ValueError:
@@ -209,5 +209,5 @@ if __name__ == '__main__':
                 raise RuntimeError(message)
             comp_model_dict[component]=model
 
-    main(args[0],opt.obs,comp_model_dict,opt.do_prefit,opt.suffix)
+    main(args.rootfilename,args.obs,comp_model_dict,args.do_prefit,args.suffix)
     
