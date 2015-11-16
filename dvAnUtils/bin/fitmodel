@@ -94,7 +94,7 @@ def preFit(data,obs,modelname,modeltype,ops_instance):
         if par_name.find('p') != -1:
             ops_instance.get_variable_from_model(modeltype,par_name).setMin(par_new_value)
 
-def main(inputfile,obs,pdfdict,do_prefit=False):
+def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
     """Steering function. Performs a initial tentative fit of the data
     using a predefined pdf models. The output is stored in a ROOT file
     as a ROOT.Workspace.
@@ -137,7 +137,7 @@ def main(inputfile,obs,pdfdict,do_prefit=False):
     
     samplename = inputfile.split('_')[1]
     # And plot!
-    sd.plot(samplename+'_bkg_'+obs+'.pdf',databkg,'bkg')
+    sd.plot(samplename+'_bkg_'+obs+'.pdf',databkg,'bkg',plot_suffix=suffix)
     
     # Same for the signal content if any
     if has_signal_content:
@@ -151,7 +151,7 @@ def main(inputfile,obs,pdfdict,do_prefit=False):
             for _parname in parameter_names_from_model(sd.getmodel('sig')):
                 set_initial_value(_parname,sd.get_variable_from_model('sig',_parname))
         sd.fitTo(datasig,'sig')
-        sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig')
+        sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig',plot_suffix=suffix)
 
     extratag = '_bkg_'
     if has_signal_content:
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     usage +=" start to work with."
 
     parser = OptionParser(usage=usage)
-    parser.set_defaults(obs='ntracks',models=None,do_prefit=False)
+    parser.set_defaults(obs='ntracks',models=None,do_prefit=False,suffix='pdf')
     parser.add_option( "-o","--observable",action='store',dest='obs',\
             help="Name of the observable [ntracks]")
     parser.add_option( "-p","--pre-fit",action='store_true',dest='do_prefit',\
@@ -185,6 +185,8 @@ if __name__ == '__main__':
             help="Name of the model(s) to be used (must exits at dVAnUtils.pdfmodels)"\
                     " [bkg:negative_binomial_pdf_conditional,"\
                     "sig:negative_binomial_sum_pdf_conditional]")
+    parser.add_option( "-s","--suffix-plot",action='store',dest='suffix',\
+            help="Suffix format for the plots [pdf]")
 
     (opt,args) = parser.parse_args()
     if len(args) != 1:
@@ -207,5 +209,5 @@ if __name__ == '__main__':
                 raise RuntimeError(message)
             comp_model_dict[component]=model
 
-    main(args[0],opt.obs,comp_model_dict,opt.do_prefit)
+    main(args[0],opt.obs,comp_model_dict,opt.do_prefit,opt.suffix)
     

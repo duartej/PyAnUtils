@@ -252,40 +252,65 @@ class ObservableSamplingProb(object):
             the observable) being the keys the name of those parameters
         """
         import multiprocessing
-        from ROOT import RooFit,RooAbsReal
+        from ROOT import RooFit,RooAbsReal,RooDataSet,RooDataHist,RooMinuit
         
         nCPUs = multiprocessing.cpu_count()
 
         # Just picking the first one
         if not modeltype:
             modeltype = self.__models.keys()[0]
-        
-        # Integration: set default to MC integrator
-        #RooAbsReal.defaultIntegratorConfig().method1D().setLabel('RooMCIntegrator')
-        
-        #self.__models[modeltype][0].createCdf(RooArgSet(self.getobservable()))
+        ## Create the unbinned likelihood or the chi2 depending the type of the data
+        #if isinstance(data,RooDataSet):
+        #    minim_function = self.__models[modeltype][0].createNNL(data)
+        #elif isinstance(data,RooDataHist):
+        #    minim_function = self.__models[modeltype][0].createChi2(data)
+        #else:
+        #    raise RuntimeError("[fitTo ERROR]: Unexpected class instance for data:"\
+        #            " '{0}'".format(type(data))
+        # Create Minuit interface
+        #m = RooMinuit(minim_function)
+    
+        # we expect a couple of calls to converge.. if not print warning and go on
+        failFit = True
+        nloop  = 0
+        while failFit and nloop < 3:
+            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save())#RooFit.NumCPU(nCPUs),RooFit.Save())
+            # check status and quality of covariance matrix: 
+            # covQuality codes 3=Full,accuratte cov matrix, 2=FULL, but forced to POSITIVE DEFINED...
+            # Check the status of the
+            if fit_result.status() == 0 and fit_result.covQual() == 3:
+                failFit = False
+            nloop += 1
+        if nloop == 3:
+            print '\033[1;33mfitTo WARNING\033[1;m: Fit DID NOT CONVERGE! Please do it manually:' 
+            print ' - MODEL: {0} [{1}] '.format(self.__pdftypes[modeltype],modeltype)
+            print ' - DATA:  {0}       '.format(data.GetName())
 
-        self.__models[modeltype][0].fitTo(data,RooFit.NumCPU(nCPUs))
-        containervar = self.__models[modeltype][0].getVariables()
         vardict = {}
-        it = containervar.createIterator()
-        print "Fit Results::"
-        for i in xrange(containervar.getSize()):
-            var = it.Next()
-            if var.GetName() == self.__observable:
+        avai_variables = parameter_names_from_model(self.__models[modeltype][0])
+        largest_length = max(map(lambda x: len(x),avai_variables))
+        print
+        print "\033[1;34mfitTo INFO\033[1;m: Fit Results"
+        print "--------------------------------------------"
+        for varname in avai_variables:
+            if varname == self.__observable:
                 continue
-            vardict[var.GetName()] = var
-            print " + %s=%.3f +/- %.3f" % (var.GetName(),var.getVal(),var.getError())
+            var = self.get_variable_from_model(modeltype,varname)
+            vardict[varname] = var
+            str_format = " + {0:"+str(largest_length)+"}={1:.3f} +/- {2:.3f}" 
+            print str_format.format(varname,var.getVal(),var.getError())
+        print
         
         return vardict
     
-    def plot(self,plotname,data,modeltype=None,**kwd):
+    def plot(self,pre_plotname,data,modeltype=None,**kwd):
         """Plot the data and the model and saves the image in pdf
 
         Parameters
         ----------
         plotname: str
-            the name to be used in the image [with extension]
+            the name to be used in the image (the suffix will be 
+            overwritten by optional plot_suffix)
         data: ROOT.RooDataSet
         
         modeltype: str, optional
@@ -306,10 +331,17 @@ class ObservableSamplingProb(object):
         
         aux = ExtraOpt( [ ('sample',''),('xtitle','N_{t}'),
             ('ytitle','Number of Events'),('title',''),
-            ('layoutlabel',''),('components',''), ('bins','') ] )
+            ('layoutlabel',''),('components',''), ('bins',''),
+            ('plot_suffix','pdf')] )
         aux.setkwd(kwd)
     
         ROOT.gROOT.SetBatch(1)
+
+        # format the suffix name
+        try:
+            plotname = pre_plotname.split('.')[:-1][0]+".{0}".format(aux.plot_suffix)
+        except IndexError:
+            plotname = pre_plotname+".{0}".format(aux.plot_suffix)
     
         frame = self.__getattribute__(self.__observable).frame()
         frame.SetXTitle(aux.xtitle)
