@@ -94,6 +94,8 @@ def preFit(data,obs,modelname,modeltype,ops_instance):
         if par_name.find('p') != -1:
             ops_instance.get_variable_from_model(modeltype,par_name).setMin(par_new_value)
 
+
+
 def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
     """Steering function. Performs a initial tentative fit of the data
     using a predefined pdf models. The output is stored in a ROOT file
@@ -107,7 +109,9 @@ def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
     obs: str
         The name of the observable
     """
-    from dvAnUtils.samplingprob import readfile,ObservableSamplingProb,parameter_names_from_model
+    from dvAnUtils.samplingprob import readfile,ObservableSamplingProb,\
+            parameter_names_from_model,array_converter
+    from PyAnUtils.pyanfunctions import psitest
     # Obtaining the info from the root file
     f,obsdict,modeldict,databkgdict,datasigdict = readfile(inputfile)
     if not obsdict.has_key(obs):
@@ -132,8 +136,12 @@ def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
         for _parname in parameter_names_from_model(sd.getmodel('bkg')):
             set_initial_value(_parname,sd.get_variable_from_model('bkg',_parname))
     
+    # keep track of the fits
+    fits_performed = []
     # Perform the fit
     sd.fitTo(databkg,'bkg')
+    fits_performed.append((sd.getmodel('bkg'),sd.get_pdfmodel_name('bkg'),\
+            databkg))
     
     samplename = inputfile.split('_')[1]
     # And plot!
@@ -151,6 +159,8 @@ def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
             for _parname in parameter_names_from_model(sd.getmodel('sig')):
                 set_initial_value(_parname,sd.get_variable_from_model('sig',_parname))
         sd.fitTo(datasig,'sig')
+        fits_performed.append((sd.getmodel('sig'),sd.get_pdfmodel_name('sig'),\
+                datasig))
         sd.plot(samplename+'_sig_'+obs+'.pdf',datasig,'sig',plot_suffix=suffix)
 
     extratag = '_bkg_'
@@ -163,6 +173,21 @@ def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
         containertoupdate.append(datasig)
     nfile = inputfile.split('_')[1]+extratag+obs+'_ws.root'
     sd.update('w',nfile,containertoupdate)
+
+    # The goodness of the fit 
+    gofmes = "\n\033[1;34mfitmodel INFO\033[1;m: PSI-TESTS results"\
+            " ['{0}']\n".format(sd.getobservablename())
+    gofmes+= "---------------------------------------------\n"
+    gofmes+="(psi_H = X dB --> there is another hypothesis that is X"\
+            " decibels better than the hypothesis H)\n"
+    for (model_fit,model_name,data_fit) in fits_performed:
+        marray = array_converter(model_fit,sd.getobservablename())
+        darray = array_converter(data_fit,sd.getobservablename())
+        psi    = psitest(marray,darray)
+        gofmes+= " -- Psi(Model: {0}, Data: {1}) = {2:.5f} dB\n".format(\
+                model_name,data_fit.GetName(),psi)
+    print gofmes
+
     
 if __name__ == '__main__':
     from argparse import ArgumentParser

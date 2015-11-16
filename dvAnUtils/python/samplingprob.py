@@ -416,6 +416,26 @@ class ObservableSamplingProb(object):
         """
         return self.__observable
 
+    def get_pdfmodel_name(self,modeltype=None):
+        """Given the 'modeltype' model, the function returns
+        the name of the `pdfmodels` model used
+
+        Parameters
+        ----------
+        modeltype: str|None
+            The `modeltype`
+
+        Returns
+        -------
+        str: the name of the `pdfmodels` class
+        """
+        # Just picking the first one
+        if not modeltype:
+            modeltype = self.__pdftypes.keys()[0]
+        elif not self.__pdftypes.has_key(modeltype):
+            raise AttributeError("No model type '%s' available" % modeltype)
+        return self.__pdftypes[modeltype]
+
     def getmodel(self,modeltype=None):
         """
         """
