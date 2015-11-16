@@ -175,14 +175,28 @@ def negative_binomial_pdf_conditional(obs,**kwd):
     if opt.eff_trinit:
         eff_tr.setVal(opt.eff_trinit)
 
-    func_str ="ROOT::Math::negative_binomial_pdf({observable},"\
-            "((1.0-{p})/(1.0-{p}*(1.0-{eff_tr}))),{k})".format(observable=obs.GetName(),
-                    p=opt.p,k=opt.k,eff_tr=opt.eff_tr)
+    # given the value of the pre-fit (pre_fit_p)
+    #              or even without pre-fitting
+    #              eff_tr = (P/(1-P))*p-1+(P/(1-P))
+    # Note that this is the failure probability, therefore
+    # the success is P=1-Q
+    # =======================================================
+    q_total_name = 'p_total'
+    q_total_suffix = opt.p.split('_')[-1]
+    if q_total_suffix.isdigit():
+        q_total_name += '_{0}'.format(q_total_suffix)
+    q_total = ROOT.RooFormulaVar(q_total_name,"total success probability",
+            "(1.0-{p})/(1.0-{p}*(1.0-{eff_tr}))".format(
+                observable=obs.GetName(),p=opt.p,k=opt.k,eff_tr=opt.eff_tr),
+            ROOT.RooArgList(p,eff_tr))
+
+    func_str = "ROOT::Math::negative_binomial_pdf({observable},"\
+            "{q_total},{k})".format(observable=obs.GetName(),q_total=q_total_name,k=opt.k)
     
     nbd = ROOT.RooGenericPdf(opt.pdf_name,"Negative Binomial",func_str,
-            ROOT.RooArgList(obs,eff_tr,p,k))
+            ROOT.RooArgList(obs,q_total,k))
 
-    return nbd,k,p,eff_tr
+    return nbd,k,p,eff_tr,q_total
 
 def negative_binomial_sum_pdf(obs):
     """Build a negative binomial ROOT.RooRealPdf 
@@ -272,10 +286,10 @@ def negative_binomial_sum_pdf_conditional(obs):
     obsname = obs.GetName()
 
     # first binomial
-    nbd_1,k_1,p_1,eff_tr_1 = negative_binomial_pdf_conditional(obs,
+    nbd_1,k_1,p_1,eff_tr_1,q_total_1 = negative_binomial_pdf_conditional(obs,
             k='k_1',p='p_1',eff_tr='eff_tr_1',pdf_name='nbd_1')
     # second binomial
-    nbd_2,k_2,p_2,eff_tr_2 = negative_binomial_pdf_conditional(obs,
+    nbd_2,k_2,p_2,eff_tr_2,q_total_2 = negative_binomial_pdf_conditional(obs,
             k='k_2',p='p_2',eff_tr='eff_tr_2',pdf_name='nbd_2')
     # Plus extra variable
     signalfrac = ROOT.RooRealVar("signalfrac","DV-fraction in the RoIs signal",0.5,0.,1.)
@@ -284,6 +298,5 @@ def negative_binomial_sum_pdf_conditional(obs):
     nbd = ROOT.RooAddPdf("signalRoI","Signal RoIS with two populations",
             nbd_1,nbd_2,signalfrac)
 
-    return nbd,nbd_1,nbd_2,k_1,p_1,eff_tr_1,k_2,p_2,eff_tr_2,signalfrac
-
+    return nbd,nbd_1,nbd_2,k_1,p_1,eff_tr_1,k_2,p_2,eff_tr_2,q_total_1,q_total_2,signalfrac
 
