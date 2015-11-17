@@ -8,6 +8,44 @@
     .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
 """
 
+# ------------------  HELPER FUNCTION ---------------------------
+def get_ordered_models(family):
+    """Returns a list of the available models for a given family
+    in complexity order (from simplest to more parameters models)
+
+    Parameters
+    ----------
+    family: str
+        The name of the Pdf family. Valid families are: 
+            * negative_binomial
+            * negative_binomial_conditional
+
+    Returns
+    -------
+    pdfs: list(str)
+        The ordered list of PDFs belonging to that family, ordered
+        from simplest to more complicated
+    """
+    if family == 'negative_binomial':
+        basename = 'negative_binomial_pdf'
+        pdfs = [ basename ]
+        sumbasename = family
+        for i in xrange(2,4):
+            istr = str(i)
+            pdfs.append( '{0}_{1}sum_pdf'.format(sumbasename,i) )
+    elif family == 'negative_binomial_conditional':
+        basename = 'negative_binomial_pdf_conditional'
+        pdfs = [ basename ]
+        sumbasename = 'negative_binomial'
+        for i in xrange(2,4):
+            istr = str(i)
+            pdfs.append( '{0}_{1}sum_pdf_conditional'.format(sumbasename,i) )
+    else:
+        raise AttributeError("PDFs family '{0}' not implemented "\
+                "yet".format(family))
+    return pdfs
+
+
 # ------------------ AVAILABLE MODELS ---------------------------
 def negative_binomial_pdf(obs,**kwd):
     # FIXME:: Change names to a more meaninful ones
@@ -300,3 +338,86 @@ def negative_binomial_sum_pdf_conditional(obs):
 
     return nbd,nbd_1,nbd_2,k_1,p_1,eff_tr_1,k_2,p_2,eff_tr_2,q_total_1,q_total_2,signalfrac
 
+def negative_binomial_Ksum_pdf_conditional(order,obs):
+    """Build a sum of k-negative binomial ROOT.RooRealPdf 
+
+    Parameters
+    ----------
+    obs: ROOT.RooRealVar
+        The observable associated to the PDF
+    order: int
+        The number of NBDs to be summed
+    Returns
+    -------
+    (nbdSum,NBDs,ks,ps,eff_trs,signalfracs)
+
+    nbdSum: ROOT.RooGenericPdf
+        The sum of k-negative binomial pdf
+    NBDs: tuple(ROOT.RooGenericPdf)
+        The negative binomial pdf component due to the Displaced Vertex
+    nbdbkg: ROOT.RooGenericPdf
+        The negative binomial pdf component due to the Interaction Point
+    r_DV: ROOT.RooRealVar
+        The rate of failures observable from the Displaced Vertex
+        component
+    e_DV: ROOT.RooRealVar
+        The success efficiency from the Displaced Vertex component
+    r_IP_sig: ROOT.RooRealVar
+        The rate of failures observable from the Interaction Point
+        component
+    e_IP_sig: ROOT.RooRealVar
+        The success efficiency from the Interaction Point component
+    signalfrac: ROOT.RooRealVar
+        The relative number of entries of the Displaced Vertex component
+
+    See Also
+    --------
+    negative_binomial_pdf
+    """
+    import ROOT
+    obsname = obs.GetName()
+
+    nbd_s  = []
+    k_s    = []
+    p_s    = []
+    eff_s  = []
+    q_tot_s= []
+    signalfrac_s = []
+
+    nbdsList = ROOT.RooArgList()
+    signalfracList = ROOT.RooArgList()
+
+    for i in xrange(order):
+        istr = str(i)
+        _nbd,_k,_p,_eff,_q_total = negative_binomial_pdf_conditional(obs,
+            k='k_'+istr,p='p_'+istr,eff_tr='eff_tr_'+istr,pdf_name='nbd_'+istr)
+        nbd_s.append(_nbd)
+        k_s.append(_k)
+        p_s.append(_p)
+        eff_s.append(_eff)
+        q_tot_s.append(_q_total)
+        # RooArgLists
+        nbdsList.add(_nbd)
+        
+        if i == 0:
+            signalfrac_s.append(None)
+        else:
+            _sf = ROOT.RooRealVar("signalfrac_"+istr,
+                    "fraction of events of the "+istr+" negative binomial",0.5,0.,1.)
+            signalfrac_s.append(_sf)
+            signalfracList.add(_sf)
+        # The k-summ of NBDs
+        nbd = ROOT.RooAddPdf("nbd_add_"+str(order),str(order)+" populations",
+                nbdsList,signalfracList)
+    
+    return nbd,nbd_s,k_s,p_s,eff_s,q_tot_s,signalfrac_s
+
+# Cannot be done automatically?
+def negative_binomial_2sum_pdf_conditional(obs):
+    return negative_binomial_Ksum_pdf_conditional(2,obs)
+def negative_binomial_3sum_pdf_conditional(obs):
+    return negative_binomial_Ksum_pdf_conditional(3,obs)
+def negative_binomial_4sum_pdf_conditional(obs):
+    return negative_binomial_Ksum_pdf_conditional(4,obs)
+def negative_binomial_5sum_pdf_conditional(obs):
+    return negative_binomial_Ksum_pdf_conditional(5,obs)

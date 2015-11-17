@@ -274,7 +274,7 @@ class ObservableSamplingProb(object):
         failFit = True
         nloop  = 0
         while failFit and nloop < 3:
-            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save())#RooFit.NumCPU(nCPUs),RooFit.Save())
+            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
             # check status and quality of covariance matrix: 
             # covQuality codes 3=Full,accuratte cov matrix, 2=FULL, but forced to POSITIVE DEFINED...
             # Check the status of the

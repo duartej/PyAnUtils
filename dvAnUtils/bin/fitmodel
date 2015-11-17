@@ -94,7 +94,92 @@ def preFit(data,obs,modelname,modeltype,ops_instance):
         if par_name.find('p') != -1:
             ops_instance.get_variable_from_model(modeltype,par_name).setMin(par_new_value)
 
+def find_best_model(initial_model,inputfile,obs,dataname):
+    """
+    """
+    from dvAnUtils.pdfmodels import get_ordered_models
+    from dvAnUtils.samplingprob import readfile,array_converter,\
+            ObservableSamplingProb,parameter_names_from_model
+    from PyAnUtils.pyanfunctions import psitest
 
+    # Get the list of models to be checked
+    if initial_model.find('negative_binomial') == 0:
+        family_model = 'negative_binomial'
+    if initial_model.find('conditional') != -1:
+        family_model += '_conditional'
+    # Note that an attribute error means we do not know the family
+    try:
+        all_pdfs = get_ordered_models(family_model)
+    except NameError:
+        raise AttributeError("Not implemented/found family "\
+                " of '{0}' pdf".format(initial_model))
+    try:
+        i_min = map(lambda (i,x):i,filter(lambda (i,x): x == initial_model,enumerate(all_pdfs)))[0]
+    except IndexError:
+        raise RuntimeError("Inconsistency found! Pdf '{0}'"\
+                " is not available...".format(initial_model))
+
+    pdfs_to_check = all_pdfs[i_min:]
+    
+    # -- get the data
+    f,obsdict,modeldict,databkgdict,datasigdict = readfile(inputfile)
+    observable = obsdict[obs]
+    if databkgdict.has_key(dataname):
+        data = databkgdict[dataname]
+    elif datasigdict.has_key(dataname):
+        data = datasigdict[dataname]
+    else:
+        raise RuntimeError("Data '{0}' not found at '{1}'".format(
+            dataname,inputfile))
+
+    array_data = array_converter(data,obs)
+    # -- start the fitting
+    print 
+    print "\n\033[1;34mfitmodel INFO\033[1;m: PSI-TESTS scan"\
+            " over {0} ['{1}']".format(pdfs_to_check,obs)
+    print "-"*80
+    print "(psi_H = X dB --> there is another hypothesis that is X"\
+            " decibels better than the hypothesis H)"
+    psitest_results = []
+    for model in pdfs_to_check:
+        sd = ObservableSamplingProb(observable)
+        modeltype = 'fit_{0}'.format(model)
+        sd.setupmodel(modeltype,model)
+        #set the initial values
+        for _parname in parameter_names_from_model(sd.getmodel(modeltype)):
+            set_initial_value(_parname,sd.get_variable_from_model(modeltype,_parname))
+        # fiiit..ing
+        sd.fitTo(data,modeltype)
+        array_model = array_converter(sd.getmodel(modeltype),obs)
+        # Psi -test
+        psitest_results.append(psitest(array_model,array_data))
+        if len(psitest_results) < 2:
+            continue
+        # VERBOSITY ----
+        print " -- Psi(Model: {0}, Data: {1}) = {2:.5f} dB".format(model,
+                data.GetName(),
+                psitest_results[-1])
+        print "    Comparing with previous models:"        
+        for i in xrange(len(psitest_results)-2,-1,-1):
+            print "    [#{0}/CURRENT] "\
+                    "{1:.5f}/{2:.5f} {3:.5f}".format(
+                            i,
+                            psitest_results[i],
+                            psitest_results[-1],
+                            psitest_results[i]/psitest_results[-1])
+        print
+        # The more elaborate model [-1] gives a higher psi value
+        # than the simplest one [-2]: keep the previous model
+        if psitest_results[-2]/psitest_results[-1] < 1.0:
+            break
+
+    # the psitest_results gives which was the best model
+    index_pdf = len(psitest_results)-1
+    print "\n\033[1;34mfitmodel INFO\033[1;m: PSI-TESTS scan"\
+            " at data '{0} ['{1}'] RESULT: {2} ".format(
+                    data.GetName(),
+                    sd.getobservablename(),
+                    pdfs_to_check[index_pdf])
 
 def main(inputfile,obs,pdfdict,do_prefit=False,suffix='pdf'):
     """Steering function. Performs a initial tentative fit of the data
@@ -197,25 +282,52 @@ if __name__ == '__main__':
     usage +="First approximation which can be used to setup the workspace to"
     usage +=" start to work with."
 
-    parser = ArgumentParser(prog='fitmodel',description=usage)#,allow_abbrev=False)
-    parser.add_argument('rootfilename',type=str,action='store',\
-            metavar='ROOTFILE',
-            help="ROOT file containing the RooDataSet"\
-            " or RooDataHist data (previously processed by roibasisconverter)")
-    parser.set_defaults(obs='ntracks',models=None,do_prefit=False,suffix='pdf')
+    parser = ArgumentParser(prog='fitmodel',description=usage)
+    parser.set_defaults(obs='ntracks',do_prefit=False,suffix='png')
     parser.add_argument( "-o","--observable",action='store',dest='obs',\
             help="Name of the observable [ntracks]")
     parser.add_argument( "-p","--pre-fit",action='store_true',dest='do_prefit',\
             help="Whether or not perform a pre-fit of the binomials using"\
             " the the minimum amount of nuisance parameters, i.e. 'p' and 'k'" )
-    parser.add_argument( "-m","--models",action='store',dest='models',\
+    parser.add_argument( "-s","--suffix-plot",action='store',dest='suffix',\
+            help="Suffix format for the plots [png]")
+    
+    # Sub-command parsers
+    subparsers = parser.add_subparsers(title='subcommands',
+            description='valid subcommands', 
+            help='additional help')
+
+    # Fit performed to RoIs dedicted analysis: a bkg and a signal samples
+    parser_rois = subparsers.add_parser("dvrois",help="Fits performed to "\
+            "DV-RoIs like analysis. A pure background and a mixed signal and"\
+            " background samples are going to be fit")
+    parser_rois.set_defaults(which='rois',models=None)
+    parser_rois.add_argument('rootfilename',type=str,action='store',\
+            metavar='ROOTFILE',
+            help="ROOT file containing the RooDataSet"\
+            " or RooDataHist data (previously processed by roibasisconverter)")
+    parser_rois.add_argument( "-m","--models",action='store',dest='models',\
             metavar="COMPONENT1:MODEL1[,COMPONENT2:MODEL2,...]",
-            help="Name of the model(s) to be used (must exits at dVAnUtils.pdfmodels)"\
+            help="Name of the model(s) to be used (must exist at dVAnUtils.pdfmodels)"\
                     " [bkg:negative_binomial_pdf_conditional,"\
                     "sig:negative_binomial_sum_pdf_conditional]")
-    parser.add_argument( "-s","--suffix-plot",action='store',dest='suffix',\
-            help="Suffix format for the plots [pdf]")
-
+    
+    # Fit to be performed checking the available PDFs and recursively find
+    # the simplest model (checked with psi-test)
+    parser_finder = subparsers.add_parser("finder",help="given an initial "\
+            "model, the algorithm tries to obtain from the same family of PDFs, "\
+            " the simplest model fitting the data")
+    parser_finder.add_argument('rootfilename',type=str,action='store',\
+            metavar='ROOTFILE',
+            help="ROOT file containing the RooDataSet"\
+            " or RooDataHist data (previously processed by roibasisconverter)")
+    parser_finder.add_argument("-m","--models",action='store',dest='model',\
+            metavar="MODEL",
+            help="name of the model(s) to be used as initial "\
+                    " (must exist at dVAnUtils.pdfmodels)")
+    parser_finder.add_argument("-d","--data-name",action='store',dest='dataname',\
+            help="name of the data [dvsig_ntracks]")
+    parser_finder.set_defaults(which='finder',model='negative_binomial_pdf',dataname='dvsig_ntracks')
     args = parser.parse_args()
     
     # Check the root file
@@ -224,15 +336,19 @@ if __name__ == '__main__':
     # Parse the model option
     comp_model_dict = { 'bkg': 'negative_binomial_pdf_conditional',
             'sig':'negative_binomial_sum_pdf_conditional' }
-    if args.models:
-        for compmodel in args.models.split(","):
-            try: 
-                component,model = compmodel.split(":")
-            except ValueError:
-                message = "\033[31mfitmodel ERROR\033[m Invalid format for the option"\
-                        " '-m','--models'. Please see help"
-                raise RuntimeError(message)
-            comp_model_dict[component]=model
+    if args.which == 'dvrois':
+        if args.models:
+            for compmodel in args.models.split(","):
+                try: 
+                    component,model = compmodel.split(":")
+                except ValueError:
+                    message = "\033[31mfitmodel ERROR\033[m Invalid format for the option"\
+                            " '-m','--models'. Please see help"
+                    raise RuntimeError(message)
+                comp_model_dict[component]=model
+    
+        main(args.rootfilename,args.obs,comp_model_dict,args.do_prefit,args.suffix)
+    elif args.which == 'finder':
+        find_best_model(args.model,args.rootfilename,args.obs,args.dataname)
 
-    main(args.rootfilename,args.obs,comp_model_dict,args.do_prefit,args.suffix)
     
