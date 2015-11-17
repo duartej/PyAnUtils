@@ -252,7 +252,8 @@ class ObservableSamplingProb(object):
             the observable) being the keys the name of those parameters
         """
         import multiprocessing
-        from ROOT import RooFit,RooAbsReal,RooDataSet,RooDataHist,RooMinuit
+        from ROOT import RooFit,RooLinkedList,RooAbsReal,RooDataSet,RooDataHist,RooMinuit
+        from ROOT.RooFit import Range,NumCPU,Optimize,ProjectedObservables,SplitRange,DataError,Extended
         
         nCPUs = multiprocessing.cpu_count()
 
@@ -261,12 +262,14 @@ class ObservableSamplingProb(object):
             modeltype = self.__models.keys()[0]
         ## Create the unbinned likelihood or the chi2 depending the type of the data
         #if isinstance(data,RooDataSet):
-        #    minim_function = self.__models[modeltype][0].createNNL(data)
+        #    _fitToFunction = self.__models[modeltype][0].fitTo
+        ##    minim_function = self.__models[modeltype][0].createNNL(data)
         #elif isinstance(data,RooDataHist):
-        #    minim_function = self.__models[modeltype][0].createChi2(data)
+        #    _fitToFunction = self.__models[modeltype][0].chi2FitTo
+        ##    minim_function = self.__models[modeltype][0].createChi2(data)
         #else:
         #    raise RuntimeError("[fitTo ERROR]: Unexpected class instance for data:"\
-        #            " '{0}'".format(type(data))
+        #            " '{0}'".format(type(data)))
         # Create Minuit interface
         #m = RooMinuit(minim_function)
     
@@ -274,7 +277,13 @@ class ObservableSamplingProb(object):
         failFit = True
         nloop  = 0
         while failFit and nloop < 3:
+            print
+            print '\033[1;34mfitTo INFO\033[1;m: Fitting Attemp [#{0}]:'.format(nloop) 
+            print ' - MODEL: {0} [{1}] '.format(self.__pdftypes[modeltype],modeltype)
+            print ' - DATA:  {0}       '.format(data.GetName())
+            print 
             fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
+            #fit_result = _fitToFunction(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
             # check status and quality of covariance matrix: 
             # covQuality codes 3=Full,accuratte cov matrix, 2=FULL, but forced to POSITIVE DEFINED...
             # Check the status of the
