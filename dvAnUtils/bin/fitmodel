@@ -174,7 +174,9 @@ def find_best_model(initial_model,inputfile,obs,dataname):
             break
 
     # the psitest_results gives which was the best model
-    index_pdf = len(psitest_results)-1
+    # the previous to the last included (note the extra -1 is due
+    # to the len(): max_index = len()-1
+    index_pdf = len(psitest_results)-2
     print "\n\033[1;34mfitmodel INFO\033[1;m: PSI-TESTS scan"\
             " at data '{0} ['{1}'] RESULT: {2} ".format(
                     data.GetName(),
