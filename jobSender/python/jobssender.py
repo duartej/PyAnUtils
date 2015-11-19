@@ -51,7 +51,7 @@ def getremotepaths(remoteinputfiles):
     files inside a folder using the eos command. 
 
     :param inputfiles: a str or list of str with regular expressions
-                       to match files
+                       to match files --> A STR ONLY
     :type inputfiles: str or list(str)
 
     :return: the real paths or an empty list if no match

@@ -193,7 +193,6 @@ class athenajob(workenv):
         self.makecopyJO()
         
         # Allowing EOS remote files
-        self.remotefiles=False
         if inputfiles.find('root://') == -1:
             self.inputfiles=getrealpaths(inputfiles)
         else:
@@ -204,7 +203,7 @@ class athenajob(workenv):
             raise RuntimeError('Not found the Athena inputfiles: %s' \
                     % inputfiles)
         
-        if kw.has_key('evtmax'):
+        if kw.has_key('evtmax') and int(kw['evtmax']) != -1:
             self.evtmax = int(kw['evtmax'])
         else:
             if not self.remotefiles:
