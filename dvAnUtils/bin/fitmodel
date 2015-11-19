@@ -303,7 +303,7 @@ if __name__ == '__main__':
     parser_rois = subparsers.add_parser("dvrois",help="Fits performed to "\
             "DV-RoIs like analysis. A pure background and a mixed signal and"\
             " background samples are going to be fit")
-    parser_rois.set_defaults(which='rois',models=None)
+    parser_rois.set_defaults(which='dvrois',models=None)
     parser_rois.add_argument('rootfilename',type=str,action='store',\
             metavar='ROOTFILE',
             help="ROOT file containing the RooDataSet"\
