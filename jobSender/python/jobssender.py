@@ -240,13 +240,13 @@ class job(object):
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
-    def preparejobs(self):
+    def preparejobs(self,asetup_extra):
         """..method ::preparejobs()
 
         wrapper to the workenv method. The tasks
         are initialized
         """
-        self.tasklist = self.weinst.preparejobs()
+        self.tasklist = self.weinst.preparejobs(asetup_extra)
 
     def submit(self):
         """..method ::submit

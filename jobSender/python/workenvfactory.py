@@ -128,7 +128,7 @@ class workenv(object):
                 "__setneedenv__()" % (self.__class__.__name__))
 
     @abstractmethod
-    def preparejobs(self):
+    def preparejobs(self,extrabash=''):
         """..method:: preparejobs()
         
         function to modify input scripts, make the cluster steer
@@ -249,7 +249,7 @@ class athenajob(workenv):
         # And re-point
         self.joboption=localcopy
 
-    def preparejobs(self):
+    def preparejobs(self,extra_asetup=''):
         """..method:: preparejobs() -> listofjobs
         
         main function which builds the folder structure
@@ -264,7 +264,7 @@ class athenajob(workenv):
 
         # setting up the folder structure to send the jobs
         # including the bashscripts
-        return self.settingfolders(usersetupfolder,athenaversion,compiler)
+        return self.settingfolders(usersetupfolder,athenaversion,compiler,extra_asetup)
 
 
     def getuserasetupfolder(self):
@@ -310,6 +310,7 @@ class athenajob(workenv):
                 self.setupfolder=None
                 self.version=None
                 self.gcc =None
+                self.extra_asetup=''
 
             def haveallvars(self):
                 if not self.setupfolder or not self.version or not self.gcc:
@@ -331,7 +332,7 @@ class athenajob(workenv):
         bashfile = '#!/bin/bash\n\n'
         bashfile += '# File created by the %s class [%s]\n\n' % (self.__class__.__name__,timestamp)
         bashfile += 'cd '+ph.setupfolder+'\n'
-        bashfile += 'source $AtlasSetup/scripts/asetup.sh %s,%s,here\n' % (ph.version,ph.gcc)
+        bashfile += 'source $AtlasSetup/scripts/asetup.sh %s,%s,here %s\n' % (ph.version,ph.gcc,ph.extra_asetup)
         bashfile += 'cd -\n'
         bashfile += 'cp %s .\n' % self.joboption
         bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
@@ -344,7 +345,7 @@ class athenajob(workenv):
         f.close()
         os.chmod(self.scriptname,0755)
 
-    def settingfolders(self,usersetupfolder,athenaversion,gcc):
+    def settingfolders(self,usersetupfolder,athenaversion,gcc,extra_asetup=''):
         """..method:: settingfolders()
         create the folder structure to launch the jobs: for each job
         a folder is created following the notation:
@@ -366,7 +367,7 @@ class athenajob(workenv):
             # create the local bashscript
             self.createbashscript(setupfolder=usersetupfolder,\
                     version=athenaversion,\
-                    gcc=gcc,skipevts=skipevts,nevents=nevents)
+                    gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
             # Registring the jobs in jobdescription class instances
             jdlist.append( 
                     jobdescription(path=foldername,script=self.jobname,index=i)

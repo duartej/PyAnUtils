@@ -33,6 +33,8 @@ if __name__ == '__main__':
             "Options valid only when it is called with 'send' arg")
     sendopt.add_option("-j","--jobOption",action="store",dest="joboption",\
             help="Name of the python jobOption file")
+    sendopt.add_option("--extra-asetup",action="store",dest="asetup_options",\
+            default='',help="Space separated extra options to be delivered to the asetup")
     sendopt.add_option("-q","--queue",action="store",dest="queue",\
             help="Name of the queue to be send the job [Default: 8nh]")
     sendopt.add_option("-i","--inputfiles",action="store",dest="filenames",\
@@ -97,7 +99,7 @@ if __name__ == '__main__':
         cern = cerncluster(simulate=opt.dryrun,queue=opt.queue)
         # Job instantation
         js   = job(cern,athenawe)
-        js.preparejobs()
+        js.preparejobs(opt.asetup_options)
         js.submit()
         bookeepingjobs(js)
         os.chdir(cwd)
