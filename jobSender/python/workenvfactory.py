@@ -252,6 +252,7 @@ class blindjob(workenv):
         """
         import shutil
         import os
+        import stat
         
         localcopy=os.path.join(os.getcwd(),os.path.basename(self.bashscript))
         if localcopy != self.bashscript:
@@ -267,6 +268,9 @@ class blindjob(workenv):
         with open(localcopy,"w") as f1:
             f1.writelines(newlines)
         f1.close()
+        # make it executable
+        st = os.stat(localcopy)
+        os.chmod(localcopy, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH )
 
     # DEPRECATED!!
     #def getlistofjobs(self):
