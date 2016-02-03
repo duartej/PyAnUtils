@@ -160,6 +160,144 @@ class workenv(object):
          raise NotImplementedError("Class %s doesn't implement "\
                  "sethowtocheckstatus()" % (self.__class__.__name__))
 
+## -- Concrete implementation: Blind job, the user provides everything
+class blindjob(workenv):
+    """..class:: blindjob
+
+    Concrete implementation of a blind job. The user provides a bashscript
+    name which corresponds with an actual bashscript in the working folder.
+    """
+    def __init__(self,bashscriptname,specificfile=None,**kw):
+        """..class:: blindjob(nameofthejob,specificfile[,])
+
+        Concrete implementation of an blind job. 
+
+        :param nameofthejob: generic name to this job and the name of an 
+                actual bashscript which must exist in the working dir 
+        :type  nameofthejob: str
+        :param specificfile: the name of a file which should be used for 
+                each job, the file name should contain a number which is
+                associated to the job number: filename_i.suffix
+                So the name to be passed should be filename.suffix
+        :type  specificfile: str
+        """
+        import glob
+        from jobssender import getrealpaths,getremotepaths,getevt
+
+        super(blindjob,self).__init__(bashscriptname,**kw)
+        try:
+            self.bashscript=getrealpaths(bashscriptname+'.sh')[0]
+        except IndexError:
+            raise RuntimeError('Bash script file not found %s' % bashscriptname)
+        
+        self.specificfiles = []
+        if specificfile:
+            self.specificfiles= sorted(glob.glob(specificfile.split('.')[0]+'_*'))
+            if len(self.specificfiles) == 0:
+                raise RuntimeError('Specific files not found %s' % specificfile)
+        
+        if kw.has_key('njobs'):
+            self.njobs = int(kw['njobs'])
+        else:
+            self.njobs= 1
+
+    def __setneedenv__(self):
+        """..method:: __setneedenv__() 
+
+        Relevant environment in an ATLAS job:
+        """
+        self.typealias = 'Blind'
+        # just dummy
+        self.relevantvar = [ ('PWD','echo') ] 
+
+    def preparejobs(self,extra_asetup=''):
+        """..method:: preparejobs() -> listofjobs
+        
+        main function which builds the folder structure
+        and the needed files of the job, in order to be
+        sent to the cluster
+        A folder is created following the notation:
+          * JOB_self.jobname_jobdsc.index
+          
+        """
+        import os
+        from jobssender import jobdescription
+
+        cwd=os.getcwd()
+
+        jdlist = []
+        for i in xrange(self.njobs):
+            # create a folder
+            foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
+            os.mkdir(foldername)
+            os.chdir(foldername)
+            # create the local bashscript
+            self.createbashscript(i=i)
+            # Registring the jobs in jobdescription class instances
+            jdlist.append( 
+                    jobdescription(path=foldername,script=self.jobname,index=i)
+                    )
+            jdlist[-1].state   = 'configured'
+            jdlist[-1].status  = 'ok'
+            jdlist[-1].workenv = self
+            #self.setjobstate(jdlist[-1],'configuring') ---> Should I define one?
+            os.chdir(cwd)
+
+        return jdlist
+
+    def createbashscript(self,**kw):
+        """..method:: creatdbashscript()
+
+        the bash script is copied in the local path      
+        """
+        import shutil
+        import os
+        
+        localcopy=os.path.join(os.getcwd(),os.path.basename(self.bashscript))
+        if localcopy != self.bashscript:
+            shutil.copyfile(self.bashscript,localcopy)
+        # And re-point
+        self.bashscript=localcopy
+
+        with open(self.bashscript,"rw") as f:
+            lines = f.readlines()
+        f.close()
+        newlines = map(lambda l: l.replace("%i",str(kw["i"])), lines)
+        with open(self.bashscript,"w") as f1:
+            f1.writelines(newlines)
+        f1.close()
+
+    # DEPRECATED!!
+    #def getlistofjobs(self):
+    #    """..method:: getlistofjobs() -> [ listofjobs ]
+    #    return the list of prepared jobs, if any, None otherwise
+
+    #    :return: List of jobs prepared
+    #    :rtype:  list(jobdescription)        
+    #    """
+    #    return self.joblist
+
+    @staticmethod
+    def checkfinishedjob(jobdsc):
+        """..method:: checkfinishedjob(jobdsc) -> status
+        
+        using the datamember 'successjobcode' perform a check
+        to the job (jobdsc) to see if it is found the expected
+        outputs or success codes
+        """
+        return 'fail' 
+
+    def sethowtocheckstatus(self):
+        """TO BE DEPRECATED!!!
+        ..method:: sethowtocheckstatus()
+        
+        empty
+        """
+        self.succesjobcode=['','']
+
+# Concrete workenv class for blind jobs
+workenv.register(blindjob)
+
 ## -- Concrete implementation: Athena job
 class athenajob(workenv):
     """..class:: athenajob

@@ -10,7 +10,7 @@
 
 DEBUG=True
 JOBEVT=500
-from jobSender.workenvfactory import athenajob
+from jobSender.workenvfactory import athenajob,blindjob
 from jobSender.clusterfactory import cerncluster
 from jobSender.jobssender     import bookeepingjobs,accessingjobsinfo,job
 
@@ -31,6 +31,11 @@ if __name__ == '__main__':
 
     sendopt= OptionGroup(parser,"Send mode options",
             "Options valid only when it is called with 'send' arg")
+    sendopt.add_option("-t","--type",action="store",dest="type_we",\
+            default='athena',help="Name of the type of job: <athena|blind> [athena]")
+    sendopt.add_option("--specific-file",action="store",dest="optionalfile",\
+            help="Extra file for the blind job, specific related to the job-index."\
+            " The actual format should be like 'filenama_%i.suff'")
     sendopt.add_option("-j","--jobOption",action="store",dest="joboption",\
             help="Name of the python jobOption file")
     sendopt.add_option("--extra-asetup",action="store",dest="asetup_options",\
@@ -76,6 +81,8 @@ if __name__ == '__main__':
                     'mc14_13TeV.177568.Pythia_AUET2BCTEQ6L1_RPV_vtx2_LSP100'\
                     '_mujets_filtDL_Rmax300.recon.RDO.e3355_s1982_s2008_r5787'\
                     '_tid04569111_00/*.pool.root.*',
+                    type_we='athena',
+                    optionalfile=None,
                     njobs=300,
                     queue='8nh',
                     workingpath='./')
@@ -83,22 +90,27 @@ if __name__ == '__main__':
     (opt,args) = parser.parse_args()
     print "================================================================"
     print "\033[1;33mWARNING:\033[1;m Some functionalities are not developed yet. The program"
-    print "is just able to send 'athena' jobs in the 'cern' cluster"
+    print "is just able to send jobs in the 'cern' cluster"
     print "================================================================"
 
     if len(args) != 1:
-        raise RuntimeError('%prog must be called either with "send|retrieve"'\
+        raise RuntimeError('clustermanager must be called either with "send|retrieve"'\
                 ' arguments')
     if args[0] == 'send':
         cwd = os.getcwd()
         os.chdir(os.path.abspath(opt.workingpath))
         
         # Work environment and cluster definitions
-        athenawe = athenajob(opt.bashname,opt.joboption,opt.filenames,
-                njobs=opt.njobs)
+        if opt.type_we == 'athena':
+            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,
+                    njobs=opt.njobs)
+        elif opt.type_we == 'blind':
+            we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs)
+        else:
+            raise AttributeError('-t option variable not recognized: "{0}"'.format(opt.type_we))
         cern = cerncluster(simulate=opt.dryrun,queue=opt.queue)
         # Job instantation
-        js   = job(cern,athenawe)
+        js   = job(cern,we_instance)
         js.preparejobs(opt.asetup_options)
         js.submit()
         bookeepingjobs(js)
