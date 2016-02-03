@@ -256,14 +256,15 @@ class blindjob(workenv):
         localcopy=os.path.join(os.getcwd(),os.path.basename(self.bashscript))
         if localcopy != self.bashscript:
             shutil.copyfile(self.bashscript,localcopy)
-        # And re-point
-        self.bashscript=localcopy
+        # And re-point: WHY??
+        #self.bashscript=localcopy
 
-        with open(self.bashscript,"rw") as f:
+        with open(localcopy,"rw") as f:
             lines = f.readlines()
         f.close()
         newlines = map(lambda l: l.replace("%i",str(kw["i"])), lines)
-        with open(self.bashscript,"w") as f1:
+
+        with open(localcopy,"w") as f1:
             f1.writelines(newlines)
         f1.close()
 
