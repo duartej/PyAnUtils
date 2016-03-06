@@ -212,10 +212,41 @@ class HistoContainer():
         if name not in self._histos.keys():
             raise RuntimeError("No histogram booked with the name '%s'" % name)
 
+    def associate(self,name,histonamelist):
+        """ Associate histograms which are intented to be plotted together 
+        in the same ROOT.TCanvas using the method plot. 
+        The x,y and z must be the same. 
+
+        Parameters
+        ----------
+        name: str
+            the name of the central histogram (which are going to be 
+            associated the list of histos)
+        histonamelist: list(str)
+            the list of names of the histograms to be associated
+
+        Raises
+        ------
+            RuntimeError
+                if any of the histograms in the list is not book
+        """
+        self.checkhisto(name)
+        for associate_name in histonamelist:
+            self.checkhisto(associate_name)
+            try:
+                self._associated[name] += associate_name
+            except KeyError:
+                # empty before, so include now the whole list
+                self._associated[name] = filter(lambda x: x != name, histonamelist)
+                # and we can go out, the work is done
+                break
+    
     def associated(self,histonamelist):
         """ Associate histograms which are intented to be plotted together 
         in the same ROOT.TCanvas using the method plot. 
         The x,y and z must be the same. 
+
+        TO BE DEPRECATED, see associate above
 
         Parameters
         ----------
@@ -311,8 +342,6 @@ class HistoContainer():
             stl.cd()
             #ROOT.gROOT.ForceStyle()
         setpalette('gray')
-
-
 
         self.checkhisto(name)
         
