@@ -43,7 +43,8 @@ class HistoContainer():
                           'fill': ExtraOpt( [('weight',None)] ),
                           'plot': ExtraOpt( [('options',''), ('legend',True),
                                     ('legposition','RIGHT'),('legy',0.85),('textlength',0.31),
-                                    ('normalize',True)] )
+                                    ('normalize',True),
+                                    ('setstyle',False)] )
                           }
     
     def book_histo(self,h,**kwd):
@@ -298,16 +299,21 @@ class HistoContainer():
             the length of the legend box, default 0.31
         """
         from PyAnUtils.pyanfunctions import drawlegend
-        from PyAnUtils.plotstyles import njStyle,setpalette
+        from PyAnUtils.plotstyles import setpalette
         
-        stl = njStyle()
-        stl.cd()
-        #ROOT.gROOT.ForceStyle()
-        setpalette('gray')
-
         opt = self._opts['plot']
         opt.reset()
         opt.setkwd(kwd)
+
+        if opt.setstyle:
+            from PyAnUtils.plotstyles import setpalette
+            stl = njStyle()
+            stl.cd()
+            #ROOT.gROOT.ForceStyle()
+        setpalette('gray')
+
+
+
         self.checkhisto(name)
         
         canvascreatedhere=False
