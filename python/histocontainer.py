@@ -144,11 +144,11 @@ class HistoContainer():
             raise KeyError("Histogram name already in used" %  name)
         
         if opt.npoints_y: 
-            if not opt.ylow or not opt.yhigh:
-                raise RuntimeError("npoints_z option needs also"\
+            if opt.ylow is None or opt.yhigh is None:
+                raise RuntimeError("npoints_y option needs also"\
                         " ylow and yhigh")
             if opt.npoints_z:
-                if not opt.zlow or not opt.zhigh:
+                if opt.zlow is None or opt.zhigh is None:
                     raise RuntimeError("npoints_z option needs also"\
                             " zlow and zhigh")
                 histoclass = "TH3F"
