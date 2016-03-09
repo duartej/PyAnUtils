@@ -41,11 +41,14 @@ class storedtree(object):
             self._rootfiles = [rootfiles]
         else:
             self._rootfiles = rootfiles
-        
+
         self._tree = ROOT.TChain(chainname)
         print "TChain '%s' created" % chainname
         print "Adding %i root files to the tree" % len(self._rootfiles)
         for i in sorted(self._rootfiles):
+            # is there a file?
+            if not os.path.exists(i):
+                raise IOError("ROOT file '{0}' does not exists!".format(i))
             self._tree.AddFile(i)
         
         self._plotsactivated = False
@@ -53,6 +56,7 @@ class storedtree(object):
         self._wise_values= {}
         self._aliases    = {}
         self._currententry = -1
+        self._aux_associated = {}
         # The self._vars attribute is created in the concrete implementations
 
 
@@ -277,6 +281,11 @@ class storedtree(object):
         if self._currententry == i:
             return
         _dummy = self._tree.GetEntry(i)
+        # working in xAOD trees, setting the aux variables each event
+        for varname in self._aux_associated.keys():
+            #setattr(self,varname,getattr(self._tree,varname))
+            #self._aux_associated[varname] = getattr(self._tree,varname+'Aux.')
+           getattr(self,varname).setStore(self._aux_associated[varname])
         self._currententry = i
 
     #def fill_all_histos(self):
@@ -307,6 +316,30 @@ class xaodtree(storedtree):
     Git repo:
       https://duartej@bitbucket.org/duartej/rpvmctruthhist.git
     """
+    #def __init__(self,rootfiles):
+    #    """.. class rpvmcinfo(rootfiles)
+    #    concrete storedeff class for efficiencies evaluated using the 
+    #    RPVMCInfoTree ATLAS package 
+    #    """
+    #    import ROOT
+    #    import cppyy
+    #    #import PyCintex
+    #    #PyCintex.Cintex.Enable()
+    #    # Not use this, just look cyypy, and the other stuff..
+    #    from AthenaROOTAccess import transientTree
+
+    #    super(xaodtree,self).__init__(rootfiles,'CollectionTree')
+
+    #    # re-do the tree, to associate properly auxliar data and so on
+    #    # FIXME:: VERY PROVISIONAL FIXME::
+    #    self._file = ROOT.TFile.Open(rootfiles)
+    #    del self._tree
+    #    self._tree = transientTree.makeTree(self._file)
+
+    #    # Initialize the tree, just to be able to set memory addresses
+    #    self.getentry(0)
+    
+    # second version
     def __init__(self,rootfiles):
         """.. class rpvmcinfo(rootfiles)
         concrete storedeff class for efficiencies evaluated using the 
@@ -314,19 +347,25 @@ class xaodtree(storedtree):
         """
         import ROOT
         import cppyy
-        #import PyCintex
-        #PyCintex.Cintex.Enable()
-        # Not use this, just look cyypy, and the other stuff..
-        from AthenaROOTAccess import transientTree
+        # let's assume we are inside ATLAS-- FIXME: CHECK IT
 
         super(xaodtree,self).__init__(rootfiles,'CollectionTree')
-
-        # re-do the tree, to associate properly auxliar data and so on
-        # FIXME:: VERY PROVISIONAL FIXME::
-        self._file = ROOT.TFile.Open(rootfiles)
-        del self._tree
-        self._tree = transientTree.makeTree(self._file)
-
+        
+        # let's associate properly auxliar data and so on
         # Initialize the tree, just to be able to set memory addresses
         self.getentry(0)
+
+        # Obtain all the variables of the tree, and their associated
+        branch_names = map(lambda x: x.GetName(), self._tree.GetListOfBranches())
+        for bname in filter(lambda y: y.find('Aux') == -1,branch_names):
+            try:
+                bname_aux = filter(lambda x: x == bname+'Aux.',branch_names)[0]
+                self._aux_associated[bname] = getattr(self._tree,bname_aux)
+            except IndexError:
+                pass
+            # create the attribute to the class
+            setattr(self,bname,getattr(self._tree,bname))
+        # do the association (points to the aux var)
+        for varname,auxvar in self._aux_associated.iteritems():
+            getattr(self,varname).setStore(auxvar)
 
