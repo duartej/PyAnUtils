@@ -58,7 +58,11 @@ class storedtree(object):
         self._currententry = -1
         self._aux_associated = {}
         # The self._vars attribute is created in the concrete implementations
-
+    
+    #def __iter__(self):
+    #    """Easyly iterates the tree, by calling the GetEntry methods
+    #    """
+    #    return self
 
     def activate_variable(self,varname,methodtouse=None,**kwd):
         """The varname variable is encapsulated to be includede in this
@@ -308,6 +312,25 @@ class storedtree(object):
     #                histos.Fill(x,y)
 
 
+class plaintree(storedtree):
+    """.. class plaintree(rootfiles,treename)
+    concrete storedeff class for plain TTree, i.e. containing STL containers
+    or other plain types of C
+    """
+    def __init__(self,rootfiles,treename):
+        """.. class plaintree(rootfiles,treename)
+        concrete storedeff class for plain TTree, i.e. containing STL containers
+        or other plain types of C
+
+        TO BE DEPRECATED: ROOT do not need that anymore. You can access directly
+        """
+        import ROOT
+
+        super(plaintree,self).__init__(rootfiles,treename)
+        
+        # create direct access to the variables (as attributes of the class)
+        self.getentry(0)
+        self.activate_all_variables()
 
 class xaodtree(storedtree):
     """.. class rpvmcinfo(rootfiles)
