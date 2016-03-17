@@ -37,13 +37,18 @@ class HistoContainer():
         self._description= {}
         self._opts   = { 'create_and_book_histo': ExtraOpt( [('npoints_y',None),('ylow',None), ('yhigh',None),
                                     ('npoints_z',None), ('zlow',None), ('zhigh',None),
-                                    ('description','')] ),
-                          'book_histo': ExtraOpt( [('description',''), ('title',None)] ),
+                                    ('description',''), ('color',None), ('title',''),
+                                    ('xtitle',None),('ytitle',None),('ztitle',None)] ),
+
+                          'book_histo': ExtraOpt( [('description',''), ('title',''),
+                                    ('color',None),
+                                    ('xtitle',None),('ytitle',None),('ztitle',None)] ),
 
                           'fill': ExtraOpt( [('weight',None)] ),
                           'plot': ExtraOpt( [('options',''), ('legend',True),
                                     ('legposition','RIGHT'),('legy',0.85),('textlength',0.31),
                                     ('normalize',True),
+                                    ('log',False),
                                     ('setstyle',False)] )
                           }
     
@@ -74,11 +79,16 @@ class HistoContainer():
             
         """
         import ROOT
+        from PyAnUtils.pyanfunctions import set_attr_plotobject
+
         opt = self._opts['book_histo']
         opt.reset()
         opt.setkwd(kwd)
         
         name = h.GetName()
+        set_attr_plotobject(h,xtitle=opt.xtitle,ytitle=opt.ytitle,
+                ztitle=opt.ztitle,title=opt.title,
+                color=opt.color)
 
         if name in self._histos.keys():
             raise KeyError("Histogram name already in used" %  name)
@@ -137,12 +147,14 @@ class HistoContainer():
             y(z)low and y(z)high
         """
         import ROOT
+        from PyAnUtils.pyanfunctions import set_attr_plotobject
+        
         opt = self._opts['create_and_book_histo']
         opt.reset()
         opt.setkwd(kwd)
         
         if name in self._histos.keys():
-            raise KeyError("Histogram name already in used" %  name)
+            raise KeyError("Histogram '{0}' already in used".format(name))
         
         if opt.npoints_y: 
             if opt.ylow is None or opt.yhigh is None:
@@ -163,6 +175,11 @@ class HistoContainer():
         else:
             histoclass = "TH1F"
             h = ROOT.TH1F(name,title,npoints,xlow,xhigh)
+        
+        set_attr_plotobject(h,xtitle=opt.xtitle,ytitle=opt.ytitle,
+                ztitle=opt.ztitle,title=opt.title,
+                color=opt.color)
+        
         self._histos[name] = h
         setattr(self,name,self._histos[name])
         self._class[name]  = histoclass
@@ -291,8 +308,8 @@ class HistoContainer():
         opt.setkwd(kwd)
 
         self.checkhisto(name)
-        if y:
-            if z:
+        if y is not None:
+            if z is not None:
                 self._histos[name].Fill(x,y,z)
             else:
                 self._histos[name].Fill(x,y)
@@ -328,6 +345,8 @@ class HistoContainer():
             default 0.85
         textlength: float
             the length of the legend box, default 0.31
+        log: bool
+            activate the logarithmic scale in the y-axis 
         """
         from PyAnUtils.pyanfunctions import drawlegend
         from PyAnUtils.plotstyles import setpalette
@@ -372,6 +391,9 @@ class HistoContainer():
                 leg.AddEntry(self._histos[n],self._description[n],"LF")
                 drawlegend(leg,opt.legposition,opt.legy,textlength=opt.textlength)
         canvas.SaveAs(plotname)
+        if opt.log:
+            canvas.SetLogy()
+            canvas.SaveAs(plotname.replace(".","_log."))
         # Deattach the legend from this canvas, otherwise violation segmentation
         canvas.Clear()
         leg.Delete()
