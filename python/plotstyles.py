@@ -286,7 +286,7 @@ def njStyle():
     #ROOT.gStyle.ls();
     return njStyle
 
-def setpalette(name="rainbow", ncontours=999):
+def setpalette(name="rainbow", ncontours=99):
     """.. function::setpalette()
     
     Set a color palette from a given RGB list
@@ -316,6 +316,11 @@ def setpalette(name="rainbow", ncontours=999):
         red   = [0.00, 0.09, 0.18, 0.09, 0.00]
         green = [0.01, 0.02, 0.39, 0.68, 0.97] 
         blue  = [0.17, 0.39, 0.62, 0.79, 0.97] 
+    elif name == 'forest':
+        stops = [0.00, 0.25, 0.50, 0.75, 1.00]  
+        red   = [0.93, 0.70, 0.40, 0.17, 0.00]
+        green = [0.97, 0.89, 0.76, 0.64, 0.43] 
+        blue  = [0.98, 0.89, 0.64, 0.37, 0.17] 
     else:
         # default palette, looks cool
         stops = [0.00, 0.34, 0.61, 0.84, 1.00]
