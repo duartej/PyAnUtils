@@ -405,3 +405,25 @@ class HistoContainer():
             if self._associated.has_key(name):
                 __dummy = map(lambda n: self._histos[n].Scale(oldintegral[n]), unorderednames)
 
+    def write_to(self,outputfile):
+        """Write all the histograms in the container to a ROOT.TFile
+
+        Parameters
+        ----------
+        outputfile: str
+            name of the output filename
+
+        Raises
+        ------
+            IOError if any problem is found opening the output file
+        """
+        import ROOT 
+
+        efile = ROOT.TFile.Open(outputfile,'UPDATE')
+        if efile.IsZombie():
+            raise IOError("problem opening the file '{0}'".format(outputfile))
+
+        for _h in self._histos.values():
+            _h.Write("",ROOT.TObject.kOverwrite)
+        efile.Close()
+        del efile
