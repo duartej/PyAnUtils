@@ -357,14 +357,33 @@ class xaodtree(storedtree):
 
         # Obtain all the variables of the tree, and their associated
         branch_names = map(lambda x: x.GetName(), self._tree.GetListOfBranches())
+        tocreate_attr = []
         for bname in filter(lambda y: y.find('Aux') == -1,branch_names):
             try:
+                # try to match then name or only the instance name A_B_C --> C
                 bname_aux = filter(lambda x: x == bname+'Aux.',branch_names)[0]
                 self._aux_associated[bname] = getattr(self._tree,bname_aux)
             except IndexError:
                 pass
-            # create the attribute to the class
-            setattr(self,bname,getattr(self._tree,bname))
+            tocreate_attr.append( (bname,getattr(self._tree,bname)) )
+        # -- note that if no aux is associated is because we are not using 
+        #    properly the name info: CONTAINERTYPE<CLASSCONTAINED>_INSTANCENAME_
+        if len(self._aux_associated) == 0:
+            tocreate_attr = []
+            # get a splitted list TYPECLASS,INSTANCE
+            instances_names = map(lambda x: x.GetName().split('_'), self._tree.GetListOfBranches())
+            for bname in filter(lambda y: y[-1].find('Aux') == -1,instances_names):
+                try:
+                    # try to match then name or only the instance name A_B_C --> C
+                    bname_aux = filter(lambda x: x[-1] == bname[-1]+'Aux.',instances_names)[0]
+                    self._aux_associated[bname[-1]] = getattr(self._tree,'_'.join(bname_aux))
+                except IndexError:
+                    pass
+                tocreate_attr.append( (bname[-1],getattr(self._tree,'_'.join(bname))) )
+        # create the attribute to the class
+        for (atname,obj) in tocreate_attr:
+            setattr(self,atname,obj)
+        #    properly the instances names: TYPE_CLASS_INSTANCE 
         # do the association (points to the aux var)
         for varname,auxvar in self._aux_associated.iteritems():
             getattr(self,varname).setStore(auxvar)
