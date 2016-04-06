@@ -87,9 +87,9 @@ class HistoContainer():
             title = h.GetTitle()
         
         self._histos[name] = h
-        setattr(self,name,self._histos[name])
         self._class[name]  = h.ClassName()
         self._description[name] = opt.description
+        setattr(self,name,self._histos[name])
         self._usercreated[name] = True
 
     def create_and_book_histo(self,name,title,npoints,xlow,xhigh,**kwd):
