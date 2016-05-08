@@ -332,8 +332,17 @@ class athenajob(workenv):
         except IndexError:
             raise RuntimeError('jobOption file not found %s' % joboptionfile)
         
-        # JobOptions file
-        self.makecopyJO()
+        # check if it is a transformation job
+        self.isTFJ = False
+        if kw.has_key('reco_tf') and kw['reco_tf']:
+            self.isTFJ = True
+            # filling the type of input (RAW,ESD,AOD)
+            # FIXME: check for valid types
+            if kw.has_key['input_type']:
+                self.tf_input_type = kw['input_type']
+            else:
+                self.tf_input_type = 'ESD'
+        self.useJOFile()
         
         # Allowing EOS remote files
         if inputfiles.find('root://') == -1:
@@ -378,11 +387,19 @@ class athenajob(workenv):
         self.typealias = 'Athena'
         self.relevantvar =  [ ("AtlasSetup","setupATLAS"), ("CMTCONFIG","asetup") ] 
 
-    def makecopyJO(self):
-        """..method:: makecopyJO()
+    def useJOFile(self):
+        """..method:: useJOFile()
 
-        the JobOption is copied in the local path      
+        the JobOption is copied in the local path if is a athena job or
+        extracted the content if is a transformation job
         """
+        if self.isTFJ:
+            # if Reco_tf, just extract the content of the file
+            with open(self.joboption) as f:
+                self.tf_parameters = f.readlines()
+                f.close()
+            return
+        # Otherwise, copy it in the local path
         import shutil
         import os
         
@@ -477,11 +494,19 @@ class athenajob(workenv):
         bashfile += 'cd '+ph.setupfolder+'\n'
         bashfile += 'source $AtlasSetup/scripts/asetup.sh %s,%s,here %s\n' % (ph.version,ph.gcc,ph.extra_asetup)
         bashfile += 'cd -\n'
-        bashfile += 'cp %s .\n' % self.joboption
-        bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
-                (ph.skipevts,ph.nevents,str(self.inputfiles))
-        # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
-        bashfile += self.joboption+" \n"
+        if self.isTFJ:
+            # Transformation job
+            bashfile += 'Reco_tf --fileValidation False --maxEvents {0}'\
+                    ' --skipEvent {1} --ignoreErrors \'True\' {2} --input{3} '\
+                    '{4}'.format(ph.nevents,ph.skipevts,self.tf_parameters,\
+                    self.tf_inputType,str(self.inputfiles))
+        else:
+            # athena.py jobOption.py job
+            bashfile += 'cp %s .\n' % self.joboption
+            bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
+                    (ph.skipevts,ph.nevents,str(self.inputfiles))
+            # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
+            bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
         f=open(self.scriptname,"w")
         f.write(bashfile)

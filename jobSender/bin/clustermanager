@@ -102,8 +102,11 @@ if __name__ == '__main__':
         
         # Work environment and cluster definitions
         if opt.type_we == 'athena':
-            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,
+            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,\
                     njobs=opt.njobs)
+        elif opt.type_we == 'reco_tf':
+            we_instance = athenajob(opt.bashname,opt.optionalfile,\
+                    njobs=opt.njobs,reco_tf=True)
         elif opt.type_we == 'blind':
             we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs)
         else:
