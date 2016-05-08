@@ -338,7 +338,7 @@ class athenajob(workenv):
             self.isTFJ = True
             # filling the type of input (RAW,ESD,AOD)
             # FIXME: check for valid types
-            if kw.has_key['input_type']:
+            if kw.has_key('input_type'):
                 self.tf_input_type = kw['input_type']
             else:
                 self.tf_input_type = 'ESD'
@@ -396,7 +396,8 @@ class athenajob(workenv):
         if self.isTFJ:
             # if Reco_tf, just extract the content of the file
             with open(self.joboption) as f:
-                self.tf_parameters = f.readlines()
+                _params = f.readline()
+                self.tf_parameters = _params.replace("\n","")
                 f.close()
             return
         # Otherwise, copy it in the local path
@@ -496,10 +497,11 @@ class athenajob(workenv):
         bashfile += 'cd -\n'
         if self.isTFJ:
             # Transformation job
+            # convert the list of files into a space separated string (' '.join(self.inputfiles)
             bashfile += 'Reco_tf --fileValidation False --maxEvents {0}'\
-                    ' --skipEvent {1} --ignoreErrors \'True\' {2} --input{3} '\
+                    ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3} '\
                     '{4}'.format(ph.nevents,ph.skipevts,self.tf_parameters,\
-                    self.tf_inputType,str(self.inputfiles))
+                    self.tf_input_type,' '.join(self.inputfiles))
         else:
             # athena.py jobOption.py job
             bashfile += 'cp %s .\n' % self.joboption
