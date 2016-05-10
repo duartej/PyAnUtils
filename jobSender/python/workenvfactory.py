@@ -305,24 +305,52 @@ workenv.register(blindjob)
 
 ## -- Concrete implementation: Athena job
 class athenajob(workenv):
-    """..class:: athenajob
+    """Concrete implementation of an athena work environment. 
+    An athena job could be called in two different modes:
+      1. as jobOption-based [jO]
+      2. as transformation job [tf]
+    In both cases, an athena job should contain:
+      * a bashscript name, which defines the cluster jobs, being
+      bash script to deliver to the cluster
+      * a list of input files
+      * and depending of the mode (jO-based or tf):
+        - [jO]: a jobOption python script feeding the athena exec
+        - [tf]: a python script which contains in a single line (as
+        it is) the string to be deliver to the Reco_tf.py exec. In that
+        line, the input files related commands must be removed; but
+        the output file related commands must be included (i.e. 
+        --outputAODFile fileName.root) 
+    
+    See __init__ method to instatiate the class
 
-    Concrete implementation of an athena work environment. 
-    An athena job should contain an jobOption python script which
-    feeds the athena.py executable. This jobs needs a list of 
-    input files and the probably a list of output files. 
     TO BE IMPLEMENTED: Any extra configuration variable to be used
     in the jobOption (via -c), can be introduced with the kw in the
     construction.
     """
-    def __init__(self,bashscriptname,joboptionfile,inputfiles,**kw):
-        """..class:: athenajob(nameofthejob[,])
+    def __init__(self,bashscriptname,joboptionfile,
+            inputfiles,athenamode = 'jo',**kw):
+        """Instantiation
 
-        Concrete implementation of an athena job. 
+        Parameters
+        ----------
+        bashscriptname: str
+            name of the bash script argument to the cluster sender command.
+            Note that must be without suffix (.sh)
+        joboptionfile: str
+            path to the python script (jobOption or tf_parameters, depending
+            the athena mode)
+        inputfiles: str
+            comma separated root inputfiles, wildcards are allowed
+        athenamode: str, {'jo', 'tf'}
+            athena mode, either jobOption-based or transformation job 
+            (note default is jobOption mode)
 
-        :param nameofthejob: generic name to this job. It is used to 
-                             populate other data members (script name,...)
-        :type  nameofthejob: str
+        input_type: str, optional, { 'ESD', 'RAW', 'HITS', 'RDO', 'AOD' }
+            only valid with athenamode=='tf'
+        evtmax: int, optional
+            number of events to be processed
+        njobs: int, optional
+            number of jobs to be sent
         """
         from jobssender import getrealpaths,getremotepaths,getevt
 
@@ -334,14 +362,18 @@ class athenajob(workenv):
         
         # check if it is a transformation job
         self.isTFJ = False
-        if kw.has_key('reco_tf') and kw['reco_tf']:
+        if athenamode == 'tf':
             self.isTFJ = True
+            self.tf_input_type = 'ESD'
+            VALIDINPUTS = [ 'ESD', 'RAW', 'HITS', 'RDO', 'AOD' ]
             # filling the type of input (RAW,ESD,AOD)
             # FIXME: check for valid types
-            if kw.has_key('input_type'):
-                self.tf_input_type = kw['input_type']
-            else:
-                self.tf_input_type = 'ESD'
+            if kw.has_key('input_type') :
+                try:
+                    self.tf_input_type = filter(lambda x: x == kw['input_type'],VALIDINPUTS)[0]
+                except IndexError:
+                    raise AttributeError("Invalid 'input_type'={0}, "\
+                            " see help(athenajob.__init__) to get the list of valid input types")
         self.useJOFile()
         
         # Allowing EOS remote files
@@ -498,10 +530,10 @@ class athenajob(workenv):
         if self.isTFJ:
             # Transformation job
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
-            bashfile += 'Reco_tf --fileValidation False --maxEvents {0}'\
+            bashfile += 'Reco_tf.py --fileValidation False --maxEvents {0}'\
                     ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3} '\
                     '{4}'.format(ph.nevents,ph.skipevts,self.tf_parameters,\
-                    self.tf_input_type,' '.join(self.inputfiles))
+                    self.tf_input_type,' '.join(self.inputfiles),self.tf_output_type,self.outputfile)
         else:
             # athena.py jobOption.py job
             bashfile += 'cp %s .\n' % self.joboption
@@ -568,8 +600,15 @@ class athenajob(workenv):
         using the datamember 'successjobcode' perform a check
         to the job (jobdsc) to see if it is found the expected
         outputs or success codes
+
+        FIXME: Static class do not have make use of the self?
         """
-        succesjobcode=['Py:Athena','INFO leaving with code 0: "successful run"']
+        #if self.isTFJ:
+        #    succesjobcode=['PyJobTransforms.main','trf exit code 0']
+        #else:
+        #    succesjobcode=['Py:Athena','INFO leaving with code 0: "successful run"']
+        succesjobcode_tf=['PyJobTransforms.main','trf exit code 0']
+        succesjobcode_jo=['Py:Athena','INFO leaving with code 0: "successful run"']
         import os
         # Athena jobs outputs inside folder defined as:
         folderout = os.path.join(jobdsc.path,'LSFJOB_'+str(jobdsc.ID))
@@ -583,8 +622,11 @@ class athenajob(workenv):
         f = open(logout)
         lines = f.readlines()
         f.close()
-        for i in lines:
-            if i.find(succesjobcode[-1]) != -1:
+        # usually is in the end of the file
+        for i in reversed(lines):
+            if i.find(succesjobcode_jo[-1]) != -1:
+                return 'ok'
+            if i.find(succesjobcode_tf[-1]) != -1:
                 return 'ok'
         return 'fail' 
 
