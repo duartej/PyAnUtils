@@ -283,7 +283,7 @@ class blindjob(workenv):
     #    return self.joblist
 
     @staticmethod
-    def checkfinishedjob(jobdsc):
+    def checkfinishedjob(jobdsc,logfilename):
         """..method:: checkfinishedjob(jobdsc) -> status
         
         using the datamember 'successjobcode' perform a check
@@ -594,7 +594,7 @@ class athenajob(workenv):
     #    return self.joblist
 
     @staticmethod
-    def checkfinishedjob(jobdsc):
+    def checkfinishedjob(jobdsc,logfilename):
         """..method:: checkfinishedjob(jobdsc) -> status
         
         using the datamember 'successjobcode' perform a check
@@ -611,9 +611,11 @@ class athenajob(workenv):
         succesjobcode_jo=['Py:Athena','INFO leaving with code 0: "successful run"']
         import os
         # Athena jobs outputs inside folder defined as:
-        folderout = os.path.join(jobdsc.path,'LSFJOB_'+str(jobdsc.ID))
+        #folderout = os.path.join(jobdsc.path,'LSFJOB_'+str(jobdsc.ID))
         # outfile
-        logout = os.path.join(folderout,"STDOUT")
+        #logout = os.path.join(folderout,"STDOUT")
+        # -- defined as logfilename
+        logout = os.path.join(jobdsc.path,logfilename)
         if not os.path.isfile(logout):
             if DEBUG:
                 print "Not found the logout file '%s'" % logout

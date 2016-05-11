@@ -11,7 +11,7 @@
 DEBUG=True
 JOBEVT=500
 from jobSender.workenvfactory import athenajob,blindjob
-from jobSender.clusterfactory import cerncluster
+from jobSender.clusterfactory import cluster_builder
 from jobSender.jobssender     import bookeepingjobs,accessingjobsinfo,job
 
 if __name__ == '__main__':
@@ -41,11 +41,11 @@ if __name__ == '__main__':
     sendopt.add_option("--extra-asetup",action="store",dest="asetup_options",\
             default='',help="Space separated extra options to be delivered to the asetup")
     sendopt.add_option("-q","--queue",action="store",dest="queue",\
-            help="Name of the queue to be send the job [Default: 8nh]")
+            help="Name of the queue to be send the job [Default: None]")
     sendopt.add_option("-i","--inputfiles",action="store",dest="filenames",\
             help="Input root files (can be regular expresion)")
     sendopt.add_option("-n","--njobs",action="store",dest="njobs",\
-            help="Force the number of jobs to be sent")
+            help="Force the number of jobs to be sent [10]")
     sendopt.add_option("-e","--evtsmax",action="store",dest="evtsmax",\
             help="Number of events to be processed")
     parser.add_option_group(sendopt)
@@ -83,14 +83,13 @@ if __name__ == '__main__':
                     '_tid04569111_00/*.pool.root.*',
                     type_we='athena',
                     optionalfile=None,
-                    njobs=300,
-                    queue='8nh',
+                    njobs=10,
+                    queue=None,
                     workingpath='./')
 
     (opt,args) = parser.parse_args()
     print "================================================================"
-    print "\033[1;33mWARNING:\033[1;m Some functionalities are not developed yet. The program"
-    print "is just able to send jobs in the 'cern' cluster"
+    print "\033[1;33mWARNING:\033[1;m DEVELOPMENT VERSION, use at your own risk"
     print "================================================================"
 
     if len(args) != 1:
@@ -109,9 +108,9 @@ if __name__ == '__main__':
             we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs)
         else:
             raise AttributeError('-t option variable not recognized: "{0}"'.format(opt.type_we))
-        cern = cerncluster(simulate=opt.dryrun,queue=opt.queue)
+        cluster = cluster_builder(simulate=opt.dryrun,queue=opt.queue)
         # Job instantation
-        js   = job(cern,we_instance)
+        js   = job(cluster,we_instance)
         js.preparejobs(opt.asetup_options)
         js.submit()
         bookeepingjobs(js)
