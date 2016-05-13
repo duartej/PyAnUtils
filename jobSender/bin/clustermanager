@@ -32,7 +32,7 @@ if __name__ == '__main__':
     sendopt= OptionGroup(parser,"Send mode options",
             "Options valid only when it is called with 'send' arg")
     sendopt.add_option("-t","--type",action="store",dest="type_we",\
-            default='athena',help="Name of the type of job: <athena|blind> [athena]")
+            default='athena',help="Name of the type of job: <athena|reco_tf|blind> [athena]")
     sendopt.add_option("--specific-file",action="store",dest="optionalfile",\
             help="Extra file for the blind job, specific related to the job-index."\
             " The actual format should be like 'filenama_%i.suff'")
