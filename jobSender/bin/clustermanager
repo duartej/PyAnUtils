@@ -84,6 +84,7 @@ if __name__ == '__main__':
                     type_we='athena',
                     optionalfile=None,
                     njobs=10,
+                    evtsmax = -1,
                     queue=None,
                     workingpath='./')
 
@@ -101,11 +102,14 @@ if __name__ == '__main__':
         
         # Work environment and cluster definitions
         if opt.type_we == 'athena':
-            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,'jo',njobs=opt.njobs)
+            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,'jo',
+                    njobs=opt.njobs,evtmax=opt.evtsmax)
         elif opt.type_we == 'reco_tf':
-            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,'tf',njobs=opt.njobs)
+            we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,'tf',
+                    njobs=opt.njobs,evtmax=otp.evtsmax)
         elif opt.type_we == 'blind':
-            we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs)
+            we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs,
+                    evtmax=opt.evtsmax)
         else:
             raise AttributeError('-t option variable not recognized: "{0}"'.format(opt.type_we))
         cluster = cluster_builder(simulate=opt.dryrun,queue=opt.queue)
