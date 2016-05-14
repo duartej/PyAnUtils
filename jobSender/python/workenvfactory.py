@@ -537,7 +537,7 @@ class athenajob(workenv):
         else:
             # athena.py jobOption.py job
             bashfile += 'cp %s .\n' % self.joboption
-            bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
+            bashfile +='athena.py -c "SkipEvents=%i; theApp.EvtMax=%i; FilesInput=%s;" ' % \
                     (ph.skipevts,ph.nevents,str(self.inputfiles))
             # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
             bashfile += self.joboption+" \n"
