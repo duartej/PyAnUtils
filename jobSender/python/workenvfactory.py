@@ -441,6 +441,30 @@ class athenajob(workenv):
             shutil.copyfile(self.joboption,localcopy)
         # And re-point
         self.joboption=localcopy
+    
+    def jobOption_modification(self):
+        """Be sure that the FilesInput and SkipEvents are used
+        accordingly in a jo-based
+        """
+        lines = []
+        with open(self.joboption) as f:
+            lines = f.readlines()
+        # secure and lock the FilesINput and skipEvents provided
+        # by the user
+        prelines = [ "athenaCommonFlags.FilesInput.set_Value_and_Lock(FilesInput)" ,\
+                "athenaCommonFlags.SkipEvents.set_Value_and_Lock(SkipEvents)" ]
+        try:
+            impline = filter(lambda (i,l): 
+                    l.find("from AthenaCommon.AthenaCommonFlags import athenaCommonFlags") == 0, enumerate(lines))[0][0]
+        except IndexError:
+            raise RuntimeError("Weird jobOption, are you sure you don't want to"\
+                    " add the athenaCommonFlags?")
+        for k in xrange(len(prelines)):
+            lines.insert(impline+k,prelines[k])
+
+        with open(self.joboption,"w") as f:
+            f.writelines(lines)
+
 
     def preparejobs(self,extra_asetup=''):
         """..method:: preparejobs() -> listofjobs
@@ -454,6 +478,11 @@ class athenajob(workenv):
         usersetupfolder = self.getuserasetupfolder()
         athenaversion = os.getenv('AtlasVersion')
         compiler      = self.getcompiler()
+        
+        # if is an athena job, be sure that the FilesInput and SkipEvents
+        # orders are received and locked, i.e. modify accordingly the JO
+        if not self.isTFJ:
+            self.jobOption_modification()
 
         # setting up the folder structure to send the jobs
         # including the bashscripts
