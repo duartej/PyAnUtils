@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+""":script:`ks_submit_prun` -- Send panda jobs for the Kshort trk. eff. study 
+=============================================================================
+
+.. script:: ks_submit_prun
+  :platform: unix
+  :synopsis:     Use the grid infrastructure to send runDVAna jobs 
+                 (see DV_XAODAnalysis packages). The script is intended to 
+                 send jobs for the Kshort's uncertainty on tracking efficiency
+                 study, but may be easily adapted to send generic runDVAna
+                 jobs. [FIXME: DO THE ADAPTATION].
+  :inputs:       DATASETS which should be available in the AMI db
+  :dependencies: PANDA (setupATLAS && lsetup panda)
+.. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
+"""
+VERSION=4
+
+def main(datasets,simulate=False):
+    """
+    """
+    import datetime,time
+    import getpass
+    from subprocess import Popen,PIPE
+
+    if simulate:
+        print "\033[1;33mSIMULATING\033[1;m, not sending anything to the grid"
+    else:
+        print "\033[1;34mINFO\033[1;m sending KsSampleCreator jobs to the grid"
+        print "\033[1;34mINFO\033[1;m log: " 
+    # Get the datasets
+    loglines = []
+    for ds in datasets:
+        # extract a suitable name for the output
+        _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,version = \
+                ds.split(":")[-1].split(".")
+        outDS  = "user.duarte.KsSampleCreator.{0}.{1}.{2}.{3}.v{4}".format(physics_short,
+                DSnumber,post_step,repo_tab,VERSION)
+        dijet = physics_short.split("_")[-1]
+        rootname = "kshort_mc_{0}.root".format(dijet)
+        command= ['prun', '--exec="runDVAna -a KsSampleCreator -o {0} -f %IN"'.format(rootname),\
+                '--useRootCore', '--inDS={0}'.format(ds), '--outputs', rootname,'--outDS',outDS,'--nGBPerJob',' MAX']
+        if simulate:
+            print ' '.join(command)+'\n'
+            continue
+        else:
+            print "\033[1;34mINFO\033[1;m Sending {0}.".format(outDS)
+        p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
+        if p[1] != "":
+            message = "ERROR from {0}:\n".format(self.sendcom)
+            message += p[1]+"\n"
+            raise RuntimeError(message)
+        loglines = p[0]
+    ts = time.time()
+    timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y%m%d_%H%M%S')
+    username = getpass.getuser()
+    logfile="prunsubmission_{0}_{1}.log".format(timestamp,username)
+
+
+if __name__ == '__main__':
+    from optparse import OptionParser
+
+    usage  = "usage: submit_prun.py INPUTDS [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option( "-s",action='store_true',dest='simulate',default=False,\
+            help="Don't send the jobs, just simulate and print the commands")
+
+    (opt,args) = parser.parse_args()
+    if len(args) <= 1:
+        message = "\033[31msubmit_prun ERROR\033[m Missing mandatory INPUT DATASETS"
+        raise RuntimeError(message)
+    
+    main(args,opt.simulate)
+
+

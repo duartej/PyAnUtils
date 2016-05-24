@@ -15,5 +15,6 @@ setup(name='PyAnUtils',
         scripts=['bin/mtgfastfullcmp','bin/lazycmt','dvAnUtils/bin/dvtrigeff',
             'dvAnUtils/bin/roibasisconverter', 'dvAnUtils/bin/fitmodel',
             'jobSender/bin/clustermanager','mtgAnUtils/bin/mtg_gs_summary',
-            'dvAnUtils/bin/quickTrackPlotter','bin/getdecorations'],
+            'dvAnUtils/bin/quickTrackPlotter','bin/getdecorations',
+            'dvAnUtils/bin/ks_submit_prun','dvAnUtils/bin/ks_submit_localbatch'],
         )

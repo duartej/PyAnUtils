@@ -1,0 +1,233 @@
+#!/usr/bin/env python
+""":script:`ks_submit_localbatch` -- Prepare jobs to be submitted in a batch 
+=============================================================================
+
+.. script:: ks_submit_prun
+  :platform: unix
+  :synopsis:     Prepare the suitables inputs needed to submit local batch 
+                 jobs of the  runDVAna executable using the clustermanager
+                 script. The script is intended to send jobs for the 
+                 Kshort's uncertainty on tracking efficiency study, but may 
+                 be easily adapted to send generic runDVAna jobs. 
+                 [FIXME: DO THE ADAPTATION].
+  :inputs:       DATASETS which should be available in the AMI db
+  :dependencies: FAX (setupATLAS && lsetup fax)
+.. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
+"""
+VERSION=1
+
+# TO BE PROMOTED
+from contextlib import contextmanager
+import os
+
+@contextmanager
+def cd(newdir):
+    """Always returns to the previous directory
+    """
+    prevdir = os.getcwd()
+    os.chdir(os.path.expanduser(newdir))
+    try:
+        yield
+    finally:
+        os.chdir(prevdir)
+
+def getLFNd_and_Events(scope,dataset,verbose=False):
+    """Obtain the Logical file names belonging to a dataset
+
+    Parameters
+    ----------
+    scope: str
+    dataset: srt
+
+    verbose: bool [False]
+
+    Returns
+    -------
+    collFiles: list((str,int))
+        list of files and events contained in that file
+
+    Notes
+    -----
+    Inspired in fax-get-gLFNs
+    """
+    import os
+    try:
+        import rucio.client
+    except ImportError:
+        raise ImportError("Please do first: 'lsetup fax'")
+    
+    # get redirector
+    if verbose:
+        print '\033[1;34mINFO\033[1;m Seeking available files for "{0}:{1}"'.format(scope,dataset)
+    redir = os.environ.get("STORAGEPREFIX")
+    if not redir:
+        raise RuntimeError("no FAX redirector given. Please do: 'lsetup fax'")
+    filename = lambda scope,fname: "{0}/atlas/rucio/{1}:{2}".format(redir,scope,fname)
+
+    didcli = rucio.client.didclient.DIDClient()
+    cont = didcli.list_files(scope,dataset)
+    collFiles = map(lambda f: (filename(f['scope'],f['name']),f['events']), cont)
+    return collFiles
+
+def files_per_job(flist,evtperjob):
+    """Algorithm to split a list of n-files into a minimum of evts per job
+    The algorithm will try to match the required number of events per job, but
+    the input files are the atoms of the scheme, so they cannot be divided.
+    
+    Parameters
+    ----------
+    flist: list( (str,int) )
+        list of the files with their corresponding number of events.
+        This list can be obtained directly from the 'getLFNd_and_Events'
+        function
+
+    evtperjob: int
+        the recommended number of events per job
+
+    Return
+    ------
+    files_jobid: dict( int: [str] )
+        the list of files (values) to be processed by each job (key)
+    """
+    i = 0
+    files_jobid = {}
+    evts_in_this_job=0
+    for fname,evt in flist:
+        try:
+            files_jobid[i].append(fname)
+        except KeyError:
+            files_jobid[i] = [fname]
+        evts_in_this_job+=evt
+        if evts_in_this_job >= evtperjob:
+            evts_in_this_job=0
+            i+=1
+    # Just checking the coherence
+    assert sum(map(lambda ylist: len(ylist),files_jobid.values())) != len(fname)
+    return files_jobid
+
+def create_auxiliary_file(jobid,filelist,filename="filelist"):
+    """Create a file with the 'filelist' content. This function
+    intends to create the input file list which are going to feed 
+    each job. The created file will be: {0}_{1}.txt.format(jobid,filename)
+
+    Parameters
+    ----------
+    jobid: str
+    filelist: str
+        space separated list of files
+    filename: str, [filelist]
+
+    Return
+    ------
+    the name of the created file
+    """
+    lines = "{0}\n".format(' '.join(filelist))
+    current_filename = "{0}_{1}.txt".format(filename,jobid)
+    with open(current_filename,"w") as f:
+        f.write(lines)
+        f.close()
+    return current_filename
+
+def create_bash(filelist,testarea,bashname):
+    """Create a generic bashscript allowed to be used for each job,
+    so it contains some wildcards (%i) which the clustermanager (type:blind)
+    is going to use to define the jobs. The execute permission are set 
+    as well.
+
+    Parameters
+    ----------
+    filelist: str
+        space separated list of the input (root) files
+    testarea: str
+        the path to the area where is installed RootCore/DV_xAODAnalysis
+    bashname: str
+        name of the bash script (with n extension), so it creates 'bashname.sh'
+    """
+    import time,datetime
+    import os
+
+    ts = time.time()
+    timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    bashfile = '#!/bin/bash\n\n'
+    bashfile += '# File created by the script "launch_jobs" [{0}]\n'.format(timestamp)
+    bashfile += 'source $ATLAS_LOCAL_ROOT_BASE/user/atlasLocalSetup.sh\n'
+    bashfile += 'cd '+testarea+'\n'
+    bashfile += "lsetup 'rcsetup'\n"
+    bashfile += 'cd -\n'
+    dijetname = bashname.split('.')[1].split('_')[-1]
+    bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat ../{1}`\n'.format(
+            'kshistos_mc_{0}_%i.root'.format(dijetname),filelist)
+    bashfile += 'cp *.root {0}\n'.format(os.getcwd())
+    scriptname = '{0}.sh'.format(bashname)
+    f = open(scriptname,"w")
+    f.write(bashfile)
+    f.close()
+    os.chmod(scriptname,0755)
+
+def main(DSs,testarea,njobs=200,events_per_job=None):
+    """Steer the creation of the jobs. Per each dataset it will
+        1. Obtain the list of files
+        2. Create a directory 
+        3. Populate the directory with a bashscript and files with 
+           the list of input files per job
+        4. Remind the clustermanager command to be sent inside the
+           directory
+    """
+    import os
+    # get the event per job
+
+    # for each dataset 
+    for ds in DSs:
+        scope,dsname = ds.split(":")
+        splitname = dsname.split('.')
+        name = "{0}.{1}.{2}.{3}".format(splitname[3],splitname[2],splitname[7],splitname[8])
+        print "\033[1;34mINFO\033[1;m Creating job for {0}".format(name)
+        # -- create a directory to launch
+        directory=os.path.join(os.getcwd(),name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        with cd(directory):
+            # get the name of the files to process and events per file
+            flist = getLFNd_and_Events(scope,dsname)
+            # get the events per jobs
+            totalevts = sum(map(lambda x: x[1],flist))
+            evtperjob = totalevts/njobs
+            remainevts= totalevts%njobs
+            # build the list
+            jobid_files = files_per_job(flist,evtperjob)
+            # create an unique bash script 
+            filelist_name = 'filelist_%i.txt'
+            jobname = 'KsSampleCreator.{0}.v{1}'.format(name,VERSION)
+            create_bash(filelist_name,testarea,jobname)
+            # create the dv-analysis jobs
+            for jobid,filelist in jobid_files.iteritems():
+                auxiliary_filename = create_auxiliary_file(jobid,filelist,filename=filelist_name.split('_')[0])
+            print "\033[1;32mCOMMAND\033[1;m clustermanager send -t blind -b {0} --specific-file {1} "\
+                    "-n {2}".format(jobname,filelist_name.split('_')[0],njobs)
+            #FIXME: do it right away!
+    print "Send the jobs to the cluster!!"
+
+if __name__ == '__main__':
+    from optparse import OptionParser
+    import os
+    from os.path import expanduser
+
+    usage  = "usage: submit_localbatch.py DS1 DS2 ... [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option( "-t",action='store',dest='testarea',\
+            help="the path to the test area [$HOME/work/private/DualUse]",\
+            default="{0}/work/private/DualUse".format(expanduser("~")))
+    parser.add_option( "-j",action='store',dest='njobs',help="the number of jobs",\
+            default=200)
+
+    (opt,args) = parser.parse_args()
+    if len(args) < 1:
+        message = "\033[1;31msubmit_localbatch ERROR\033[1;m Missing list input datasets"
+        raise RuntimeError(message)
+    import sys
+    main(args,opt.testarea,njobs=int(opt.njobs))
+
+
+    
+
+
