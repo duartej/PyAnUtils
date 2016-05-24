@@ -162,24 +162,28 @@ class workenv(object):
 
 ## -- Concrete implementation: Blind job, the user provides everything
 class blindjob(workenv):
-    """..class:: blindjob
-
-    Concrete implementation of a blind job. The user provides a bashscript
+    """Concrete implementation of a blind job. The user provides a bashscript
     name which corresponds with an actual bashscript in the working folder.
+    The expected inputs are formed by:
+        * 1 unic bashscript which contains inside %i pattern which is going
+        to be substitute per the jobId
+        * a list of files following the notation 'filename_i.suff'
+        where 'i' stands for the jobID and 'suff' the suffix of the file
+    
+    Therefore the job splitting is based in the auxiliary files filename_i.suff
     """
     def __init__(self,bashscriptname,specificfile=None,**kw):
-        """..class:: blindjob(nameofthejob,specificfile[,])
-
-        Concrete implementation of an blind job. 
-
-        :param nameofthejob: generic name to this job and the name of an 
-                actual bashscript which must exist in the working dir 
-        :type  nameofthejob: str
-        :param specificfile: the name of a file which should be used for 
-                each job, the file name should contain a number which is
-                associated to the job number: filename_i.suffix
+        """Concrete implementation of an blind job. 
+        
+        Parameters
+        ----------
+        nameofthejob: str
+            generic name to this job and the name of an actual bashscript
+            which must exist in the working dir 
+        specificfile: str
+            name of a file which should be used for each job, the file name should 
+            contain a number which is associated to the job number: filename_i.suffix
                 So the name to be passed should be filename.suffix
-        :type  specificfile: str
         """
         import glob
         from jobssender import getrealpaths,getremotepaths,getevt
