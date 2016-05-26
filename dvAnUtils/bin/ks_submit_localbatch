@@ -155,8 +155,8 @@ def create_bash(filelist,testarea,bashname):
     bashfile += "lsetup 'rcsetup'\n"
     bashfile += 'cd -\n'
     dijetname = bashname.split('.')[1].split('_')[-1]
-    bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat ../{1}`\n'.format(
-            'kshistos_mc_{0}_%i.root'.format(dijetname),filelist)
+    bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat {1}/{2}` -c\n'.format(
+            'kshistos_mc_{0}_%i.root'.format(dijetname),os.getcwd(),filelist)
     bashfile += 'cp *.root {0}\n'.format(os.getcwd())
     scriptname = '{0}.sh'.format(bashname)
     f = open(scriptname,"w")
