@@ -69,6 +69,47 @@ def getLFNd_and_Events(scope,dataset,verbose=False):
     collFiles = map(lambda f: (filename(f['scope'],f['name']),f['events']), cont)
     return collFiles
 
+def getLocalFiles_and_Events(listfile,treename="CollectionTree"):
+    """Obtain the number of events 
+
+    Parameters
+    ----------
+    files: str
+        file with the list of input files to use
+
+    Returns
+    -------
+    collFiles: list((str,int))
+        list of files and events contained in that file
+    """
+    from ROOT import TFile
+    import sys
+
+    collFiles= []
+    with open(listfile) as _f1:
+        files_str = _f1.read()
+        _f1.close()
+    # to a list (with no empty strings)
+    files = filter(None,files_str.split("\n"))
+    
+    # --- Progress bar :)
+    pointpb = float(len(files))/100.0
+    for i in xrange(len(files)):
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m Obtaining number of events"+\
+                " from the files  [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+        sys.stdout.flush()
+        f = TFile.Open(files[i])
+        if f.IsZombie():
+            print 
+            print "\033[1;33mWARNING\033[1;m file '{0}' not found".format(i)
+            continue
+        evts = getattr(f,treename).GetEntries()
+        f.Close()
+        del f
+        collFiles.append( (files[i],evts) )
+    print
+    return collFiles
+
 def files_per_job(flist,evtperjob):
     """Algorithm to split a list of n-files into a minimum of evts per job
     The algorithm will try to match the required number of events per job, but
@@ -101,8 +142,11 @@ def files_per_job(flist,evtperjob):
         if evts_in_this_job >= evtperjob:
             evts_in_this_job=0
             i+=1
-    # Just checking the coherence
-    assert sum(map(lambda ylist: len(ylist),files_jobid.values())) != len(fname)
+    # Just checking the coherence...  
+    if sum(map(lambda ylist: len(ylist),files_jobid.values())) != len(flist):
+        raise RuntimeError("INTERNAL ERROR: The number of files collected in the"\
+                " files_jobid dict (which are the values) must be the same"\
+                " than the number of introduced files.")
     return files_jobid
 
 def create_auxiliary_file(jobid,filelist,filename="filelist"):
@@ -145,26 +189,35 @@ def create_bash(filelist,testarea,bashname):
     """
     import time,datetime
     import os
+    import random
 
     ts = time.time()
     timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     bashfile = '#!/bin/bash\n\n'
     bashfile += '# File created by the script "launch_jobs" [{0}]\n'.format(timestamp)
+    bashfile += '='*80+'\n'
+    bashfile += 'hostname\n'
+    bashfile += 'pwd\n'
+    bashfile += '='*80+'\n'
+    # Issue with the directory, create a temporary one
+    tmpdir   = '__tmp_job_{0}_{1}'.format(hash(random.uniform(0,1e9)),hash(random.uniform(0,1e9)))
+    bashfile += 'mkdir {0}\n'.format(tmpdir)
+    bashfile += 'cd {0}\n'.format(tmpdir)
     bashfile += 'source $ATLAS_LOCAL_ROOT_BASE/user/atlasLocalSetup.sh\n'
     bashfile += 'cd '+testarea+'\n'
     bashfile += "lsetup 'rcsetup'\n"
-    bashfile += 'cd -\n'
+    bashfile += 'cd {0}\n'.format(tmpdir)
     dijetname = bashname.split('.')[1].split('_')[-1]
     bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat {1}/{2}` -c\n'.format(
             'kshistos_mc_{0}_%i.root'.format(dijetname),os.getcwd(),filelist)
-    bashfile += 'cp *.root {0}\n'.format(os.getcwd())
+    bashfile += 'mv kshistos_mc_{0}_%i.root {0}/\n'.format(dijetname,os.getcwd())
     scriptname = '{0}.sh'.format(bashname)
     f = open(scriptname,"w")
     f.write(bashfile)
     f.close()
     os.chmod(scriptname,0755)
 
-def main(DSs,testarea,njobs=200,events_per_job=None):
+def main(DSs,testarea,localfiles,njobs=200,events_per_job=None):
     """Steer the creation of the jobs. Per each dataset it will
         1. Obtain the list of files
         2. Create a directory 
@@ -174,7 +227,17 @@ def main(DSs,testarea,njobs=200,events_per_job=None):
            directory
     """
     import os
-    # get the event per job
+    
+    # Mode FAX or local?
+    obtain_files_evts = getLFNd_and_Events
+    if localfiles:
+        # Get the full path 
+        filelist_file = os.path.realpath(localfiles)
+        obtain_files_evts = getLocalFiles_and_Events
+        # Be sure only one DS is evaluated
+        if len(DSs) > 1:
+            raise RuntimeError("\033[1;31mERROR\033[1;m Only one"\
+                    " datasets is allowed with the '-l' option")
 
     # for each dataset 
     for ds in DSs:
@@ -188,7 +251,10 @@ def main(DSs,testarea,njobs=200,events_per_job=None):
             os.makedirs(directory)
         with cd(directory):
             # get the name of the files to process and events per file
-            flist = getLFNd_and_Events(scope,dsname)
+            if localfiles:
+                flist = getLocalFiles_and_Events(filelist_file)
+            else:
+                flist = getLFNd_and_Events(scope,dsname)
             # get the events per jobs
             totalevts = sum(map(lambda x: x[1],flist))
             evtperjob = totalevts/njobs
@@ -219,13 +285,17 @@ if __name__ == '__main__':
             default="{0}/work/private/DualUse".format(expanduser("~")))
     parser.add_option( "-j",action='store',dest='njobs',help="the number of jobs",\
             default=200)
+    parser.add_option( "-l","--local-files",action='store',dest='localfiles',\
+            metavar="LISTFILES.txt",help="the input files are located locally"\
+            " and listed into LISTFILES.txt filed. With this option, it is only"\
+            " valid to process one DS")
 
     (opt,args) = parser.parse_args()
     if len(args) < 1:
         message = "\033[1;31msubmit_localbatch ERROR\033[1;m Missing list input datasets"
         raise RuntimeError(message)
     import sys
-    main(args,opt.testarea,njobs=int(opt.njobs))
+    main(args,opt.testarea,opt.localfiles,njobs=int(opt.njobs))
 
 
     
