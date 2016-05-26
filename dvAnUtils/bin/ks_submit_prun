@@ -13,47 +13,52 @@
   :dependencies: PANDA (setupATLAS && lsetup panda)
 .. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
 """
-VERSION=4
 
-def main(datasets,simulate=False):
+def main(datasets,version,simulate=False):
     """
     """
     import datetime,time
     import getpass
     from subprocess import Popen,PIPE
 
-    if simulate:
-        print "\033[1;33mSIMULATING\033[1;m, not sending anything to the grid"
-    else:
-        print "\033[1;34mINFO\033[1;m sending KsSampleCreator jobs to the grid"
-        print "\033[1;34mINFO\033[1;m log: " 
-    # Get the datasets
-    loglines = []
-    for ds in datasets:
-        # extract a suitable name for the output
-        _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,version = \
-                ds.split(":")[-1].split(".")
-        outDS  = "user.duarte.KsSampleCreator.{0}.{1}.{2}.{3}.v{4}".format(physics_short,
-                DSnumber,post_step,repo_tab,VERSION)
-        dijet = physics_short.split("_")[-1]
-        rootname = "kshort_mc_{0}.root".format(dijet)
-        command= ['prun', '--exec="runDVAna -a KsSampleCreator -o {0} -f %IN"'.format(rootname),\
-                '--useRootCore', '--inDS={0}'.format(ds), '--outputs', rootname,'--outDS',outDS,'--nGBPerJob',' MAX']
-        if simulate:
-            print ' '.join(command)+'\n'
-            continue
-        else:
-            print "\033[1;34mINFO\033[1;m Sending {0}.".format(outDS)
-        p = Popen(command,stdout=PIPE,stderr=PIPE).communicate()
-        if p[1] != "":
-            message = "ERROR from {0}:\n".format(self.sendcom)
-            message += p[1]+"\n"
-            raise RuntimeError(message)
-        loglines = p[0]
     ts = time.time()
     timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y%m%d_%H%M%S')
     username = getpass.getuser()
     logfile="prunsubmission_{0}_{1}.log".format(timestamp,username)
+    if simulate:
+        print "\033[1;33mSIMULATING\033[1;m, not sending anything to the grid"
+    else:
+        print "\033[1;34mINFO\033[1;m sending KsSampleCreator jobs to the grid"
+        print "\033[1;34mINFO\033[1;m log: {0} ".format(logfile)
+    # Get the datasets
+    loglines = []
+    for ds in datasets:
+        # extract a suitable name for the output
+        _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,in_version = \
+                ds.split(":")[-1].split(".")
+        outDS  = "user.duarte.KsSampleCreator.{0}.{1}.{2}.{3}.v{4}".format(physics_short,
+                DSnumber,post_step,repo_tab,version)
+        dijet = physics_short.split("_")[-1]
+        rootname = "kshort_mc_{0}.root".format(dijet)
+        command= 'prun --exec=\"runDVAna -a KsSampleCreator -o {0} -f %IN\" '\
+                '--useRootCore --inDS={1} --outputs {0} --outDS {2} '\
+                '--nGBPerJob MAX'.format(rootname,ds,outDS)
+        if simulate:
+            print command
+            continue
+        else:
+            print "\033[1;34mINFO\033[1;m Sending {0}".format(outDS)
+        p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+        #if p[1] != "":
+        #    message = "ERROR from prun:\n"
+        #    message += p[1]+"\n"
+        #    raise RuntimeError(message)
+        # The error stream is not well defined in prun...
+        loglines.append(p[1])
+    if not simulate:
+        with open(logfile,"w") as f1:
+            f1.writelines(loglines)
+            f1.close()
 
 
 if __name__ == '__main__':
@@ -63,12 +68,14 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
     parser.add_option( "-s",action='store_true',dest='simulate',default=False,\
             help="Don't send the jobs, just simulate and print the commands")
+    parser.add_option( "-v","--version",action='store',dest='version',default="0",\
+            help="The version number of the job")
 
     (opt,args) = parser.parse_args()
-    if len(args) <= 1:
+    if len(args) < 1:
         message = "\033[31msubmit_prun ERROR\033[m Missing mandatory INPUT DATASETS"
         raise RuntimeError(message)
     
-    main(args,opt.simulate)
+    main(args,opt.version,opt.simulate)
 
 
