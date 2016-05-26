@@ -391,7 +391,7 @@ class taucluster(clusterspec):
             queue = kw['queue']
         else:
             queue = 'N'
-        self.extraopt  += [ '-q', queue ]
+        self.extraopt  += [ '-q', queue , '-V' ]
     
     def simulatedresponse(self,action):
         """ DO NOT USE this function, just for debugging proporses
