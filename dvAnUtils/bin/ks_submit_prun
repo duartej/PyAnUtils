@@ -34,8 +34,15 @@ def main(datasets,version,simulate=False):
     loglines = []
     for ds in datasets:
         # extract a suitable name for the output
-        _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,in_version = \
-                ds.split(":")[-1].split(".")
+        try:
+            # input DS with the repo_tab 
+            _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,in_version = \
+                    ds.split(":")[-1].split(".")
+        except ValueError:
+            _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,in_version = \
+                    ds.split(":")[-1].split(".")
+            # dummy repository tag
+            repo_tab="xxxx"
         outDS  = "user.duarte.KsSampleCreator.{0}.{1}.{2}.{3}.v{4}".format(physics_short,
                 DSnumber,post_step,repo_tab,version)
         dijet = physics_short.split("_")[-1]
