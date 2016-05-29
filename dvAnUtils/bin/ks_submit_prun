@@ -14,7 +14,7 @@
 .. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
 """
 
-def main(datasets,version,simulate=False):
+def main(datasets,version,steps,multiple_ds,simulate=False):
     """
     """
     import datetime,time
@@ -30,8 +30,17 @@ def main(datasets,version,simulate=False):
     else:
         print "\033[1;34mINFO\033[1;m sending KsSampleCreator jobs to the grid"
         print "\033[1;34mINFO\033[1;m log: {0} ".format(logfile)
+    
+    if multiple_ds:
+        ds_list=[]
+
     # Get the datasets
     loglines = []
+    # send all the input DS in one unique job
+    pre_command= 'prun --exec=\"runDVAna -a KsSampleCreator -o {0} -f %IN\" '\
+            '--useRootCore --inDS={1} --outputs {0} --outDS {2} '\
+            '--nGBPerJob MAX'
+    pre_outDS = "user.{0}.{1}.{2}.{3}.{4}.v{5}"
     for ds in datasets:
         # extract a suitable name for the output
         try:
@@ -43,13 +52,16 @@ def main(datasets,version,simulate=False):
                     ds.split(":")[-1].split(".")
             # dummy repository tag
             repo_tab="xxxx"
-        outDS  = "user.duarte.KsSampleCreator.{0}.{1}.{2}.{3}.v{4}".format(physics_short,
-                DSnumber,post_step,repo_tab,version)
+        outDS  = pre_outDS.format(username,physics_short,DSnumber,steps,repo_tab,version)
         dijet = physics_short.split("_")[-1]
-        rootname = "kshort_mc_{0}.root".format(dijet)
-        command= 'prun --exec=\"runDVAna -a KsSampleCreator -o {0} -f %IN\" '\
-                '--useRootCore --inDS={1} --outputs {0} --outDS {2} '\
-                '--nGBPerJob MAX'.format(rootname,ds,outDS)
+        rootname = "kshort_{0}.root".format(dijet)
+        command= pre_command.format(rootname,ds,outDS)
+        
+        if multiple_ds:
+            ds_list.append( (ds,outDS) )
+            # not send it
+            continue
+        
         if simulate:
             print command
             continue
@@ -62,11 +74,30 @@ def main(datasets,version,simulate=False):
         #    raise RuntimeError(message)
         # The error stream is not well defined in prun...
         loglines.append(p[1])
+    
+    if multiple_ds:
+        unique_inDS = ','.join(map(lambda x: x[0], ds_list))
+        # copy the ouDS but the DSnumber which it 
+        unique_outDS_split = ds_list[0][1].split('.')
+        # Extract the minimum and maximum DS number (only make sense in data)
+        minDS = min(map(lambda x: x[0].split('.')[3],ds_list))
+        maxDS = max(map(lambda x: x[0].split('.')[3],ds_list))
+        # rename the 3rd field (DS)
+        unique_outDS_split[3] = '{0}_{1}'.format(minDS,maxDS)
+        # the new name
+        unique_outDS = '.'.join(unique_outDS_split)
+        rootname = "kshort_{0}_{1}.root".format(minDS,maxDS)
+        command= pre_command.format(rootname,unique_inDS,unique_outDS)
+        if simulate:
+            print command
+            return
+        p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+        loglines.append(p[1])
+       
     if not simulate:
         with open(logfile,"w") as f1:
             f1.writelines(loglines)
             f1.close()
-
 
 if __name__ == '__main__':
     from optparse import OptionParser
@@ -75,6 +106,11 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
     parser.add_option( "-s",action='store_true',dest='simulate',default=False,\
             help="Don't send the jobs, just simulate and print the commands")
+    parser.add_option( "-m","--multiple-datasets",action='store_true',dest='multiple_ds',default=False,\
+            help="Send the whole bunch of datasets in an unique JOB set (--inDS DS1,DS2,DS3,...)")
+    parser.add_option( "--step",action='store',dest='step',default="KsSampleCreator",\
+            help="The algorithms(s) that are going to be run in the job, in order to"\
+            " define the ouput Dataset name")
     parser.add_option( "-v","--version",action='store',dest='version',default="0",\
             help="The version number of the job")
 
@@ -83,6 +119,6 @@ if __name__ == '__main__':
         message = "\033[31msubmit_prun ERROR\033[m Missing mandatory INPUT DATASETS"
         raise RuntimeError(message)
     
-    main(args,opt.version,opt.simulate)
+    main(args,opt.version,opt.step,opt.multiple_ds,opt.simulate)
 
 
