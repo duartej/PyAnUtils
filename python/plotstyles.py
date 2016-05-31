@@ -114,84 +114,24 @@ def atlasStyle():
     """.. function:: AtlasStyle() -> ROOT.gStyle
     
     Return a ROOT.gStyle based in ATLAS Style
-    (check for last versions in svn:)
     which is based on style from BaBar
+    It is actually a wrapper to the AtlasStyle 
+    macro (should be located in the system FIXE HOW)
     """ 
     import ROOT
-    ROOT.GloStyle = ROOT.gStyle
+    import AtlasStyle
+    
+    AtlasStyle.ROOT.SetAtlasStyle()
 
-    atlasStyle= ROOT.TStyle("ATLAS","Atlas style")
-    ROOT.gStyle = atlasStyle
+    atlasStyle= ROOT.gStyle
 
-    # use plain black on white colors
-    icol=0
-    atlasStyle.SetFrameBorderMode(icol)
-    atlasStyle.SetCanvasBorderMode(icol)
-    atlasStyle.SetPadBorderMode(icol)
-    atlasStyle.SetPadColor(icol)
-    atlasStyle.SetCanvasColor(icol)
-    atlasStyle.SetStatColor(icol)
-    #atlasStyle.SetFillColor(icol)
+    atlasStyle.SetCanvasDefH      (600)
+    atlasStyle.SetCanvasDefW      (700)
+    #atlasStyle.SetCanvasDefX      ( 10)
+    #atlasStyle.SetCanvasDefY      ( 10)
     
-    # set the paper & margin sizes
-    atlasStyle.SetPaperSize(20,26)
-    atlasStyle.SetPadTopMargin(0.05)
-    atlasStyle.SetPadRightMargin(0.05)
-    atlasStyle.SetPadBottomMargin(0.16)
-    atlasStyle.SetPadLeftMargin(0.12)
+    atlasStyle.SetPalette(53)
     
-    # use large fonts
-    #font=72
-    #font=42
-    font=52
-    #tsize=0.05
-    tsize=0.025
-    atlasStyle.SetTextFont(font)
-    
-    atlasStyle.SetTextSize(tsize)
-    atlasStyle.SetLabelFont(font,"x")
-    atlasStyle.SetTitleFont(font,"x")
-    atlasStyle.SetLabelFont(font,"y")
-    atlasStyle.SetTitleFont(font,"y")
-    atlasStyle.SetLabelFont(font,"z")
-    atlasStyle.SetTitleFont(font,"z")
-    
-    atlasStyle.SetLabelSize(tsize,"x")
-    atlasStyle.SetTitleSize(tsize,"x")
-    atlasStyle.SetLabelSize(tsize,"y")
-    atlasStyle.SetTitleSize(tsize,"y")
-    atlasStyle.SetLabelSize(tsize,"z")
-    atlasStyle.SetTitleSize(tsize,"z")
-    
-    #use bold lines and markers
-    atlasStyle.SetMarkerStyle(20)
-    atlasStyle.SetMarkerSize(1.2)
-    #atlasStyle.SetHistLineWidth(2.)
-    atlasStyle.SetLineStyleString(2,"[12 12]") # postscript dashes
-    
-    #get rid of X error bars and y error bar caps
-    #atlasStyle.SetErrorX(0.001)
-    # get rid of error bar caps
-    atlasStyle.SetEndErrorSize(0.);
-    
-    #do not display any of the standard histogram decorations
-    atlasStyle.SetOptTitle(0)
-    #atlasStyle.SetOptStat(1111)
-    atlasStyle.SetOptStat(0)
-    #atlasStyle.SetOptFit(1111)
-    atlasStyle.SetOptFit(0)
-    
-    # put tick marks on top and RHS of plots
-    atlasStyle.SetPadTickX(1)
-    atlasStyle.SetPadTickY(1)
-    
-    atlasStyle.SetPalette(1)
-    #ROOT.gROOT.SetStyle("Plain")
-    #ROOT.gROOT.SetStyle("ATLAS")
-    #ROOT.gROOT.ForceStyle()
-    
-    #gStyle.SetPadTickX(1)
-    #gStyle.SetPadTickY(1)
     return atlasStyle
 
 def njStyle():
