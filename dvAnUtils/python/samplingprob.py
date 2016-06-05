@@ -234,7 +234,7 @@ class ObservableSamplingProb(object):
         self.__models[modeltype] = model(self.__getattribute__(self.__observable))
         self.__pdftypes[modeltype] = modelpdfname
 
-    def fitTo(self,data,modeltype=None):
+    def fitTo(self,data,modeltype=None,**cmds):
         """Wrapper to the RooAbsPdf::fitTo
 
         Parameters
@@ -245,6 +245,11 @@ class ObservableSamplingProb(object):
             The region name, note that not using this argument, the
             per default value is the first one found.
 
+        extended: bool, optional
+            if it is present the fit is going to be performed using the 
+            enum RooFit.Extended (meaning, the coeficients in a composite 
+            PDF model are taken as fractions [0,1] of the total data 
+
         Returns
         -------
         vardict: dict((str,ROOT.RooRealVar))
@@ -253,9 +258,32 @@ class ObservableSamplingProb(object):
         """
         import multiprocessing
         from ROOT import RooFit,RooLinkedList,RooAbsReal,RooDataSet,RooDataHist,RooMinuit
-        from ROOT.RooFit import Range,NumCPU,Optimize,ProjectedObservables,SplitRange,DataError,Extended
+        #from ROOT.RooFit import Range,NumCPU,Optimize,ProjectedObservables,SplitRange,DataError,Extended
         
         nCPUs = multiprocessing.cpu_count()
+
+        # process keywords, options to the fit
+        #class fit_opts(object):
+        #    theCmds = [ 'Range', 'Optimize', 'ProjectedObservables', 'SplitRange', \
+        #            'DataError', 'Extended' ]
+        #    def __init__(self):
+        #        for cmd in theCmds:
+        #            self.setcmd(cmd)
+        #    def setcmd(self,cmd,really=False):
+        #        import ROOT
+
+        #        if not really:
+        #            self.__setattr__(cmd,ROOT.Roofit.RooCmdArg.none())
+        #        else:
+        #            self.__setattr__(cmd,getattr(ROOT.Roofit,cmd))
+
+        from PyAnUtils.pyanfunctions import ExtraOpt        
+        aux = ExtraOpt( [ ('Extended',False) ] )
+        aux.setkwd(cmds)
+
+        #if aux.Extended:
+        #    fo.setcmd('Extended')
+
 
         # Just picking the first one
         if not modeltype:
@@ -282,7 +310,7 @@ class ObservableSamplingProb(object):
             print ' - MODEL: {0} [{1}] '.format(self.__pdftypes[modeltype],modeltype)
             print ' - DATA:  {0}       '.format(data.GetName())
             print 
-            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
+            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save(),RooFit.Extended(aux.Extended))#RooFit.NumCPU(nCPUs))
             #fit_result = _fitToFunction(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
             # check status and quality of covariance matrix: 
             # covQuality codes 3=Full,accuratte cov matrix, 2=FULL, but forced to POSITIVE DEFINED...
@@ -391,7 +419,7 @@ class ObservableSamplingProb(object):
         #c.SaveAs(aux.sample+"_"+self.__observable+"_log.pdf")
 
     def getobservable(self):
-        """TO BE DCOUMENTED FIXME
+        """TO BE DOCUMENTED FIXME
         """
         return self.__getattribute__(self.__observable)
 
