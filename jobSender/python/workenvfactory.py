@@ -382,6 +382,7 @@ class athenajob(workenv):
         
         # Allowing EOS remote files
         if inputfiles.find('root://') == -1:
+            self.remotefiles=False
             self.inputfiles=getrealpaths(inputfiles)
         else:
             self.remotefiles=True
@@ -461,8 +462,11 @@ class athenajob(workenv):
             impline = filter(lambda (i,l): 
                     l.find("from AthenaCommon.AthenaCommonFlags import athenaCommonFlags") == 0, enumerate(lines))[0][0]
         except IndexError:
-            raise RuntimeError("Weird jobOption, are you sure you don't want to"\
-                    " add the athenaCommonFlags?")
+            print "\033[1;m31WARNING\0331;m Weird jobOption, which does not content the athenaCommonFlags."\
+                    " The input files, and skip events options are ignored, be sure that your jobOption"\
+                    " contains the proper input files for the job"
+            return
+
         for k in xrange(len(prelines)):
             lines.insert(impline+k,prelines[k])
 
