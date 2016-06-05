@@ -421,3 +421,158 @@ def negative_binomial_4sum_pdf_conditional(obs):
     return negative_binomial_Ksum_pdf_conditional(4,obs)
 def negative_binomial_5sum_pdf_conditional(obs):
     return negative_binomial_Ksum_pdf_conditional(5,obs)
+
+
+def double_gauss(mass,**opt):
+    """Build a double gaussian with same mean and different variance plus
+    a polynomial background (first order Chebychev)
+
+    FIXME: CHANGE NAME double_gauss_plus_polynomial
+
+    Parameters
+    ----------
+    nass: ROOT.RooRealVar
+        The observable associated to the PDF
+    
+    opt: dict(), optional
+        the keyword dictionary intended to be used for the initial
+        values for the parameters of the PDF. See below
+
+    low_mass: 350.0, range (low) for the observable
+    high_mass: 650, range (up) for the observable
+    mean: 497.0,  gaussian initial mean
+    low_mean: 490.0, mean parameter minimum
+    high_mean: 510., mean parameter maximum
+    sgm_narrow: 5.0, narrow variance initial value
+    low_sgm_narrow: 0.01, narrow variance minimum
+    high_sgm_narrow: 10.0, narrow variance maximum
+    sgm_broad': 10.0, broad variance initial value
+    low_sgm_broad: 2.0, broad variance minimum
+    high_sgm_broad: 25.0, broad variance maximum
+    frac_gauss_nw: 0.8, fraction of events corresponding to 
+        the narrow gaussian in the sum of the double gaussian 
+    low_frac_gauss_nw: 0.0, fraction of events narrow minimum
+    high_frac_gauss_nw: 1.0, fraction of events narrow maximum
+    c0_bkg: 1.0,  order 0 Chebychev coefficient initial value
+    low_c0_bkg: -1.0, order 0 Chebychev coefficient minimum
+    high_c0_bkg: 1.0, order 0 Chebychev coefficient maximum
+    c1_bkg: 0.1, order 1 Chebychev coefficient initial value
+    low_c1_bkg -1.0, order 1 Chebychev coefficient minimum
+    high_c1_bkg: 1.0, order 1 Chebychev coefficient maximum
+    nsig': 0.5*1e9, number of events correspondint to the double gauss
+    low_nsig: 0.0, number of events for double gauss minimum
+    high_nsig: 1.0*2e9, number of events DG maximum
+    nbkg: 0.5*1e9, number of events for the Chebychev initial value
+    low_nbkg: 0.0 , number of events for the Chebychev minimum
+    high_nbkg: 1.0*2e9, number of events for the Chebychev maximum
+    
+    
+    Returns
+    -------
+    (model,esig,sig,sig_narrow,sig_broad,
+    ebkg,bkg,nsig,nbkg,mean,sgm_narrow,sgm_broad,
+    frac_gauss_nw,c0_bkg,c1_bkg)
+
+    model: ROOT.RooAddPdf
+        The sum of the Double Gaussian and Chebychev 
+    esig: ROOT.RooExtendPdf
+        The extended DG (used for the model)
+    sig: ROOT.RooAddPdf
+        The DG 
+    sig_narrow, sig_broad: ROOT.RooGaussian
+        the two gaussian
+    ebkg: ROOT.RooExtendPdf
+        The extended Chebychev (used for the model)
+    bkg: ROOT.RooChebychev
+        The polynomial for the background
+    nsig: ROOT.RooRealVar
+        The number of events correspoding to the DG
+    nbkg: ROOT.RooRealVar
+        The number of events correspoding to the Chebychev polynom
+    mean: ROOT.RooRealVar
+        The mean parameter of the DG
+    sgm_narrow: ROOT.RooRealVar
+        The variance parameter of one gaussian
+    sgm_broad: ROOT.RooRealVar
+        The variance parameter of one gaussian
+    frac_gausss_nw ROOT.RooRealVar
+        The fraction of events corresponding to one of the gaussians
+    c0_bkg: ROOT.RooRealVar
+        The order 0 coefficient of the Chebychev pol.
+    c1_bkg: ROOT.RooRealVar
+        The order 1 coefficient of the Chebychev pol.
+    """
+    import ROOT
+
+    defaults = { 'low_mass': 350.0, 'high_mass':650.,
+            'mean': 497.0, 'low_mean': 490., 'high_mean': 510.,
+            'sgm_narrow': 5.0, 'low_sgm_narrow': 0.01, \
+                    'high_sgm_narrow': 10.0,
+            'sgm_broad': 10.0, 'low_sgm_broad': 2., \
+                    'high_sgm_broad': 25.0,
+            'frac_gauss_nw': .8, 'low_frac_gauss_nw': .0, \
+                    'high_frac_gauss_nw': 1.,
+            'c0_bkg': 1.0, 'low_c0_bkg': -1.0, 'high_c0_bkg': 1.0,
+            'c1_bkg': 0.1, 'low_c1_bkg': -1.0, 'high_c1_bkg': 1.0,
+            'nsig': 0.5*1e9, 'low_nsig': 0.0, 'high_nsig': 1.0*2e9,
+            'nbkg': 0.5*1e9, 'low_nbkg': 0.0, 'high_nbkg': 1.0*2e9
+            }
+    class final_vals():
+        """ empty placeholder 
+        """
+        def __init__(self):
+            pass
+    fv = final_vals()
+
+    for key,value in defaults.iteritems():
+        if key in opt.keys():
+            setattr(fv,key,opt[key])
+        else:
+            setattr(fv,key,value)
+    
+    # variables and models declaration
+    # ================================
+    #mass = ROOT.RooRealVar("mass","Particle Mass",fv.low_mass,\
+    #        fv.high_mass,"MeV")
+    mean = ROOT.RooRealVar("mean","mean",fv.mean,fv.low_mean,fv.high_mean)
+    sgm_narrow = ROOT.RooRealVar("sgm_narrow","sigma1", fv.sgm_narrow,
+            fv.low_sgm_narrow,fv.high_sgm_narrow)
+    sgm_broad  = ROOT.RooRealVar("sgm_broad","sigma2",fv.sgm_broad,
+            fv.low_sgm_broad,fv.high_sgm_broad)
+    frac_gauss_nw = ROOT.RooRealVar("frac_gauss_nw","frac narrow Gauss",
+            fv.frac_gauss_nw, fv.low_frac_gauss_nw,fv.high_frac_gauss_nw)
+    # Two gaussians signal:
+    sig_narrow = ROOT.RooGaussian("sig_narrow","Narrow component of "\
+            "the signal PDF", mass, mean,sgm_narrow)
+    sig_broad = ROOT.RooGaussian("sig_broad","Narrow component of the "\
+            " signal PDF", mass, mean,sgm_broad)
+    sig = ROOT.RooAddPdf("sig","Signal narrow+broad",
+            ROOT.RooArgList(sig_narrow,sig_broad),
+            ROOT.RooArgList(frac_gauss_nw))#,frac_gauss_bd))
+    
+    # Background (flat):    
+    c0_bkg = ROOT.RooRealVar("c0_bkg","coeff #0",fv.c0_bkg,
+            fv.low_c0_bkg,fv.high_c0_bkg)
+    c1_bkg = ROOT.RooRealVar("c1_bkg","coeff #1",fv.c1_bkg,
+            fv.low_c1_bkg,fv.high_c1_bkg)
+    bkg = ROOT.RooChebychev("bkg","background PDF",mass,
+            ROOT.RooArgList(c0_bkg,c1_bkg))
+
+    # Final model
+    nsig  = ROOT.RooRealVar("nsig","extended number of signal events",fv.nsig,
+            fv.low_nsig,fv.high_nsig)
+    nbkg  = ROOT.RooRealVar("nbkg","extended number of background events",fv.nbkg,
+            fv.low_nbkg,fv.high_nbkg)
+    esig  = ROOT.RooExtendPdf("esig","extended Double Gauss signal",sig,nsig)
+    ebkg  = ROOT.RooExtendPdf("ebkg","extended Chebychev background",bkg,nbkg)
+    model = ROOT.RooAddPdf("model","Double Gauss (Signal) + Chebychev (Background)",
+            ROOT.RooArgList(esig,ebkg))
+    #model = ROOT.RooAddPdf("model","Double Gauss (Signal) + Chebychev (Background)",
+    #        ROOT.RooArgList(sig,bkg),ROOT.RooArgList(nsig,nbkg))
+    # see here
+    #https://root.cern.ch/root/html/tutorials/roofit/rf202_extendedmlfit.C.html
+
+    return model,esig,sig,sig_narrow,sig_broad,ebkg,bkg,\
+            nsig,nbkg,mean,sgm_narrow,sgm_broad,\
+              frac_gauss_nw,c0_bkg,c1_bkg
+
