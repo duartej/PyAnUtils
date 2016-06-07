@@ -1,0 +1,948 @@
+#!/usr/bin/env python
+
+"""
+Fitting Kshorts using the output ROOT files from the KsSampleCreator class 
+ (DV_xAODAnalysis: https://gitlab.cern.ch/atlas-phys-susy-secondary-vertex/DV_xAODAnalysis/blob/master/DVAnalyses/DVAnalyses/KsSampleCreator.h)
+"""
+########################################################################################
+## WEIGHT RELATED FUNCTIONS
+COLOR =None
+def setcolors():
+    import ROOT
+    global COLOR
+
+    COLOR = { 0: ROOT.kBlack, 
+            1: ROOT.kRed-2,
+            2: ROOT.kAzure+3,
+            3: ROOT.kGreen-2,
+            4: ROOT.kOrange-3,
+            5: ROOT.kMagenta+2,
+            6: ROOT.kYellow-2,
+            }
+
+STYLE = { 0: 20, 
+        1: 1,
+        2: 2,
+        3: 3,
+        4: 4,
+        5: 5,
+        6: 6
+        }
+
+def kinematic_plots(histos,xtitle,var):
+    """FIXME DOC
+
+    Parameters
+    ----------
+    histos: 
+    """
+    import ROOT 
+    from PyAnUtils.plotstyles import atlasStyle
+    __atlasstyle = atlasStyle()
+    import AtlasUtils
+
+    ROOT.gROOT.SetBatch()
+
+    setcolors()
+
+    ymax = 0.0
+    print "Plotting variable {0}".format(xtitle)
+    for i,(h,legend) in sorted(histos.iteritems()):
+        h.SetMarkerStyle(STYLE[i])
+        h.SetMarkerColor(COLOR[i])
+        h.SetLineColor(COLOR[i])
+        h.SetLineStyle(STYLE[i])
+        h.SetLineWidth(2)
+        #h.Scale(1.0/h.Integral())
+        y = h.GetMaximum()
+        if y > ymax:
+            ymax=y*1.6
+    c = ROOT.TCanvas()
+    if var == "eta":
+        ymax = 1.3*ymax
+    hframe = c.DrawFrame(histos[0][0].GetBinLowEdge(1),0.0,
+            histos[0][0].GetXaxis().GetBinUpEdge(histos[0][0].GetNbinsX()),ymax)
+    hframe.GetYaxis().SetTitle('A.U.')
+    hframe.GetXaxis().SetTitle(xtitle)
+    ylabel_pos_init= 0.85
+    AtlasUtils.ROOT.ATLAS_LABEL(0.2,ylabel_pos_init)
+    AtlasUtils.ROOT.myText(0.34,ylabel_pos_init,1,"Work In Progress")
+    prout = ROOT.TLatex()
+    prout.SetNDC(True)
+    prout.SetTextSize(0.035)
+    prout.SetTextFont(42)
+    j = 0
+    marker = {}
+    for i,(h,legend) in sorted(histos.iteritems()):
+        if var == "eta":
+            xinit = 0.22
+        else:
+            xinit = 0.65
+        ypos = (ylabel_pos_init-0.05)-j*0.05
+        if i == 0:
+            h.Draw("PESAME")
+            marker[i] = ROOT.TMarker(0.0,0.0,h.GetMarkerStyle())
+            marker[i].SetNDC(True)
+            marker[i].SetX(xinit-0.020); marker[i].SetY(ypos+0.015);
+            marker[i].SetMarkerColor(h.GetMarkerColor())
+        else:
+            h.Draw("HISTSAME")
+            marker[i] = ROOT.TLine(xinit-0.025,ypos+0.015,xinit-0.010,ypos+0.015)
+            marker[i].SetNDC(True)
+            marker[i].SetLineWidth(2)
+            marker[i].SetLineStyle(h.GetLineStyle())
+            marker[i].SetLineColor(h.GetLineColor())
+    
+        marker[i].Draw()
+        prout.DrawLatex(xinit,ypos,legend)
+        j+=1
+    c.SaveAs("kinematics_{0}.png".format(var))
+
+def create_and_save_file_weights(rootfile,hdata,hmc,varname):
+    """FIXME DOCS
+    """
+    import ROOT
+    
+    # histo name
+    #hname = "{0}_weights".format(hmc.GetName())
+    hname = "{0}_weights_{1}".format(hmc.GetName(),varname)
+    # Delete previous version, if any
+    rootfile.Delete(hname+';*')
+    rootfile.cd()
+    print rootfile
+    # create the new one
+    whisto = hdata.Clone(hname)
+    whisto.Divide(hmc) # DaTA/this MC
+    whisto.Write()
+
+    return whisto
+
+def create_weights(_froot,_files,doplots):
+    """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
+    new TTree 'weight_tree' vertex-wise for each MC sample.
+
+    Parameters
+    ----------
+    _froot: { int: ROOT.TFile,  ...}
+        the index with the root file dict.
+
+    _files: { (int, str): str } }
+        a { (index,sample name) : legend } dictionary
+
+    doplots: bool
+    """
+    import ROOT 
+
+    # Build the TH2F ready 
+    h2histos = {}
+    zhistos = {}
+    print "Collecting data..."
+    for (i,fname),legend in sorted(_files.iteritems()):
+        hname = fname.split('.')[0]
+        h2name=hname+"_pt_eta"
+        print " --\ extracting info from {0}".format(fname)
+        # Note I cannot include zPV because is event-wise
+        h2histos[i] = (ROOT.TH2F(h2name,"",100,00,30.,100,-3.0,3.0), legend)
+        h2histos[i][0].Sumw2()
+        # Fill data
+        t = _froot[i].Get("KsTree_KsSampleCreator")
+        t.Project(h2name,"pseudorapidity:pt*1e-3")
+        h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
+        # and the zPV
+        hzname = hname+"_zPV"
+        zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
+        zhistos[i][0].Sumw2()
+        t.Project(hzname,"zPV")
+        zhistos[i][0].Scale(1.0/zhistos[i][0].Integral())
+    
+    # Do some plots if required
+    if doplots:
+        pthistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionX(),leg)),h2histos.iteritems()))
+        kinematic_plots(pthistos,
+                style=STYLE[i],
+                color=COLOR[i],
+                xtitle='p_{T} [GeV]',
+                var='pt'
+                )
+        etahistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionY(),leg)),h2histos.iteritems()))
+        kinematic_plots(etahistos,
+                style=STYLE[i],
+                color=COLOR[i],
+                xtitle='#eta',
+                var='eta'
+                )
+        kinematic_plots(zhistos,  
+                style=STYLE[i],
+                color=COLOR[i],
+                xtitle='z_{PV} [mm]',
+                var='zPV'
+                )  
+    # Build the weight histos 2D (pt, eta) + 1D zPV
+    print " Creating the weights"
+    # DATA/MC --> 0 index is data
+    # Build the weights
+    weights = {}
+    for (i,fname),legend in sorted(filter(lambda (x,y): x[0] != 0,_files.iteritems())):
+        w_pt_eta = create_and_save_file_weights(_froot[i],h2histos[0][0],h2histos[i][0],"pt_eta")
+        w_zpv    = create_and_save_file_weights(_froot[i],zhistos[0][0],zhistos[i][0],"zPV")
+        weights[i] = { wz_pt_eta.GetName(): wz_pt_eta, w_zpv.GetName(): w_zpv }
+
+    return weights
+
+def build_weight_branch(t,weightdict,weight_treename,weight_branchname):
+    """
+    FIXME: DOCS
+    Parameters
+    ----------
+    t: ROOT.TTree
+        the tree to modify
+    """
+    import ROOT
+    #from math import sqrt
+    import sys
+
+    # get the histogram for the zPV
+    zpv_hname = filter(lambda x: x.lower().find('zpv') !=-1, weightdict.keys())[0]
+    zpv_hist = weightdict[zpv_hname]
+    # get the histogram for the pt_eta
+    kin_hname = filter(lambda x: x.lower().find('pt_eta') !=-1, weightdict.keys())[0]
+    kin_hist = weightdict[kin_hname]
+
+    # create the vector 
+    w = ROOT.std.vector(float)()
+    # and the new branch
+    #branch_w = t.Branch("weights",w)
+    # a new tree
+    ntree = ROOT.TTree(weight_treename,"")
+    ntree.Branch(weight_branchname,w)
+
+    # get the address of the needed variables
+    _dummy = t.GetEntry(0)
+    etaV = getattr(t,'pseudorapidity')
+    ptV  = getattr(t,'pt')
+    # carefull event-wise variable
+    zpvV = getattr(t,'zPV')
+
+    # Start the loop on the tree
+    # --- Progress bar :)
+    pointpb = float(t.GetEntries())/100.0
+    kentry = 0
+    for curT in t:
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m -- filling weight branch"+\
+                    " [ "+"\b"+\
+                    str(int(float(kentry)/pointpb)+1).rjust(3)+"%]")
+        sys.stdout.flush()
+        kentry+=1
+        # intialize vector
+        w.clear()
+        # event-wise, only present if there is more than one DV
+        if zpvV.size() == 0:
+            ntree.Fill()
+            continue
+        w.reserve(etaV.size())
+        # find event-wise weight
+        zBin = zpv_hist.FindBin(zpvV[0])
+        evtW = zpv_hist.GetBinContent(zBin)
+        # and the vertex-wise
+        for _pt,_eta in zip(ptV,etaV):
+            kinBin = kin_hist.FindBin(_pt*1e-3,_eta)
+            w.push_back(kin_hist.GetBinContent(kinBin)*evtW)
+        #branch_w.Fill()
+        ntree.Fill()
+    print
+    ntree.Write("", ROOT.TObject.kOverwrite)    
+
+def main_weights(datasample,mcsamples,doplots):
+    """Main steering function to create the weigths from a list of 
+    samples. 
+    The first step is to obtain the 2D and 1D weights DATA/MC using 
+    a Eta and Pt (2D) and zPV (1D), after that the weight per event
+    is obtained and stored in the same file, in order to be used as
+    friend TTree
+
+    Parameters
+    ----------
+    datasample: str
+        the name of the data root sample
+    mcsamples: list(str)
+        the list of MC samples
+    doplots: bool
+        whether or not to do some kinematic plots
+    """
+    import ROOT
+    import os
+    # Be sure about the files
+    for i in mcsamples+[datasample]:
+        if not os.path.isfile(i):
+            raise IOError("Root file not found '{0}'".format(i))
+
+    # Create the dictionary with legends and indices
+    fiddict = { (0,datasample): '#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}' } # FIXME LUMINOSITY
+    # We have to assume some name convention: BLAH_BLAH_BLAH_jetjet_JZyW.root
+    k=1
+    for mcname in mcsamples:
+        fiddict[(k,mcname)] = "{0}, Simulation".format(mcname.split("_")[-1].split(".")[0])
+        k+=1
+
+    # First check if the files contains the histograms of weights
+    # and retrieve them 
+    _froots = dict( map(lambda (x,y): (x,ROOT.TFile.Open(y,"UPDATE")), fiddict.keys()) )
+    weights={}
+    no_weights=False
+    # Only MC of course
+    for i,f in filter(lambda (_i,_z): _i != 0,_froots.iteritems()):
+        weights[i] = dict(map(lambda _x: (_x.GetName(),f.Get(_x.GetName())), 
+                filter(lambda x: x.GetName().lower().find('weights')!=-1,f.GetListOfKeys())))
+        if len(weights[i]) == 0:
+            no_weights=True
+            break
+    if no_weights:
+        # create the weights
+        weights = create_weights(_froots,fiddict,doplots)
+    else:
+        if doplots:
+            print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
+                        ' skipping plots as well'
+    # We have the weigths, check if the branch is already there (only MC, of course)
+    for i,f in filter(lambda (_i,_y_): _i != 0,_froots.iteritems()):
+        f.cd()
+        weight_treename = "weight_tree"
+        try: 
+            weigth_branch = f.Get(weight_treename)
+            print '\033[1;33mWARNING\033[1;m Trying to re-create TTree {0}'\
+                        ' already present in {1}. Ignoring...'.format(weight_treename,f.GetName())
+        except AttributeError:
+            # Not found it, so built it
+            print "\033[1;34mINFO\033[1;m Creating weight branch for {0}".format(f.GetName())
+            t = f.Get("KsTree_KsSampleCreator")
+            _dumm = t.GetEntry(0)
+            weight_branchname = "weights"
+            build_weight_branch(t,weights[i],weight_treename,weight_branchname)
+            f.Close()
+    # nothing else to do with the files?
+    __dum = map(lambda _f:  _f.Close(),_froots.values())
+
+## END WEIGHT RELATED FUNCTIONS
+########################################################################################
+
+
+########################################################################################
+## FITTER RELATED FUNCTIONS
+# GLOBAL DEFINITION:
+# the radius regions mapped to an int (used as identifier)
+# Defined as global to be coherently used along all the subcommands
+RADIUS_REGIONS = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)} # mm
+
+def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_tree"):
+    """convert a root file with a Tree (from KsSampleCreator,
+    https://gitlab.cern.ch/atlas-phys-susy-secondary-vertex/DV_xAODAnalysis/blob/master/DVAnalyses/DVAnalyses/KsSampleCreator.h )
+    into the RooFit framework
+
+    Parameters
+    ----------
+    rootfile: ROOT.TFile
+        the root file created using the KsSampleCreator algorithm 
+    obs: ROOT.RooFit.RooRealVar
+        the observable
+    treename: str
+        name of the tree where to extract the dataa
+    regions: dict( int: (int,int) ... )
+        how to split the observable within the data
+    isData: bool
+        whether is data or not
+    tree_weight: srt, ['weight_tree']
+        name of the auxiliary tree with the weights (only MC)
+
+    Returns
+    -------
+    roodatahist: dict(str: ROOT.RooDataHist, ...)
+        the RooFit data per region, the name of the region contains "DATA|JZaW_REGIONX"
+        depending if is data or dijet MC samples
+        
+    """
+    import ROOT
+    trees   = dict(map(lambda x: (x.GetName(),rootfile.Get(x.GetName())), 
+                filter(lambda x: x.GetName().find(treename)==0,
+                        rootfile.GetListOfKeys()) ))
+    tws     = dict(map(lambda x: (x.GetName(),rootfile.Get(x.GetName())), 
+                filter(lambda x: x.GetName().find(tree_weight)==0,
+                        rootfile.GetListOfKeys()) ))
+    if isData:
+        weights  = 1.0
+        namedata = 'data'
+    else:
+        weights  = "weights"
+        # WARNING: the files should follow the naming convention!
+        namedata = rootfile.GetName().split(".")[0].split("_")[-1]
+
+    # Problem ... FIXME Should be changed
+    if len(trees) > 1:
+        raise RuntimeError("[JDC] INTERNAL ERROR NEEDS TO BE FIXED]")
+
+    # convert into RooDataHist
+    #--- FIXME deberia incluir las dos regions en eta
+    roodatahist = {}
+    for nametree,tree in trees.iteritems():
+        if not isData:
+            try: 
+                tfriend_weight = tws[tree_weight]
+                tree.AddFriend(tree_weight)
+            except KeyError:
+                print '\033[1;33mWARNING\033[1;m MC file without tree "{0}". '\
+                        'You should run this "kshort_study weigth" first!'.format(nametree)
+                # anuling the weight tree
+                weights = 1.0 
+
+        # split in radius lenght regions: { 0: (a,b), 1:, (b,c), 2: (c,d), ..}
+        for (reg,(l,h)) in regions.iteritems():
+            # FIXME!! PROVISIONAL .. se puede hacer de otra forma...
+            _prov  = ROOT.TH1F("{0}_region_{1}_py".format(namedata,reg),"",100,350.,650.)
+            _dummy =  tree.Project(_prov.GetName(),"mass",\
+                    "(decayLength > {0} && decayLength < {1})*{2}".format(l,h,weights))
+            roodatahist["{0}_region{1}".format(namedata,reg)] = \
+                    ROOT.RooDataHist("data_{0}_region{1}".format(namedata,reg),
+                        "Dataset Region{0}".format(reg),ROOT.RooArgList(obs),_prov)
+    return roodatahist
+    
+# 2. Build the models for the fitting: probably could be encapsulate into a 
+# class?
+def extract_models(mass,model_regions,**fits_models):
+    """
+    Parameters
+    ----------
+    model_region: {str : [str,str,...], ... } 
+        the keys of the dict are the  names assignedd to the 
+        ObservableSamplingProb model, with its model types associated
+
+    fits_models: {str: [(str,str),(str,str), .. ] , ...}, optional
+        should be equivalent to model_region parameter, where
+        per each region of each model, a pdfmodel name is given
+        If this parameter is not present a "double_gauss" model is taken
+
+    Returns
+    -------
+    modelprob: { str: dvAnUtils.samplingprob.ObservableSamplingProb, ....}
+    """
+
+    from dvAnUtils.samplingprob import ObservableSamplingProb
+    #-- setup the different models for the different regions
+    modelprob = {}
+    for model,regions in model_regions.iteritems():
+        modelprob[model] = ObservableSamplingProb(mass)
+        for region in regions:
+            modelprob[model].setupmodel(region,"double_gauss")
+    return modelprob
+
+# plotting
+def plot(result,mass,model,data,plotname,title="",isData=False):
+    """
+    """
+    import ROOT
+    ROOT.gROOT.SetBatch()
+    from PyAnUtils.plotstyles import atlasStyle
+    astyel = atlasStyle()
+    
+    import AtlasUtils
+    #AtlasStyle.ROOT.SetAtlasStyle()
+    # ---- 
+    c = ROOT.TCanvas()
+    fr = mass.frame()
+    fr.SetTitle(title)
+    # filling the RooPlot with data and the components of the model
+    data.plotOn(fr,ROOT.RooFit.MarkerColor(ROOT.kBlack),ROOT.RooFit.MarkerColor(ROOT.kBlack))
+    #model.plotOn(fr,ROOT.RooFit.Components("sig_narrow"),
+    #        ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kRed+3))
+    #model.plotOn(fr,ROOT.RooFit.Components("sig_broad"),
+    #        ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kRed+1))
+    model.plotOn(fr,ROOT.RooFit.Components("sig"),
+            ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kRed+3))
+    model.plotOn(fr,ROOT.RooFit.Components("bkg"),
+            ROOT.RooFit.LineStyle(ROOT.kDashed), ROOT.RooFit.LineColor(ROOT.kGreen+2))
+    model.plotOn(fr, ROOT.RooFit.LineColor(ROOT.kBlue+2))
+    # increase the y-axis to make space for some info
+    fr.GetYaxis().SetRangeUser(1e-10,fr.GetMaximum()*1.5)
+    fr.Draw()
+    # =====================================================
+    # Text info
+    xmin = ROOT.Double(); xmax = ROOT.Double()
+    sigma = result["frac_gauss_nw"].getVal()*result["sgm_narrow"].getVal() + \
+            (1.0-result["frac_gauss_nw"].getVal())*result["sgm_broad"].getVal()
+    _dumm = data.getRange(mass,xmin,xmax)
+    prout = ROOT.TLatex()
+    prout.SetNDC(True)
+    prout.SetTextSize(0.032)
+    prout.SetTextFont(42)
+    AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.88)
+    AtlasUtils.ROOT.myText(0.34,0.88,1,"Work in Progress")
+    if isData:
+        AtlasUtils.ROOT.myText(0.2,0.81,1,"#sqrt{s} = 13 TeV, #intLdt=3.2 fb^{-1}") 
+    else:
+        # assume that in the plotname there is info about the sample
+        dijet=plotname.split("'")[0].split("_")[-1].split(".")[0]
+        AtlasUtils.ROOT.myText(0.2,0.81,1,"Simulation, dijet "+dijet) 
+    prout.DrawLatex(0.2,0.75,"m_{0} Range: {1}-{2} GeV".format("{K_{S}}",xmin,xmax))
+    prout.DrawLatex(0.2,0.71,"#sigma: {0:.2f}  (#sigma_{1}: {2:.2f}  "\
+            "#sigma_{3}: {4:.2f})".format(sigma,"{1}",result["sgm_narrow"].getVal(),
+                "{2}",result["sgm_broad"].getVal()))
+    chi2 = fr.chiSquare(len(model.getComponents()))
+    prout.DrawLatex(0.2,0.67,"#chi^{0}/dof: {1:0.2f}".format("{2}",chi2))
+    prout.DrawLatex(0.2,0.63,"Num K_{0}: {1:.0f} #pm {2:.0f}".format("{S}",
+        result["nsig"].getVal(),result["nsig"].getError()))
+    prout.DrawLatex(0.6,0.75,title)
+    c.SaveAs(plotname)
+
+    fr.GetYaxis().SetRangeUser(1e-1,fr.GetMaximum()*1e3)
+    c.SetLogy()
+    c.SaveAs(plotname.replace(".","_log."))
+
+def get_models_from_file(filename):
+    """ Get the several ROOT.RooWorkspace objects inside a ROOT file
+    FIXME :NOT WORKING YET!!
+    FIXME: PROPER DOCUMENTATION
+    Parameters
+    ----------
+    filename: str
+        ROOT input file name
+
+    Returns
+    -------
+    f: ROOT.TFile
+        The ROOT file object, to avoid segmentation faults due to Roofit 
+        internal memory management
+    w: ROOT.Workspace
+        The workspace
+    obsdict: dict((str,ROOT.RooRealVar))
+        The available observables
+    modeldict: dict((str,ROOT.RooRealPdf))
+        The available PDF models
+    databkgdict: dict((str,ROOT.RooDataSet))
+        The available datasets
+    """
+    import ROOT
+    f = ROOT.TFile(filename)
+    # OBtain the diferent workspaces
+    wdict = dict(map(lambda x: (x.GetName(),f.Get(x.GetName())), \
+            filter(lambda i: i.GetClassName() == 'RooWorkspace',f.GetListOfKeys())))
+
+    
+    # Retrieve all the stuff
+    # -- Observables
+    observables = w.allVars()
+    obsIter = observables.iterator()
+    obsdict = {}
+    for i in xrange(len(observables)):
+        currentObs = obsIter.Next()
+        obsdict[currentObs.GetName()] = currentObs
+    # -- Models
+    models = w.allPdfs()
+    modelsIter = models.iterator()
+    modeldict = {}
+    for i in xrange(len(models)):
+        currentModel = modelsIter.Next()
+        modeldict[currentModel.GetName()] = currentModel
+    # -- Data (Note that is a list)
+    data = w.allData()
+    databkgdict = {}
+    datasigdict = {}
+    for currentData in data:#xrange(len(data)):
+        dname = currentData.GetName()
+        if dname.find('dvbkg') == 0:
+            databkgdict[dname] = currentData
+        elif dname.find('dvsig') == 0:
+            datasigdict[dname] = currentData
+
+    return f,w,obsdict,modeldict,databkgdict,datasigdict
+
+
+
+def build_fit(filename,isData=False,plotsuffix='png'):
+    """Main steering function where performs:
+        1. Obtain the data from the input files and convert
+           them to the RooFit framework
+        2. Build the models to fit the data: Double Gaussian for Ks
+          + Chebychev for background
+        3. Plot the data and the model fitted in a png [pdf] files
+
+    Parameters
+    ----------
+    filename: str
+    
+    plotsuffix: str, [png]
+        a valid suffix for the plot
+    
+    isData: bool
+
+    Returns
+    -------
+    modelprobdict: dict(str: dvAnUtils.samplingprob.ObservableSamplingProb) 
+        the key of the dict are the name of the data (plus barrel or endcap)
+    """
+
+    # First of all, if the file is already there, just get it
+    import os
+    if isData:
+        dtype='_'.join(filename.split(".")[0].split('_')[-2:])
+    else:
+        dtype=filename.split(".")[0].split("_")[-1]
+    fworkfile = 'kshort_fits_{0}.root'.format(dtype)
+    # FIXME: ACTIVATE that when working
+    #if os.path.exists(fworkfile):
+    #    return get_models_from_file(fworkfile)        
+
+    import ROOT
+    # -- observable: the invariant mass
+    low_range=350.0
+    high_range = 650.0
+    mass = ROOT.RooRealVar("mass","Particle Mass",low_range,high_range,"MeV")
+    # -- get the root file
+    # -- assume the name contains info about the sample:
+    f = ROOT.TFile(filename)
+    # Let's define the decay radius regions
+    #radius_regions = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)}
+    # 1.a Harvesting data and converting: from a given format we want a suitable 
+    # format for the fitting, i.e to RooFit variables    
+    datahists = data_harvest_tree(f,mass,"KsTree_KsSampleCreator",RADIUS_REGIONS,isData)
+    
+    # build the list of region models
+    model_and_regions = {}
+    for model_region in datahists.keys():
+        region = model_region.split("_")[-1]
+        model  = "_".join(model_region.split("_")[:-1])
+        try: 
+            model_and_regions[model].append( region )
+        except KeyError:
+            model_and_regions[model] = [region]
+    # The dict of models per region 
+    modelprob = extract_models(mass,model_and_regions)
+    
+    # output name to persitify 
+    fworkfile = 'kshort_fits_{0}.root'.format(dtype)
+    # Perform the fitting and plotting
+    for modelkey,regionlist in model_and_regions.iteritems():
+        for region in regionlist:
+            dataname = "{0}_{1}".format(modelkey,region)
+            _d = datahists[dataname]
+            _m = modelprob[modelkey]
+            ## Fitting
+            result = _m.fitTo(_d,modeltype=region,Extended=True)
+            ## plotting (FIXME: if it worked well)
+            dl_l,dl_u = radius_regions[int(region[-1])] 
+            title = "Decay Length #in [{0:.0f},{1:.0f}] mm".format(dl_l,dl_u)
+            plot(result,mass,_m.getmodel(region),_d,"{0}_{1}.{2}".format(dataname,dtype,plotsuffix),\
+                    title=title,isData=isData)
+        ## Save results for posterior treatment :: FIXME problem storing...
+        #  The problem is located in the names of all the components, for each region
+        #  we have the same names, so we should create a workspace diferent for each region...
+        #_m.update("w_{0}".format(dataname),fworkfile) 
+    return modelprob
+
+def store_numKshorts(modelprobdict,knumfile):
+    """Extract the number of Kshorts from the models and store it as
+    a pickle (shelve) file
+
+    Parameters
+    ----------
+    modelprobdict: dict(str,dvAnUtils.samplingprob.ObservableSamplingProb)
+        the keys of the dictionary are expected to follow the convention
+        'JZyW:BARREL|EC' for the MC dijet samples or data:BARREL|EC for the
+        data
+    knumfile: str
+        the name of the shelve file where to store the output dictionary
+
+    Return
+    ------
+    regiondict: { str: { str: (float,float), ... }, ... }
+        the higher level key are int referring to the region, and the internal
+        dictionaries contains the Kshort fitted number and error per sample, i.e.:
+        { 0: { 'JZyW:ETA': (kshort,error), ..., ... }
+
+    """
+    import shelve
+    import os
+    
+    is_new_file = True
+    if os.path.isfile(knumfile):
+        is_new_file =False
+    # Create the shelve data
+    kk = shelve.open(knumfile,writeback=True)
+    regiondict = {}
+    if not is_new_file:
+        regiondict = kk['regiondict']
+    # Create the region-dictionary for this sample
+    for dataname,modelprob in modelprobdict.iteritems():
+        for regionstr in modelprob.availablemodels():
+            region = int(regionstr.replace("region",""))
+            kshorts = modelprob.get_variable_from_model(regionstr,"nsig")
+            try:
+                regiondict[region][dataname] = (kshorts.getVal(),kshorts.getError())
+            except KeyError:
+                # Case when creating for the first time the dictionary
+                regiondict[region] = { dataname: (kshorts.getVal(),kshorts.getError()) }
+    # store the dict
+    kk['regiondict'] = regiondict
+    kk.close()
+
+    return regiondict
+
+## END FITTER RELATED FUNCTIONS
+########################################################################################
+
+########################################################################################
+## DOUBLE RATIO RELATED FUNCTIONS
+
+def get_numKshorts_dict(knumfile):
+    """Extract the number of Kshorts stored in a dictionary (from a shelve file)
+
+    Parameters
+    ----------
+    knumfile: str
+        the name of the shelve file where is stored the dictionary
+
+    Return
+    ------
+    regiondict: { str: { str: (float,float), ... }, ... }
+        the higher level key are int referring to the region, and the internal
+        dictionaries contains the Kshort fitted number and error per sample, i.e.:
+        { 0: { 'JZyW:ETA': (kshort,error), ..., ... }
+
+    Raises
+    ------
+    AttributeError: whenever the 'data' key is not present in all the regions
+    IOError:        when the knumfile doesn't exist   
+
+    """
+    import shelve
+    import os
+    
+    # checks that the kshorts numbers file (shelve) exists
+    if not os.path.isfile(knumfile):
+        raise IOError("\033[1;31mERROR\033[1;m '{0}' doesn't exist."\
+                " Please be sure you created this file before with"\
+                " 'kshort_study fitter'".format(args.ksnum_file))
+    # Create the shelve data
+    kk = shelve.open(knumfile)
+    regiondict = {}
+    regiondict = kk['regiondict']
+    kk.close()
+    # Checking we have a well-formatted dictionary (data must be present
+    # in all regions
+    try:
+        dummy = map(lambda xdict: xdict['data'],regiondict.values())
+    except KeyError:
+        raise RuntimeError("Inconsistency in '{0}'. Not found the 'data' key for some"\
+                " region".format(knumfile))
+    return regiondict
+
+def double_ratio_plot(dijet_name,dRdict,plotname='KsRatio'):
+    """Create the double ratio plot (in png and pdf)
+
+    Parameters
+    ----------
+    dijet_name: str
+        the name of the dijet sample to be used for the double ratio.
+        The name for all the weighted samples is JZW [default: JZ3W]
+    dRdict: dict( int: dict( str: (float,float), ..., ...)
+        dictionary mapping the radius region with a dictionary which contains
+        the double ratio and erro per each sample
+        { region: { 'SAMPLE1': (dr,edr), 'SAMPLE2': (dr2,edr2), ... }, ... }
+    plotname: str
+        the name of the plot without suffix 
+    """
+    import ROOT
+    from PyAnUtils.plotstyles import atlasStyle
+    __atlasstyle = atlasStyle()
+    import AtlasUtils
+    import array
+    
+    # get the edges of the regions
+    prov_list = set([])
+    dummy = [ (prov_list.add(float(i)),prov_list.add(float(j))) \
+            for (i,j) in RADIUS_REGIONS.values() ]
+    bin_edges = list(sorted(prov_list))
+    xbins = array.array('f',bin_edges)
+    h = ROOT.TH1F("dratio","",len(xbins)-1,xbins)
+    h.Sumw2()
+    # Convert from the region identifier to a value in R 
+    reg_convertor= dict(map(lambda (_id,(lR,hR)): (_id,(float(lR)+float(hR))/2.), \
+            RADIUS_REGIONS.iteritems()))
+    # and fill the histogram
+    for i,sampledict in dRdict.iteritems():
+        nb = h.FindBin(reg_convertor[i])
+        h.SetBinContent(nb,sampledict[dijet_name][0])
+        h.SetBinError(nb,sampledict[dijet_name][1])
+    # perform the plot
+    ROOT.gROOT.SetBatch()
+    c = ROOT.TCanvas()
+    frame = c.DrawFrame(5,0.6,40,1.6)
+    frame.SetXTitle("K_{s} proper decay length [mm]" )
+    frame.SetYTitle("Double Ratio Data/MC" )
+    h.Draw("SAME")
+    AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.85)
+    AtlasUtils.ROOT.myText(0.34,0.85,1,"Work In Progress")
+    AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}")
+    AtlasUtils.ROOT.myText(0.7,0.65,1,"|#eta| < 2.5")
+    c.SaveAs("{0}.png".format(plotname))
+    c.SaveAs("{0}.pdf".format(plotname))
+
+
+def get_ratio(numer,denom):
+    """Evaluate the ratio between numer/denom and the propated
+    error
+
+    Parameters
+    ----------
+    numer: (float,float)
+        central value and error for the numerator 
+    denom: (float,float)
+        central value and error for the denominator 
+
+    Returns
+    -------
+    (ratio,errRatio)
+    """
+    from math import sqrt
+    # Be sure we are dealing with floats
+    n = map(lambda x: float(x),numer)
+    d = map(lambda x: float(x),denom)
+    ratio = n[0]/d[0]
+    errRatio = ratio*sqrt( (d[1]/d[0])**2.+ (n[1]/n[0])**2. )
+
+    return ratio,errRatio
+
+
+def main_dr(knumfile):
+    """Main steering function to obtain the double ratio plots
+
+    Parameters
+    ----------
+    knumfile: str
+        the name of the shelve file where is stored the dictionary
+    """
+    # get the data
+    regiondict = get_numKshorts_dict(knumfile)
+    # Get the normalization factors: ratio of DATA/MC in region 0
+    normfactor = {}
+    # merge_dijets = 0.0 # NOT AVAILABLE.. MISSING EVENT WEIGHTS
+    ksData0,errKsData0 = regiondict[0]['data']
+    for name,(ks,errKs) in filter(lambda (x,y): x != 'data', regiondict[0].iteritems()):
+        norm,errN = get_ratio( (ksData0,errKsData0), (ks,errKs) )
+        normfactor[name] = (norm,errN)
+        # merge_dijets += ks
+    # --- FIXME:: NOT AVAILABLE YET
+    # updating for the merged dijet case
+    ##normfactor['JZW'] = (ksData0/totaljz,ksData0/totaljz*sqrt( 1.0/totaljz + (errKsData0/ksData0)**2.))
+    ### --> Fill the merged case and include it in the dictionary
+    ##for i in xrange(0,4):
+    ##    totalK = 0.0
+    ##    totalErr = 0.0
+    ##    for name,(ks,errKs) in filter(lambda (x,y): x != 'data', regiondict[i].iteritems()):
+    ##        totalK+=ks
+    ##        totalErr+=(errKs**2.0)
+    ##    regiondict[i]["JZW"] = (totalK,sqrt(totalErr))
+    ### --- FIXME:: NOT AVAILABLE YET
+    # Apply now the double ratio for all the regions
+    dRdict = {}
+    for i in sorted(regiondict.keys()):
+        dRdict[i] = {}
+        for name,(ks_i,errKs_i) in filter(lambda (x,y): x != 'data', regiondict[i].iteritems()):
+            ksData_i,errKsData_i = regiondict[i]['data']
+            # ratio 
+            ratio,errR = get_ratio( (ksData_i,errKsData_i), (ks_i,errKs_i) )  
+            # against norm
+            doubleRatio,errDR = get_ratio( (ratio,errR), normfactor[name] )
+            dRdict[i][name] = (doubleRatio,errDR)
+    # and do the plot: FIXME dijet sample
+    double_ratio_plot("JZ3W",dRdict)
+
+
+## END DOUBLE RATIO RELATED FUNCTIONS
+########################################################################################
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser,RawDescriptionHelpFormatter
+    import textwrap
+    import os
+
+    usage  = "Main script to perform the post-processing step of the Kshort study.\n"
+    usage += "This script requires as input files the ROOT files output from the \n"
+    usage += "KsSampleCreator class from the DV_xAODAnalysis package ([1]) which \n"
+    usage += "contains a TTree named 'KsTree_KsSampleCreator'. This script can be \n"
+    usage += "invoked using different subcommands:\n"
+    usage += "\n \033[1;34mweight\033[1;m\n"
+    usage += "   1. Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV\n"
+    usage += "   2. Creates a new TTree 'weight_tree' vertex-wise for each MC sample\n"
+    usage += "\n \033[1;34mfitter\033[1;m\n"
+    usage += "   1. Obtain the data from the input files and convert them to the RooFit\n"
+    usage += "      framework\n"
+    usage += "   2. Build the models to fit the data: Double Gaussian for Kshorts plus\n"
+    usage += "      Chebychev for background\n"
+    usage += "   3. Persistify the number of Kshorts found into a python output file, \n"
+    usage += "      persistify the RooFit workspace for posterior processing (if needed),\n"
+    usage += "      and plot data and the model fitted in a png [pdf] files\n"
+    usage += "\n \033[1;34mdouble_ratio\033[1;m\n"
+    usage += "   1. Creates the double ratio plot, at least one MC sample and the data is\n"
+    usage += "      needed to be previously processed with the \033[1;51mfitter\033[1;m sub-command\n"
+    usage += "\n\n[1] https://gitlab.cern.ch/atlas-phys-susy-secondary-vertex/DV_xAODAnalysis/"
+
+    parser = ArgumentParser(prog='kshort_study',
+            formatter_class=RawDescriptionHelpFormatter,
+            description=textwrap.dedent(usage))
+    #parser.add_option( "-c",action='store',dest='collections', metavar="COL[,...]",\
+    #        default=None,help="collection(s) to check")
+    
+    # Sub-command parsers
+    subparsers = parser.add_subparsers(title='subcommands',
+            description='valid subcommands', 
+            help='additional help')
+    
+    # weight producer and kinematic plotter
+    parser_weight = subparsers.add_parser("weight",help="Creates the ttree used to weight the"\
+            " events in a DV-wise level")
+    parser_weight.add_argument('mcsamples',nargs='+',help="Name of the MC samples")
+    parser_weight.add_argument('--data',action='store',dest='dataname',required=True,\
+            help="Name of the data file. Note that this is a MANDATORY ARGUMENT")
+    parser_weight.add_argument('--doplots',action='store_true',dest='doplots',help="Create some plot distributions"\
+            " before and after using the weights")
+    parser_weight.set_defaults(which='weight',doplots=False)
+
+    # fitter 
+    parser_fitter = subparsers.add_parser("fitter",help="Fits the mass branch of the input ROOT file to"\
+            " a double gaussian for the signal (Kshorts) plus a polynomial background" )
+    parser_fitter.add_argument('rootfilename',nargs='+',action='store',\
+            metavar='ROOTFILE',help="ROOT file(s) with a 'KsTree_KsSampleCreator' TTree")
+    parser_fitter.set_defaults(which='fitter')
+    
+    # double_ratio 
+    parser_double_ratio = subparsers.add_parser("double_ratio",help="Plot the double ratio using"\
+            " region 0 (5-10 mm) as nomalizing region")
+    parser_double_ratio.add_argument('ksnum_file',nargs='?',action='store',\
+            metavar='KSHORT_NUM_FILE.dat',help="shelve file where is stored the number of Kshorts"\
+            " per region and sample. This file is constructed by the \033[1;51mfitter\033[1;m sub-command"\
+            " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
+    parser_double_ratio.set_defaults(which='double_ratio')
+
+    args = parser.parse_args()
+
+    if args.which == 'weight':
+        # create the weights and the plots if necessary
+        main_weights(args.dataname,args.mcsamples,args.doplots)
+    elif args.which == 'fitter':
+        for rfilename in args.rootfilename:
+            if not os.path.isfile(rfilename):
+                message = "\033[31mkshort_study fitter ERROR\033[m "\
+                        "Input ROOT file '{0}' not found".format(args.rootfilename)
+                raise RuntimeError(message)
+            if rfilename.lower().find('data') != -1:
+                isData=True
+                dtype='_'.join(rfilename.split(".")[0].split('_')[-2:])
+            else:
+                isData=False
+                dtype=rfilename.split(".")[0].split("_")[-1]
+            modelprobdict = build_fit(rfilename,isData=isData)
+            # Should write down the number of Kshorts with its error: 
+            knumfile = args.ksnum_file
+            nKsdict = store_numKshorts(modelprobdict,knumfile)
+    elif args.which == 'double_ratio':
+        main_dr(args.ksnum_file)
+
+
