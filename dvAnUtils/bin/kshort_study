@@ -332,6 +332,7 @@ def main_weights(datasample,mcsamples,doplots):
 # the radius regions mapped to an int (used as identifier)
 # Defined as global to be coherently used along all the subcommands
 RADIUS_REGIONS = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)} # mm
+ETA_REGIONS = { 'BARREL': '|#eta| < 1', 'ENDCAP': '|#eta| #geq 1' }
 
 def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_tree"):
     """convert a root file with a Tree (from KsSampleCreator,
@@ -358,6 +359,7 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
     roodatahist: dict(str: ROOT.RooDataHist, ...)
         the RooFit data per region, the name of the region contains "DATA|JZaW_REGIONX"
         depending if is data or dijet MC samples
+        { 'SAMPLE1_regionY:BARREL|ETA': ROOT.RooDataHist, ... }
         
     """
     import ROOT
@@ -395,13 +397,16 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
 
         # split in radius lenght regions: { 0: (a,b), 1:, (b,c), 2: (c,d), ..}
         for (reg,(l,h)) in regions.iteritems():
-            # FIXME!! PROVISIONAL .. se puede hacer de otra forma...
-            _prov  = ROOT.TH1F("{0}_region_{1}_py".format(namedata,reg),"",100,350.,650.)
-            _dummy =  tree.Project(_prov.GetName(),"mass",\
-                    "(decayLength > {0} && decayLength < {1})*{2}".format(l,h,weights))
-            roodatahist["{0}_region{1}".format(namedata,reg)] = \
-                    ROOT.RooDataHist("data_{0}_region{1}".format(namedata,reg),
-                        "Dataset Region{0}".format(reg),ROOT.RooArgList(obs),_prov)
+            # split in barrel and endcap
+            for (eta_reg, etacut) in [ ('BARREL', 'fabs(rapidity) < 1.0'),
+                    ('ENDCAP', 'fabs(rapidity) >= 1.0') ]:
+                # FIXME!! PROVISIONAL .. se puede hacer de otra forma... (I mean using unbinned)
+                _prov  = ROOT.TH1F("{0}_region_{1}_{2}_py".format(namedata,reg,eta_reg),"",100,350.,650.)
+                _dummy =  tree.Project(_prov.GetName(),"mass",\
+                        "(decayLength > {0} && decayLength < {1} && {3})*{2}".format(l,h,weights,etacut))
+                roodatahist["{0}_region{1}:{2}".format(namedata,reg,eta_reg)] = \
+                        ROOT.RooDataHist("data_{0}_region{1}_{2}".format(namedata,reg,eta_reg),
+                                "Dataset Region{0}, {1}".format(reg,eta_reg),ROOT.RooArgList(obs),_prov)
     return roodatahist
     
 # 2. Build the models for the fitting: probably could be encapsulate into a 
@@ -411,8 +416,9 @@ def extract_models(mass,model_regions,**fits_models):
     Parameters
     ----------
     model_region: {str : [str,str,...], ... } 
-        the keys of the dict are the  names assignedd to the 
+        the keys of the dict are the names assigned to the 
         ObservableSamplingProb model, with its model types associated
+        { 'SAMPLE1: [ 'regionY:BARREL', 'regionY:ENDCAP', ... ], ..}
 
     fits_models: {str: [(str,str),(str,str), .. ] , ...}, optional
         should be equivalent to model_region parameter, where
@@ -489,11 +495,11 @@ def plot(result,mass,model,data,plotname,title="",isData=False):
     prout.DrawLatex(0.2,0.63,"Num K_{0}: {1:.0f} #pm {2:.0f}".format("{S}",
         result["nsig"].getVal(),result["nsig"].getError()))
     prout.DrawLatex(0.6,0.75,title)
-    c.SaveAs(plotname)
+    c.SaveAs(plotname.replace(":","_"))
 
     fr.GetYaxis().SetRangeUser(1e-1,fr.GetMaximum()*1e3)
     c.SetLogy()
-    c.SaveAs(plotname.replace(".","_log."))
+    c.SaveAs(plotname.replace(":","_").replace(".","_log."))
 
 def get_models_from_file(filename):
     """ Get the several ROOT.RooWorkspace objects inside a ROOT file
@@ -578,18 +584,18 @@ def build_fit(filename,isData=False,plotsuffix='png'):
         the key of the dict are the name of the data (plus barrel or endcap)
     """
 
-    # First of all, if the file is already there, just get it
     import os
+    import ROOT
     if isData:
         dtype='_'.join(filename.split(".")[0].split('_')[-2:])
     else:
         dtype=filename.split(".")[0].split("_")[-1]
     fworkfile = 'kshort_fits_{0}.root'.format(dtype)
     # FIXME: ACTIVATE that when working
+    # First of all, if the file is already there, just get it
     #if os.path.exists(fworkfile):
     #    return get_models_from_file(fworkfile)        
 
-    import ROOT
     # -- observable: the invariant mass
     low_range=350.0
     high_range = 650.0
@@ -597,17 +603,23 @@ def build_fit(filename,isData=False,plotsuffix='png'):
     # -- get the root file
     # -- assume the name contains info about the sample:
     f = ROOT.TFile(filename)
+    # Check a properly ROOT file
+    if f.IsZombie():
+        raise IOError("\033[1;31mERROR\033[1;m file '{0}' is not a ROOT file or"\
+                " is corrupted. Exiting...".format(filename))
+
     # Let's define the decay radius regions
     #radius_regions = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)}
     # 1.a Harvesting data and converting: from a given format we want a suitable 
-    # format for the fitting, i.e to RooFit variables    
+    # format for the fitting, i.e to RooFit variables  
+    # [1]- Note that the obtained dictionary has the keys following: SAMPLENAME_regionY:BARREL|ENDCAP
     datahists = data_harvest_tree(f,mass,"KsTree_KsSampleCreator",RADIUS_REGIONS,isData)
     
     # build the list of region models
     model_and_regions = {}
     for model_region in datahists.keys():
-        region = model_region.split("_")[-1]
-        model  = "_".join(model_region.split("_")[:-1])
+        # see note [1] above: SAMPLENAME_regionY:BARREL|ENDCAP
+        model,region = model_region.split("_")
         try: 
             model_and_regions[model].append( region )
         except KeyError:
@@ -625,9 +637,12 @@ def build_fit(filename,isData=False,plotsuffix='png'):
             _m = modelprob[modelkey]
             ## Fitting
             result = _m.fitTo(_d,modeltype=region,Extended=True)
-            ## plotting (FIXME: if it worked well)
-            dl_l,dl_u = radius_regions[int(region[-1])] 
-            title = "Decay Length #in [{0:.0f},{1:.0f}] mm".format(dl_l,dl_u)
+            ## plotting (FIXME: if it worked well) 
+            # extract radius and eta regions
+            rad_region,eta_region = region.split(":")
+            dl_l,dl_u = RADIUS_REGIONS[int(rad_region[-1])] 
+            title = "#splitline{0}Decay Length #in [{1:.0f},{2:.0f}] mm{3}"\
+                    "{0}{4}{3}".format("{",dl_l,dl_u,"}",ETA_REGIONS[eta_region])
             plot(result,mass,_m.getmodel(region),_d,"{0}_{1}.{2}".format(dataname,dtype,plotsuffix),\
                     title=title,isData=isData)
         ## Save results for posterior treatment :: FIXME problem storing...
@@ -656,6 +671,12 @@ def store_numKshorts(modelprobdict,knumfile):
         dictionaries contains the Kshort fitted number and error per sample, i.e.:
         { 0: { 'JZyW:ETA': (kshort,error), ..., ... }
 
+    Raises
+    ------
+    AttributeError: whenever a eta region different from 'BARREL' and 'ENDCAP' is
+        present in the dictionary keys. This probably means ann inconsistent why of
+        filling the previous dict 
+
     """
     import shelve
     import os
@@ -665,24 +686,35 @@ def store_numKshorts(modelprobdict,knumfile):
         is_new_file =False
     # Create the shelve data
     kk = shelve.open(knumfile,writeback=True)
-    regiondict = {}
+    regiondictbarrel = {}
+    regiondictendcap = {}
     if not is_new_file:
-        regiondict = kk['regiondict']
+        regiondictbarrel = kk['regiondictbarrel']
+        regiondictendcap = kk['regiondictendcap']
     # Create the region-dictionary for this sample
     for dataname,modelprob in modelprobdict.iteritems():
         for regionstr in modelprob.availablemodels():
-            region = int(regionstr.replace("region",""))
+            rad_region,eta_region = regionstr.split(":")
+            region = int(rad_region.replace("region",""))
             kshorts = modelprob.get_variable_from_model(regionstr,"nsig")
+            if eta_region == 'BARREL':
+                regiondict = regiondictbarrel
+            elif eta_region == 'ENDCAP':
+                regiondict = regiondictendcap
+            else:
+                raise AttributeError("\033[1;31mERROR\033[1;m Internal error. Contact"\
+                        " jorge.duarte.campderros@cern.ch with [ILNN-120908] code error")
             try:
                 regiondict[region][dataname] = (kshorts.getVal(),kshorts.getError())
             except KeyError:
                 # Case when creating for the first time the dictionary
                 regiondict[region] = { dataname: (kshorts.getVal(),kshorts.getError()) }
     # store the dict
-    kk['regiondict'] = regiondict
+    kk['regiondictbarrel'] = regiondictbarrel
+    kk['regiondictendcap'] = regiondictendcap
     kk.close()
 
-    return regiondict
+    return regiondictbarrel,regiondictendcap
 
 ## END FITTER RELATED FUNCTIONS
 ########################################################################################
@@ -690,13 +722,15 @@ def store_numKshorts(modelprobdict,knumfile):
 ########################################################################################
 ## DOUBLE RATIO RELATED FUNCTIONS
 
-def get_numKshorts_dict(knumfile):
+def get_numKshorts_dict(knumfile,eta_region):
     """Extract the number of Kshorts stored in a dictionary (from a shelve file)
 
     Parameters
     ----------
     knumfile: str
         the name of the shelve file where is stored the dictionary
+    eta_region: str
+        BARREL or ENDCAP
 
     Return
     ------
@@ -709,6 +743,7 @@ def get_numKshorts_dict(knumfile):
     ------
     AttributeError: whenever the 'data' key is not present in all the regions
     IOError:        when the knumfile doesn't exist   
+    KeyError:       an invalid eta region is introduced
 
     """
     import shelve
@@ -722,7 +757,10 @@ def get_numKshorts_dict(knumfile):
     # Create the shelve data
     kk = shelve.open(knumfile)
     regiondict = {}
-    regiondict = kk['regiondict']
+    try: 
+        regiondict = kk['regiondict{0}'.format(eta_region.lower())]
+    except KeyError:
+        raise KeyError("\0331;31mERROR\0331;m Introduced invalid eta region '{0}'".format(eta_region))
     kk.close()
     # Checking we have a well-formatted dictionary (data must be present
     # in all regions
@@ -733,7 +771,7 @@ def get_numKshorts_dict(knumfile):
                 " region".format(knumfile))
     return regiondict
 
-def double_ratio_plot(dijet_name,dRdict,plotname='KsRatio'):
+def double_ratio_plot(dijet_name,dRdict,eta_region,plotname='KsRatio'):
     """Create the double ratio plot (in png and pdf)
 
     Parameters
@@ -745,6 +783,8 @@ def double_ratio_plot(dijet_name,dRdict,plotname='KsRatio'):
         dictionary mapping the radius region with a dictionary which contains
         the double ratio and erro per each sample
         { region: { 'SAMPLE1': (dr,edr), 'SAMPLE2': (dr2,edr2), ... }, ... }
+    eta_region: str
+        either BARREL or ENDCAP
     plotname: str
         the name of the plot without suffix 
     """
@@ -780,9 +820,9 @@ def double_ratio_plot(dijet_name,dRdict,plotname='KsRatio'):
     AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.85)
     AtlasUtils.ROOT.myText(0.34,0.85,1,"Work In Progress")
     AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}")
-    AtlasUtils.ROOT.myText(0.7,0.65,1,"|#eta| < 2.5")
-    c.SaveAs("{0}.png".format(plotname))
-    c.SaveAs("{0}.pdf".format(plotname))
+    AtlasUtils.ROOT.myText(0.7,0.65,1,ETA_REGIONS[eta_region])
+    c.SaveAs("{0}_{1}.png".format(plotname,eta_region))
+    c.SaveAs("{0}_{1}.pdf".format(plotname,eta_region))
 
 
 def get_ratio(numer,denom):
@@ -809,17 +849,51 @@ def get_ratio(numer,denom):
 
     return ratio,errRatio
 
+def double_ratio_table(regiondict,eta_region,mcsample):
+    """FIXME DOC
+    FIXME MULTIPLE MC SAMPLES
+    """
+    # maximum discrepancies
+    discrepancy_max = 0.0
 
-def main_dr(knumfile):
+    #regiondict = drdict[eta_region]
+    message  = eta_region+"\n" 
+    header   = "{0:8s} {1:10s} +- {2:8s}\n".format('region', 'Double Ratio', 'Error')
+    message  += header
+    message += "-"*len(header)+"\n"
+    line_content  = lambda lr,hr,dr,errDr: "[{0:2.0f},{1:2.0f}]  {2:12.4f} +- {3:6.4f}\n".format(lr,hr,dr,errDr)
+    for i in regiondict.keys():
+        lrad,hrad = RADIUS_REGIONS[i]
+        for name,(ks_i,errKs_i) in filter(lambda (x,y): x in mcsample, regiondict[i].iteritems()):
+            message += line_content(lrad,hrad,ks_i,errKs_i)
+            discrepancy = max(([abs(1.0-(ks_i+errKs_i)), abs(1.0-(ks_i-errKs_i))]))
+            if discrepancy > discrepancy_max:
+                discrepancy_max = discrepancy
+    message += "Maximum discrepancy: {0:2.0f}%\n\n".format(discrepancy_max*100.0)
+
+    return message
+
+
+
+def main_dr(knumfile,eta_region,mcsample_used):
     """Main steering function to obtain the double ratio plots
 
     Parameters
     ----------
     knumfile: str
         the name of the shelve file where is stored the dictionary
+    eta_region: str
+        BARREL or ENDCAP
+    mcsample_used: str
+        the dijet sample to be used for the ratio (should be JZW, the
+        weighted sum of the dijet samples FIXME: NOT AVAILABLE YET)
+
+    Returns
+    -------
+    FIXME DOC
     """
     # get the data
-    regiondict = get_numKshorts_dict(knumfile)
+    regiondict = get_numKshorts_dict(knumfile,eta_region)
     # Get the normalization factors: ratio of DATA/MC in region 0
     normfactor = {}
     # merge_dijets = 0.0 # NOT AVAILABLE.. MISSING EVENT WEIGHTS
@@ -852,8 +926,9 @@ def main_dr(knumfile):
             doubleRatio,errDR = get_ratio( (ratio,errR), normfactor[name] )
             dRdict[i][name] = (doubleRatio,errDR)
     # and do the plot: FIXME dijet sample
-    double_ratio_plot("JZ3W",dRdict)
+    double_ratio_plot(mcsample_used,dRdict,eta_region)
 
+    return dRdict
 
 ## END DOUBLE RATIO RELATED FUNCTIONS
 ########################################################################################
@@ -910,6 +985,10 @@ if __name__ == '__main__':
             " a double gaussian for the signal (Kshorts) plus a polynomial background" )
     parser_fitter.add_argument('rootfilename',nargs='+',action='store',\
             metavar='ROOTFILE',help="ROOT file(s) with a 'KsTree_KsSampleCreator' TTree")
+    parser_fitter.add_argument('--ksnum_file',action='store',dest='ksnum_file',\
+            metavar='KSHORT_NUM_FILE.dat',help="shelve file where is stored the number of Kshorts"\
+            " per region and sample. This file is constructed by the \033[1;51mfitter\033[1;m sub-command"\
+            " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
     parser_fitter.set_defaults(which='fitter')
     
     # double_ratio 
@@ -940,9 +1019,16 @@ if __name__ == '__main__':
                 dtype=rfilename.split(".")[0].split("_")[-1]
             modelprobdict = build_fit(rfilename,isData=isData)
             # Should write down the number of Kshorts with its error: 
-            knumfile = args.ksnum_file
-            nKsdict = store_numKshorts(modelprobdict,knumfile)
+            nKs_barrel_dict,nKs_endcap_dict = store_numKshorts(modelprobdict,args.ksnum_file)
     elif args.which == 'double_ratio':
-        main_dr(args.ksnum_file)
+        drBarrel_d = main_dr(args.ksnum_file,'BARREL',"JZ3W")
+        drEC_d     = main_dr(args.ksnum_file,'ENDCAP',"JZ3W")
+        # print some numbers
+        print "\033[1;34mINFO\033[1;m Double Ratio tables\n"
+        message = double_ratio_table(drBarrel_d,'BARREL',["JZ3W"])
+        message += double_ratio_table(drEC_d,'ENDCAP',["JZ3W"])
+        print message
+        
+
 
 
