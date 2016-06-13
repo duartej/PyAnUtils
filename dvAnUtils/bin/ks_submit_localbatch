@@ -69,8 +69,60 @@ def getLFNd_and_Events(scope,dataset,verbose=False):
     collFiles = map(lambda f: (filename(f['scope'],f['name']),f['events']), cont)
     return collFiles
 
-def getLocalFiles_and_Events(listfile,treename="CollectionTree"):
-    """Obtain the number of events 
+def get_event_per_file(folder,files,scope,dsname):
+    """
+    """
+    from ROOT import TFile
+    import shelve
+    import sys
+    import os
+
+    # the name of the file with the event info
+    dbfile_name = os.path.join(folder,".events_per_file")
+    dbfile = shelve.open(dbfile_name,writeback=True)
+    try:
+        stored_collFiles = dbfile['evt_file_dict']
+    except KeyError:
+        # empty file, let's fill it using rucio
+        pre_collFiles = getLFNd_and_Events(scope,dsname)
+        # just use the right folder, note also that the previous
+        # function insert the scope (:) before the name of the file
+        stored_collFiles = map(lambda (fn,e): 
+                (os.path.join(folder,os.path.basename(fn).split(":")[-1]),e), pre_collFiles)
+    # Just using those which were introduced by the user
+    collFiles = filter(lambda x: x[0] in files, stored_collFiles)
+    # Let's see if the number of files are right or it is needed an update
+    basenames = map(lambda x: os.path.basename(x[0]),collFiles)
+    missing_in_db = filter(lambda _x: os.path.basename(_x) not in basenames, files)
+    # need to be updated the DB file
+    if len(missing_in_db) > 0:
+        # Assuming that a few files will be quick than
+        # calling again the rucio client...
+        # --- Progress bar :)
+        pointpb = float(len(missing_in_db))/100.0
+        for i in xrange(len(missing_in_db)):
+            sys.stdout.write("\r\033[1;34mINFO\033[1;m Obtaining number of events"+\
+                    " from the files  [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+            sys.stdout.flush()
+            f = TFile.Open(missing_in_db[i])
+            if f.IsZombie():
+                print 
+                print "\033[1;33mWARNING\033[1;m file '{0}' not found".format(missing_in_db[i])
+                continue
+            evts = getattr(f,"CollectionTree").GetEntries()
+            f.Close()
+            del f
+            collFiles.append( (missing_in_db[i],evts) )
+        print
+    # store back
+    dbfile['evt_file_dict'] = collFiles
+    dbfile.close()
+    return collFiles
+
+
+def getLocalFiles_and_Events(listfile,scope,dsname,treename="CollectionTree"):
+    """Obtain the number of events [TO SLOW]
+
 
     Parameters
     ----------
@@ -82,33 +134,45 @@ def getLocalFiles_and_Events(listfile,treename="CollectionTree"):
     collFiles: list((str,int))
         list of files and events contained in that file
     """
-    from ROOT import TFile
+    from ROOT import TFile,TChain
     import sys
+    import os
 
-    collFiles= []
+    #collFiles= []
     with open(listfile) as _f1:
         files_str = _f1.read()
         _f1.close()
     # to a list (with no empty strings)
     files = filter(None,files_str.split("\n"))
+
+    # Obtain the list of files from a previously used file
+    # or if not create those file
+    folder_files =  os.path.split(files[0])[0]
+    collFiles = get_event_per_file(folder_files,files,scope,dsname)
     
-    # --- Progress bar :)
-    pointpb = float(len(files))/100.0
-    for i in xrange(len(files)):
-        sys.stdout.write("\r\033[1;34mINFO\033[1;m Obtaining number of events"+\
-                " from the files  [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
-        sys.stdout.flush()
-        f = TFile.Open(files[i])
-        if f.IsZombie():
-            print 
-            print "\033[1;33mWARNING\033[1;m file '{0}' not found".format(i)
-            continue
-        evts = getattr(f,treename).GetEntries()
-        f.Close()
-        del f
-        collFiles.append( (files[i],evts) )
-    print
-    return collFiles
+    #tchain = TChain("CollectionTree")
+    ## --- Progress bar :)
+    #pointpb = float(len(files))/100.0
+    #lastevt = 0.0
+    #collFiles = []
+    #for i in xrange(len(files)):
+    #    sys.stdout.write("\r\033[1;34mINFO\033[1;m Obtaining number of events"+\
+    #            " from the files  [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+    #    sys.stdout.flush()
+    #    #f = TFile.Open(files[i])
+    #    #if f.IsZombie():
+    #    #    print 
+    #    #    print "\033[1;33mWARNING\033[1;m file '{0}' not found".format(i)
+    #    #    continue
+    #    #evts = getattr(f,treename).GetEntries()
+    #    #f.Close()
+    #    #del f
+    #    tchain.Add(files[i])
+    #    evts = tchain.GetEntries()-lastevt
+    #    lastevt = evts
+    #    collFiles.append( (files[i],evts) )
+    #print
+    return list(collFiles)
 
 def files_per_job(flist,evtperjob):
     """Algorithm to split a list of n-files into a minimum of evts per job
@@ -195,22 +259,21 @@ def create_bash(filelist,testarea,bashname):
     timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     bashfile = '#!/bin/bash\n\n'
     bashfile += '# File created by the script "launch_jobs" [{0}]\n'.format(timestamp)
-    bashfile += '='*80+'\n'
+    bashfile += '#'+'='*80+'\n'
     bashfile += 'hostname\n'
     bashfile += 'pwd\n'
-    bashfile += '='*80+'\n'
+    bashfile += '#'+'='*80+'\n'
+    bashfile += 'source $ATLAS_LOCAL_ROOT_BASE/user/atlasLocalSetup.sh; \n'
+    bashfile += 'cd '+testarea+' ;\n'
+    bashfile += "lsetup 'rcsetup' ;\n"
     # Issue with the directory, create a temporary one
-    tmpdir   = '__tmp_job_{0}_{1}'.format(hash(random.uniform(0,1e9)),hash(random.uniform(0,1e9)))
-    bashfile += 'mkdir {0}\n'.format(tmpdir)
-    bashfile += 'cd {0}\n'.format(tmpdir)
-    bashfile += 'source $ATLAS_LOCAL_ROOT_BASE/user/atlasLocalSetup.sh\n'
-    bashfile += 'cd '+testarea+'\n'
-    bashfile += "lsetup 'rcsetup'\n"
-    bashfile += 'cd {0}\n'.format(tmpdir)
+    bashfile += 'tmpdir=$(mktemp -d) ;\n'
+    bashfile += 'cd ${tmpdir};\n'
     dijetname = bashname.split('.')[1].split('_')[-1]
-    bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat {1}/{2}` -c\n'.format(
+    bashfile += 'runDVAna -a KsSampleCreator -o {0} -f `cat {1}/{2};` ;\n'.format(
             'kshistos_mc_{0}_%i.root'.format(dijetname),os.getcwd(),filelist)
-    bashfile += 'mv kshistos_mc_{0}_%i.root {0}/\n'.format(dijetname,os.getcwd())
+    bashfile += 'mv kshistos_mc_{0}_%i.root {1}/ ;\n'.format(dijetname,os.getcwd())
+    bashfile += 'rm -rf ${tmpdir} ;\n'
     scriptname = '{0}.sh'.format(bashname)
     f = open(scriptname,"w")
     f.write(bashfile)
@@ -228,33 +291,19 @@ def main(DSs,testarea,localfiles,njobs=200,events_per_job=None):
     """
     import os
     
-    # Mode FAX or local?
-    obtain_files_evts = getLFNd_and_Events
-    if localfiles:
-        # Get the full path 
-        filelist_file = os.path.realpath(localfiles)
-        obtain_files_evts = getLocalFiles_and_Events
-        # Be sure only one DS is evaluated
-        if len(DSs) > 1:
-            raise RuntimeError("\033[1;31mERROR\033[1;m Only one"\
-                    " datasets is allowed with the '-l' option")
-
     # for each dataset 
     for ds in DSs:
         scope,dsname = ds.split(":")
         splitname = dsname.split('.')
-        name = "{0}.{1}.{2}.{3}".format(splitname[3],splitname[2],splitname[7],splitname[8])
+        name = "{0}.{1}.{2}".format(splitname[3],splitname[2],splitname[8])
         print "\033[1;34mINFO\033[1;m Creating job for {0}".format(name)
         # -- create a directory to launch
         directory=os.path.join(os.getcwd(),name)
         if not os.path.exists(directory):
             os.makedirs(directory)
+        # get the name of the files to process and events per file
+        flist = getLocalFiles_and_Events(localfiles,scope,dsname)
         with cd(directory):
-            # get the name of the files to process and events per file
-            if localfiles:
-                flist = getLocalFiles_and_Events(filelist_file)
-            else:
-                flist = getLFNd_and_Events(scope,dsname)
             # get the events per jobs
             totalevts = sum(map(lambda x: x[1],flist))
             evtperjob = totalevts/njobs
@@ -263,7 +312,7 @@ def main(DSs,testarea,localfiles,njobs=200,events_per_job=None):
             jobid_files = files_per_job(flist,evtperjob)
             # create an unique bash script 
             filelist_name = 'filelist_%i.txt'
-            jobname = 'KsSampleCreator.{0}.v{1}'.format(name,VERSION)
+            jobname = '{0}.KsSampleCreator.v{1}'.format(name,VERSION)
             create_bash(filelist_name,testarea,jobname)
             # create the dv-analysis jobs
             for jobid,filelist in jobid_files.iteritems():
