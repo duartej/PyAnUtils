@@ -933,6 +933,92 @@ def main_dr(knumfile,eta_region,mcsample_used):
 ## END DOUBLE RATIO RELATED FUNCTIONS
 ########################################################################################
 
+########################################################################################
+## METADATA RELATED FUNCTIONS
+
+def get_metadata(metadata_file):
+    """
+    """
+    import shelve
+
+    # Open the file if exist, otherwise creates an empty dictionary
+    kk = shelve.open(metadata_file)
+    if kk.has_key('metadata'):
+        md = kk['metadata'].copy()
+    else:
+        md = {}
+    kk.close()
+    return md
+
+def get_AMI_client():
+    """
+    """
+    import pyAMI.client
+    import pyAMI.atlas.api as AtlasAPI
+    client = pyAMI.client.Client('atlas')
+    AtlasAPI.init()
+
+    return client,AtlasAPI
+
+
+def update_metadata(client,AtlasAPI,rootfilename,scope_dataset,metadict):
+    """
+    Parameters
+    ----------
+    client: pyAMI.client.Client
+        the ..
+    rootfilename: str
+        the name of the root file to be associated with the dataset
+    scope_dataset: str
+        the dataset in the format "SCOPE:DS"
+    metadict: dict( str: dict())
+        {}
+    """
+    # get the generation ami-tag
+    scope,dataset = scope_dataset.split(":")
+    camp,dsnumber,phys_short,step,data_type,ami_tags = dataset.split(".")
+    gen_tag = ami_tags.split("_")[0]
+    # and the quick name
+    dijet = phys_short.split("_")[-1]
+    # EVT pattern and find the EVNT gen
+    evt_pattern = "%{0}%{1}%{2}%EVNT%{3}%".format(camp,dsnumber,phys_short,gen_tag)
+    print "\033[1;34mINFO\033[1;m Looking for '{0}'".format(evt_pattern)
+    evtd = AtlasAPI.list_datasets(client,patterns=[evt_pattern],type="EVNT")[0]
+    ds_evt = evtd['ldn']
+    # Get the detailed info
+    det_info = AtlasAPI.get_dataset_info(client,ds_evt)[0]
+    # some keys are not fixed
+    gen_eff = filter(lambda x: x.lower().find("genfilteff") != -1 or 
+            x.lower().find("genfilteff") != -1,  det_info.keys())[0]
+    xs= filter(lambda x: x.find("crossSection") == 0 or 
+            x.lower().find("crosssection_mean") != -1,  det_info.keys())[0]
+    metadict[dijet] = { "events": int(det_info['totalEvents']), 
+            "gen_eff": float(det_info[gen_eff]), 
+                "xs": float(det_info[xs])*1e3, # in pb
+                "processed_file": rootfilename } 
+    print "\033[1;34mINFO\033[1;m Obtained {0}".format(dijet)
+    print "  xs={0:.2e} pb, N_Evt={1}, eff_gen={2:.3e} --> w={3:.4e}".format(
+            metadict[dijet]["xs"],metadict[dijet]["events"],
+            metadict[dijet]["gen_eff"], 
+            (metadict[dijet]["xs"]*metadict[dijet]["gen_eff"]/metadict[dijet]["events"]))
+
+def store_metadata(metadata_file,metadict):
+    """
+    Parameters
+    ----------
+    metadata_file: str
+        the name of the file to store the info
+    metadict: dict( str: dict())
+        {}
+    """
+    import shelve
+    kk = shelve.open(metadata_file)
+    kk['metadata'] = metadict
+    kk.close()
+
+## END METADATA RELATED FUNCTIONS
+########################################################################################
+
 if __name__ == '__main__':
     from argparse import ArgumentParser,RawDescriptionHelpFormatter
     import textwrap
@@ -954,6 +1040,11 @@ if __name__ == '__main__':
     usage += "   3. Persistify the number of Kshorts found into a python output file, \n"
     usage += "      persistify the RooFit workspace for posterior processing (if needed),\n"
     usage += "      and plot data and the model fitted in a png [pdf] files\n"
+    usage += "\n \033[1;34mmetadata\033[1;m [OPTIONAL]\n"
+    usage += "   1. Extracts the relevant information of the dijet samples (gen. filter\n"
+    usage += "      eff., cross-section, number of gen. events) needed whenever the add-up\n"
+    usage += "      of the available JZ*W samples is going to be used\n"
+    usage += "   2. Stores the results in a shelve file\n"
     usage += "\n \033[1;34mdouble_ratio\033[1;m\n"
     usage += "   1. Creates the double ratio plot, at least one MC sample and the data is\n"
     usage += "      needed to be previously processed with the \033[1;51mfitter\033[1;m sub-command\n"
@@ -991,14 +1082,37 @@ if __name__ == '__main__':
             " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
     parser_fitter.set_defaults(which='fitter')
     
+    # Metadata creator command parser
+    parser_metadata = subparsers.add_parser("metadata",
+            help="Creates the metadata file needed to perform the (optional) add-up of the JZ*W samples."\
+                    " It searches for in the AMI database the relevant EVNT files in order to"\
+                    " obtain the generated events, the cross-section and the generation effiency."\
+                    " It needs previously \"lsetup ami\".")
+    parser_metadata.add_argument("filename_dataset",nargs="+",action="store",
+            metavar="ROOTFILENAME,SCOPE:DATASET",
+            help="given a processed ROOTFILENAME"\
+                    " (using KsSampleCreator), the original dataset should be given")
+    parser_metadata.add_argument("--metadata-file",action="store",dest='metadata_file',
+            help="the file where to store the metadata [$PWD/dijet_metadata.dat]",
+            default=os.path.join(os.getcwd(),"dijet_metadata.dat"))
+    parser_metadata.set_defaults(which="metadata")
+    
     # double_ratio 
     parser_double_ratio = subparsers.add_parser("double_ratio",help="Plot the double ratio using"\
-            " region 0 (5-10 mm) as nomalizing region")
+            " region 0 (5-10 mm) as nomalizing region. It uses per default the JZ3W sample,"\
+            " but it can be used the weighted add-up of the available JZ*W. Before activating"\
+            " that mode with the '--all' option, the \033[1;51mmetadata\033[1;m subcommand must"\
+            " be used")
     parser_double_ratio.add_argument('ksnum_file',nargs='?',action='store',\
             metavar='KSHORT_NUM_FILE.dat',help="shelve file where is stored the number of Kshorts"\
             " per region and sample. This file is constructed by the \033[1;51mfitter\033[1;m sub-command"\
             " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
-    parser_double_ratio.set_defaults(which='double_ratio')
+    parser_double_ratio.add_argument('--all',action='store_true',dest="all_samples",\
+            help="Activate the use of the available dijet JZ*W samples. It assumes "\
+                " \033[1;51mmetadata\033[1;m subcommand was called before")
+
+    parser_double_ratio.set_defaults(which='double_ratio',all_samples=False)
+
 
     args = parser.parse_args()
 
@@ -1020,7 +1134,22 @@ if __name__ == '__main__':
             modelprobdict = build_fit(rfilename,isData=isData)
             # Should write down the number of Kshorts with its error: 
             nKs_barrel_dict,nKs_endcap_dict = store_numKshorts(modelprobdict,args.ksnum_file)
+    elif args.which == 'metadata':
+        # Extract the metadata file if exist
+        metadict = get_metadata(args.metadata_file)
+        client,amiAPI = get_AMI_client()
+        # and update its content with the new files
+        for filename_SDS in args.filename_dataset:
+            try:
+                filename,scope_ds = filename_SDS.split(",")
+            except ValueError:
+                raise RuntimeError("\033[1;31mERROR\033[1;m filename and dataset"\
+                        " must be comma-separated, see the help 'kshort_study metadata -h'")
+            update_metadata(client,amiAPI,filename,scope_ds,metadict)
+        # store back the file
+        store_metadata(args.metadata_file,metadict)
     elif args.which == 'double_ratio':
+        # extract the double ratios for endcap and barrel
         drBarrel_d = main_dr(args.ksnum_file,'BARREL',"JZ3W")
         drEC_d     = main_dr(args.ksnum_file,'ENDCAP',"JZ3W")
         # print some numbers
