@@ -8,6 +8,7 @@ Fitting Kshorts using the output ROOT files from the KsSampleCreator class
 ## WEIGHT RELATED FUNCTIONS
 COLOR =None
 def setcolors():
+    ## Just to avoid the interference with the -help option
     import ROOT
     global COLOR
 
@@ -98,18 +99,17 @@ def kinematic_plots(histos,xtitle,var):
         j+=1
     c.SaveAs("kinematics_{0}.png".format(var))
 
-def create_and_save_file_weights(rootfile,hdata,hmc,varname):
+def create_and_save_file_weights(rootfile,hdata,hmc,hname):
     """FIXME DOCS
     """
     import ROOT
     
     # histo name
     #hname = "{0}_weights".format(hmc.GetName())
-    hname = "{0}_weights_{1}".format(hmc.GetName(),varname)
+    #hname = "{0}_weights_{1}".format(hmc.GetName(),varname)
     # Delete previous version, if any
     rootfile.Delete(hname+';*')
     rootfile.cd()
-    print rootfile
     # create the new one
     whisto = hdata.Clone(hname)
     whisto.Divide(hmc) # DaTA/this MC
@@ -117,79 +117,108 @@ def create_and_save_file_weights(rootfile,hdata,hmc,varname):
 
     return whisto
 
-def create_weights(_froot,_files,doplots):
+def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
     """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
-    new TTree 'weight_tree' vertex-wise for each MC sample.
+    new TTree 'weight_tree' vertex-wise for each MC sample. Note that
+    the Created histograms already contain the MC event weights of the 
+    dijet samples
 
     Parameters
     ----------
     _froot: { int: ROOT.TFile,  ...}
         the index with the root file dict.
-
     _files: { (int, str): str } }
         a { (index,sample name) : legend } dictionary
-
     doplots: bool
+        whether or not do some kinematic plots before the weighting
+    force: bool
+        whether or not to force to re-calculate the weights whenever
+        the weights are already present in the ROOT file
+    dijet_weights: str, default: 'dijet_weights'
+        the name of the branch where the MC event weight is present 
     """
     import ROOT 
 
     # Build the TH2F ready 
+    # -- Name of the histograms with var
     h2histos = {}
     zhistos = {}
-    print "Collecting data..."
-    for (i,fname),legend in sorted(_files.iteritems()):
+    # -- Name of the histograms DATA/MC_i
+    h2dw_name = {}
+    hzw_name  = {}
+    # -- the weight histograms
+    weights = {}
+    print "\033[1;34mINFO\033[1;m Collecting data..."
+    # Run the data (i=0) the last one
+    for (i,fname),legend in sorted(_files.iteritems(),reverse=True):
+        # First get the names of everything
         hname = fname.split('.')[0]
         h2name=hname+"_pt_eta"
+        hzname = hname+"_zPV"
+        # -- Filling the name of the histos which will contain the weight
+        h2dw_name[i] = "{0}_weights_pt_eta".format(h2name)
+        hzw_name[i]    = "{0}_weights_zPV".format(hzname)
+        # And check if it is already present, then skip it
+        if not force and len(filter(lambda _k: _k.GetName() == h2dw_name[i] or \
+                _k.GetName() == hzw_name[i], _froot[i].GetListOfKeys())) == 2:
+            weights[i] = { h2dw_name[i]: _froot[i].Get(h2dw_name[i]), 
+                hzw_name[i]: _froot[i].Get(hzw_name[i]) }
+        if not force and not doplots:
+            continue
         print " --\ extracting info from {0}".format(fname)
         # Note I cannot include zPV because is event-wise
         h2histos[i] = (ROOT.TH2F(h2name,"",100,00,30.,100,-3.0,3.0), legend)
         h2histos[i][0].Sumw2()
         # Fill data
         t = _froot[i].Get("KsTree_KsSampleCreator")
-        t.Project(h2name,"pseudorapidity:pt*1e-3")
+        # Check if the dijet_weight branch is present, remove it otherwise
+        dijet_weight_v = "1.0*{0}[0]".format(dijet_weight)
+        # if getattr(t,dijet_weight) --> SEGMENTATION VIOLATION ??
+        if not dijet_weight in map(lambda x: x.GetName(),t.GetListOfBranches()):
+            dijet_weight_v = '1.0'
+            print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
+                    " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
+                    " ignore this WARNING then".format(dijet_weight,fname)
+        t.Project(h2name,"pseudorapidity:pt*1e-3",dijet_weight_v)
         h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
         # and the zPV
-        hzname = hname+"_zPV"
         zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
         zhistos[i][0].Sumw2()
-        t.Project(hzname,"zPV")
+        t.Project(hzname,"zPV",dijet_weight_v)
         zhistos[i][0].Scale(1.0/zhistos[i][0].Integral())
     
     # Do some plots if required
     if doplots:
         pthistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionX(),leg)),h2histos.iteritems()))
         kinematic_plots(pthistos,
-                style=STYLE[i],
-                color=COLOR[i],
                 xtitle='p_{T} [GeV]',
                 var='pt'
                 )
         etahistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionY(),leg)),h2histos.iteritems()))
         kinematic_plots(etahistos,
-                style=STYLE[i],
-                color=COLOR[i],
                 xtitle='#eta',
                 var='eta'
                 )
         kinematic_plots(zhistos,  
-                style=STYLE[i],
-                color=COLOR[i],
                 xtitle='z_{PV} [mm]',
                 var='zPV'
-                )  
+                )
     # Build the weight histos 2D (pt, eta) + 1D zPV
-    print " Creating the weights"
+    print "\033[1;34mINFO\033[1;m Creating the weights"
     # DATA/MC --> 0 index is data
     # Build the weights
-    weights = {}
     for (i,fname),legend in sorted(filter(lambda (x,y): x[0] != 0,_files.iteritems())):
-        w_pt_eta = create_and_save_file_weights(_froot[i],h2histos[0][0],h2histos[i][0],"pt_eta")
-        w_zpv    = create_and_save_file_weights(_froot[i],zhistos[0][0],zhistos[i][0],"zPV")
-        weights[i] = { wz_pt_eta.GetName(): wz_pt_eta, w_zpv.GetName(): w_zpv }
+        # check if it's already filled
+        if weights.has_key(i):
+            continue
+        w_pt_eta = create_and_save_file_weights(_froot[i],h2histos[0][0],h2histos[i][0],h2dw_name[i])
+        w_zpv    = create_and_save_file_weights(_froot[i],zhistos[0][0],zhistos[i][0],hzw_name[i])
+        weights[i] = { w_pt_eta.GetName(): w_pt_eta, w_zpv.GetName(): w_zpv }
 
     return weights
 
-def build_weight_branch(t,weightdict,weight_treename,weight_branchname):
+def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
+        dijet_weight_branchname="dijet_weight"):
     """
     FIXME: DOCS
     Parameters
@@ -222,7 +251,11 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname):
     ptV  = getattr(t,'pt')
     # carefull event-wise variable
     zpvV = getattr(t,'zPV')
-
+    # the MC event weight
+    if hasattr(t,dijet_weight_branchname):
+        evtW_dijet_v = getattr(t,dijet_weight_branchname)
+    else:
+        evtW_dijet_v = [ 1.0 ]
     # Start the loop on the tree
     # --- Progress bar :)
     pointpb = float(t.GetEntries())/100.0
@@ -242,7 +275,10 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname):
         w.reserve(etaV.size())
         # find event-wise weight
         zBin = zpv_hist.FindBin(zpvV[0])
-        evtW = zpv_hist.GetBinContent(zBin)
+        evtW_zPV = zpv_hist.GetBinContent(zBin)
+        evtW_dijet = evtW_dijet_v[0]
+        evtW = evtW_zPV*evtW_dijet
+        # and the event-wise MC generated weight 
         # and the vertex-wise
         for _pt,_eta in zip(ptV,etaV):
             kinBin = kin_hist.FindBin(_pt*1e-3,_eta)
@@ -252,7 +288,7 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname):
     print
     ntree.Write("", ROOT.TObject.kOverwrite)    
 
-def main_weights(datasample,mcsamples,doplots):
+def main_weights(datasample,mcsamples,doplots,force_weight_calc):
     """Main steering function to create the weigths from a list of 
     samples. 
     The first step is to obtain the 2D and 1D weights DATA/MC using 
@@ -268,6 +304,9 @@ def main_weights(datasample,mcsamples,doplots):
         the list of MC samples
     doplots: bool
         whether or not to do some kinematic plots
+    force_weight_calc: bool
+        whether or not to force to re-calculate the weights whenever
+        the weights are already present in the ROOT file
     """
     import ROOT
     import os
@@ -281,24 +320,26 @@ def main_weights(datasample,mcsamples,doplots):
     # We have to assume some name convention: BLAH_BLAH_BLAH_jetjet_JZyW.root
     k=1
     for mcname in mcsamples:
-        fiddict[(k,mcname)] = "{0}, Simulation".format(mcname.split("_")[-1].split(".")[0])
+        fiddict[(k,mcname)] = "{0}".format(mcname.split("_")[-1].split(".")[0])
         k+=1
 
     # First check if the files contains the histograms of weights
     # and retrieve them 
     _froots = dict( map(lambda (x,y): (x,ROOT.TFile.Open(y,"UPDATE")), fiddict.keys()) )
     weights={}
-    no_weights=False
+    no_weights={}
     # Only MC of course
     for i,f in filter(lambda (_i,_z): _i != 0,_froots.iteritems()):
         weights[i] = dict(map(lambda _x: (_x.GetName(),f.Get(_x.GetName())), 
                 filter(lambda x: x.GetName().lower().find('weights')!=-1,f.GetListOfKeys())))
         if len(weights[i]) == 0:
-            no_weights=True
-            break
-    if no_weights:
+            no_weights[i]=True
+        else:
+            no_weights[i]=False
+
+    if any(no_weights):
         # create the weights
-        weights = create_weights(_froots,fiddict,doplots)
+        weights = create_weights(_froots,fiddict,doplots,force_weight_calc)
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
@@ -307,11 +348,11 @@ def main_weights(datasample,mcsamples,doplots):
     for i,f in filter(lambda (_i,_y_): _i != 0,_froots.iteritems()):
         f.cd()
         weight_treename = "weight_tree"
-        try: 
-            weigth_branch = f.Get(weight_treename)
+        if not force_weight_calc and\
+                len(filter(lambda x: x.GetName() == weight_treename,f.GetListOfKeys())) == 1:
             print '\033[1;33mWARNING\033[1;m Trying to re-create TTree {0}'\
-                        ' already present in {1}. Ignoring...'.format(weight_treename,f.GetName())
-        except AttributeError:
+                        ' already present in \'{1}\'. Ignoring...'.format(weight_treename,f.GetName())
+        else:
             # Not found it, so built it
             print "\033[1;34mINFO\033[1;m Creating weight branch for {0}".format(f.GetName())
             t = f.Get("KsTree_KsSampleCreator")
@@ -1066,10 +1107,13 @@ if __name__ == '__main__':
             " events in a DV-wise level")
     parser_weight.add_argument('mcsamples',nargs='+',help="Name of the MC samples")
     parser_weight.add_argument('--data',action='store',dest='dataname',required=True,\
-            help="Name of the data file. Note that this is a MANDATORY ARGUMENT")
+            help="Name of the real data file (the one to be used against to weight."\
+            " Note that this is a MANDATORY ARGUMENT")
     parser_weight.add_argument('--doplots',action='store_true',dest='doplots',help="Create some plot distributions"\
             " before and after using the weights")
-    parser_weight.set_defaults(which='weight',doplots=False)
+    parser_weight.add_argument('--force',action='store_true',dest='force',help="Force to calculate"\
+            " the weights even if they are already in the ROOT file")
+    parser_weight.set_defaults(which='weight',doplots=False,force=False)
 
     # fitter 
     parser_fitter = subparsers.add_parser("fitter",help="Fits the mass branch of the input ROOT file to"\
@@ -1115,10 +1159,13 @@ if __name__ == '__main__':
 
 
     args = parser.parse_args()
+    
+    # can set it up now, once the help was sent
+    setcolors()
 
     if args.which == 'weight':
         # create the weights and the plots if necessary
-        main_weights(args.dataname,args.mcsamples,args.doplots)
+        main_weights(args.dataname,args.mcsamples,args.doplots,args.force)
     elif args.which == 'fitter':
         for rfilename in args.rootfilename:
             if not os.path.isfile(rfilename):
