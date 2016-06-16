@@ -1,11 +1,16 @@
 #!/usr/bin/env python
-
 """
 Fitting Kshorts using the output ROOT files from the KsSampleCreator class 
- (DV_xAODAnalysis: https://gitlab.cern.ch/atlas-phys-susy-secondary-vertex/DV_xAODAnalysis/blob/master/DVAnalyses/DVAnalyses/KsSampleCreator.h)
 """
-########################################################################################
-## WEIGHT RELATED FUNCTIONS
+__author__ = "Jordi Duarte-Campderros"
+__credits__ = ["Jordi Duarte-Campderros"]
+__version__ = "1.0.0"
+__maintainer__ = "Jordi Duarte-Campderros"
+__email__ = "jorge.duarte.campderros@cern.ch"
+__status__ = "Development"
+
+###############################################################################
+# Some globals (... I know...)
 COLOR =None
 def setcolors():
     ## Just to avoid the interference with the -help option
@@ -30,6 +35,8 @@ STYLE = { 0: 20,
         6: 6
         }
 
+###############################################################################
+## WEIGHT RELATED FUNCTIONS
 def kinematic_plots(histos,xtitle,var):
     """FIXME DOC
 
@@ -98,6 +105,7 @@ def kinematic_plots(histos,xtitle,var):
         prout.DrawLatex(xinit,ypos,legend)
         j+=1
     c.SaveAs("kinematics_{0}.png".format(var))
+    c.SaveAs("kinematics_{0}.pdf".format(var))
 
 def create_and_save_file_weights(rootfile,hdata,hmc,hname):
     """FIXME DOCS
@@ -364,10 +372,10 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc):
     __dum = map(lambda _f:  _f.Close(),_froots.values())
 
 ## END WEIGHT RELATED FUNCTIONS
-########################################################################################
+###############################################################################
 
 
-########################################################################################
+###############################################################################
 ## FITTER RELATED FUNCTIONS
 # GLOBAL DEFINITION:
 # the radius regions mapped to an int (used as identifier)
@@ -537,10 +545,12 @@ def plot(result,mass,model,data,plotname,title="",isData=False):
         result["nsig"].getVal(),result["nsig"].getError()))
     prout.DrawLatex(0.6,0.75,title)
     c.SaveAs(plotname.replace(":","_"))
+    c.SaveAs(plotname.replace(":","_").replace(".png",".pdf"))
 
     fr.GetYaxis().SetRangeUser(1e-1,fr.GetMaximum()*1e3)
     c.SetLogy()
     c.SaveAs(plotname.replace(":","_").replace(".","_log."))
+    c.SaveAs(plotname.replace(":","_").replace(".png","_log.pdf"))
 
 def get_models_from_file(filename):
     """ Get the several ROOT.RooWorkspace objects inside a ROOT file
@@ -599,7 +609,6 @@ def get_models_from_file(filename):
             datasigdict[dname] = currentData
 
     return f,w,obsdict,modeldict,databkgdict,datasigdict
-
 
 
 def build_fit(filename,isData=False,plotsuffix='png'):
@@ -758,9 +767,9 @@ def store_numKshorts(modelprobdict,knumfile):
     return regiondictbarrel,regiondictendcap
 
 ## END FITTER RELATED FUNCTIONS
-########################################################################################
+###############################################################################
 
-########################################################################################
+###############################################################################
 ## DOUBLE RATIO RELATED FUNCTIONS
 
 def get_numKshorts_dict(knumfile,eta_region):
@@ -862,8 +871,8 @@ def double_ratio_plot(dijet_name,dRdict,eta_region,plotname='KsRatio'):
     AtlasUtils.ROOT.myText(0.34,0.85,1,"Work In Progress")
     AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}")
     AtlasUtils.ROOT.myText(0.7,0.65,1,ETA_REGIONS[eta_region])
-    c.SaveAs("{0}_{1}.png".format(plotname,eta_region))
-    c.SaveAs("{0}_{1}.pdf".format(plotname,eta_region))
+    c.SaveAs("{0}_{1}_{2}.png".format(plotname,eta_region,dijet_name))
+    c.SaveAs("{0}_{1}_{2}.pdf".format(plotname,eta_region,dijet_name))
 
 
 def get_ratio(numer,denom):
@@ -897,7 +906,6 @@ def double_ratio_table(regiondict,eta_region,mcsample):
     # maximum discrepancies
     discrepancy_max = 0.0
 
-    #regiondict = drdict[eta_region]
     message  = eta_region+"\n" 
     header   = "{0:8s} {1:10s} +- {2:8s}\n".format('region', 'Double Ratio', 'Error')
     message  += header
@@ -906,6 +914,7 @@ def double_ratio_table(regiondict,eta_region,mcsample):
     for i in regiondict.keys():
         lrad,hrad = RADIUS_REGIONS[i]
         for name,(ks_i,errKs_i) in filter(lambda (x,y): x in mcsample, regiondict[i].iteritems()):
+            print name
             message += line_content(lrad,hrad,ks_i,errKs_i)
             discrepancy = max(([abs(1.0-(ks_i+errKs_i)), abs(1.0-(ks_i-errKs_i))]))
             if discrepancy > discrepancy_max:
@@ -914,9 +923,98 @@ def double_ratio_table(regiondict,eta_region,mcsample):
 
     return message
 
+def get_entries(rootfilename,treename="KsTree_KsSampleCreator"):
+    """Return the number of entries in a TTree
+
+    Parameters
+    ----------
+    rootfilename: str
+        the name of the ROOT file
+    treename: str
+        the name of the TTree
+
+    Return
+    ------
+    N: float
+        the number of entries 
+
+    Raises
+    ------
+    IOError: whenever the file is not present
+    AttributeError: whenever the tree name is not present
+    """
+    import ROOT
+    f = ROOT.TFile(rootfilename)
+    if f.IsZombie():
+        raise IOError("Input file doesn't exist '{0}'".format(rootfilename))
+    t = f.Get(treename)
+    N,Nerr = t.GetEntries()
+    f.Close()
+
+    return float(N)
+
+# just some units
+pb  = 1.0
+fb  = 1e-3*pb
+invfb=1./fb
+
+def get_weighted_sum(kshort_region_dict,metadata_name,lumi=3.2*invfb):
+    """Obtain the weighted sum of the dijet samples. For each samples, 
+    the number of events are weighted to the same luminosity:
+
+    ..math:: N_{\mathcal{L}} = w_{Tot}\cdot N_{\mathcal_{L}'} \mathcal{L}
+
+    where :math:`N_{\mathcal_{L}'}` is the processed number of events (which
+    corresponds to an equivalent luminosity :math:`\mathcal_{L}'`, and the
+    total weight is 
+
+    .. math:: w_{Tot} = \frac{e_gen}{N_EVNT}\cdot\sigma 
+
+    where all the factors are obtained from the `metadata_name` file
+
+    Parameters
+    ----------
+    kshort_region_dict: dict( )
+        per each sample, a dictionary is present, given the number of 
+        kshorts (and error) per region
+    metadata_name: str
+        the name where to find the metadata file created with the 
+        'metadata' subcommand
+    lumi: float, [default: 3.2 invfb]
+        the luminosity to be weighted
+
+    Returns
+    -------
+    Kw: dict(int: (float,float))
+        total number of kshorts (and error) per each region,
+        { regionA: (Kstotal,Kserr), ...}
+    """
+    from math import sqrt
+    # get the metadata dict
+    md = get_metadata(metadata_name)
+    if len(md) < 1:
+        raise IOError("Invalid metadata file name '{0}'."\
+                " The metadata file should be previously created"\
+                " with the subcommand \033[1;51mmetadata\033[1;m")
+    # weight from the dict
+    w = lambda _d: _d['gen_eff']*_d['xs']/_d['events']
+    # processing the samples
+    Kw     = {}
+    # get the number of kshorts, weighted to the same luminosity
+    # for each region 
+    for region,kshort_dict in kshort_region_dict.iteritems():
+        Kw_reg = 0.0
+        Kwerr2 = 0.0
+        # per each sample but data
+        for name,(Kthis,Kthis_error) in filter(lambda (n,_x): n != 'data',kshort_dict.iteritems()):
+            Kw_reg += w(md[name])*Kthis*lumi
+            Kwerr2 += ((w(md[name])*lumi)**2.0)
+        Kw[region] = (Kw_reg,sqrt(Kwerr2))
+
+    return Kw
 
 
-def main_dr(knumfile,eta_region,mcsample_used):
+def main_dr(knumfile,eta_region,mcsample_used,metadata_file):
     """Main steering function to obtain the double ratio plots
 
     Parameters
@@ -926,8 +1024,11 @@ def main_dr(knumfile,eta_region,mcsample_used):
     eta_region: str
         BARREL or ENDCAP
     mcsample_used: str
-        the dijet sample to be used for the ratio (should be JZW, the
-        weighted sum of the dijet samples FIXME: NOT AVAILABLE YET)
+        the dijet sample to be used for the ratio. Valid values are
+        JZ*W|all, *=3,4,5,6. In the case of 'all', the weighted sum
+        of all the available samples are used and requires the use
+        of the 'metadata_file'
+    metadata_file
 
     Returns
     -------
@@ -937,24 +1038,19 @@ def main_dr(knumfile,eta_region,mcsample_used):
     regiondict = get_numKshorts_dict(knumfile,eta_region)
     # Get the normalization factors: ratio of DATA/MC in region 0
     normfactor = {}
-    # merge_dijets = 0.0 # NOT AVAILABLE.. MISSING EVENT WEIGHTS
     ksData0,errKsData0 = regiondict[0]['data']
     for name,(ks,errKs) in filter(lambda (x,y): x != 'data', regiondict[0].iteritems()):
         norm,errN = get_ratio( (ksData0,errKsData0), (ks,errKs) )
         normfactor[name] = (norm,errN)
-        # merge_dijets += ks
-    # --- FIXME:: NOT AVAILABLE YET
-    # updating for the merged dijet case
-    ##normfactor['JZW'] = (ksData0/totaljz,ksData0/totaljz*sqrt( 1.0/totaljz + (errKsData0/ksData0)**2.))
-    ### --> Fill the merged case and include it in the dictionary
-    ##for i in xrange(0,4):
-    ##    totalK = 0.0
-    ##    totalErr = 0.0
-    ##    for name,(ks,errKs) in filter(lambda (x,y): x != 'data', regiondict[i].iteritems()):
-    ##        totalK+=ks
-    ##        totalErr+=(errKs**2.0)
-    ##    regiondict[i]["JZW"] = (totalK,sqrt(totalErr))
-    ### --- FIXME:: NOT AVAILABLE YET
+    # Obtain the weighted sum of all the dijet samples if asked
+    if mcsample_used == 'all':
+        K_all = get_weighted_sum(regiondict,metadata_file)
+        # Including it in the regiondict dictionary
+        for (i,kstup) in K_all.iteritems():
+            regiondict[i]['all'] = kstup
+        normfactor['all'] = get_ratio( (ksData0,errKsData0), (K_all[0][0],K_all[0][1]) )
+    print normfactor
+    print regiondict
     # Apply now the double ratio for all the regions
     dRdict = {}
     for i in sorted(regiondict.keys()):
@@ -972,13 +1068,17 @@ def main_dr(knumfile,eta_region,mcsample_used):
     return dRdict
 
 ## END DOUBLE RATIO RELATED FUNCTIONS
-########################################################################################
+###############################################################################
 
-########################################################################################
+###############################################################################
 ## METADATA RELATED FUNCTIONS
 
 def get_metadata(metadata_file):
     """
+    Parameters
+    ----------
+    metadata_file: str
+        
     """
     import shelve
 
@@ -1058,7 +1158,7 @@ def store_metadata(metadata_file,metadict):
     kk.close()
 
 ## END METADATA RELATED FUNCTIONS
-########################################################################################
+###############################################################################
 
 if __name__ == '__main__':
     from argparse import ArgumentParser,RawDescriptionHelpFormatter
@@ -1151,11 +1251,20 @@ if __name__ == '__main__':
             metavar='KSHORT_NUM_FILE.dat',help="shelve file where is stored the number of Kshorts"\
             " per region and sample. This file is constructed by the \033[1;51mfitter\033[1;m sub-command"\
             " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
-    parser_double_ratio.add_argument('--all',action='store_true',dest="all_samples",\
-            help="Activate the use of the available dijet JZ*W samples. It assumes "\
+    parser_double_ratio.add_argument('--dijet-sample',action='store',dest="dijet_sample",\
+            help="The dijet sample to be used for the calculation, valid values are "\
+                " 'JZ*W|all', *=3,4,5,6. In the case of 'all', the weighted sum"\
+                " of all the available dijet samples are used and requires the use"\
+                " of the 'metadata_file'. It assumes that the"\
                 " \033[1;51mmetadata\033[1;m subcommand was called before")
+    parser_double_ratio.add_argument("--metadata-file",action="store",dest='metadata_file',
+            help="If the option '--dijet-sample all' was called, it needs the file where"\
+                    " is stored the metadata. It should have"\
+                    " been created by the subcommand \033[1;51mmetadata\033[1;m"\
+                    " [$PWD/dijet_metadata.dat]",\
+                    default=os.path.join(os.getcwd(),"dijet_metadata.dat"))
 
-    parser_double_ratio.set_defaults(which='double_ratio',all_samples=False)
+    parser_double_ratio.set_defaults(which='double_ratio',dijet_sample="JZ4W")
 
 
     args = parser.parse_args()
@@ -1197,12 +1306,12 @@ if __name__ == '__main__':
         store_metadata(args.metadata_file,metadict)
     elif args.which == 'double_ratio':
         # extract the double ratios for endcap and barrel
-        drBarrel_d = main_dr(args.ksnum_file,'BARREL',"JZ3W")
-        drEC_d     = main_dr(args.ksnum_file,'ENDCAP',"JZ3W")
+        drBarrel_d = main_dr(args.ksnum_file,'BARREL',args.dijet_sample,args.metadata_file)
+        drEC_d     = main_dr(args.ksnum_file,'ENDCAP',args.dijet_sample,args.metadata_file)
         # print some numbers
         print "\033[1;34mINFO\033[1;m Double Ratio tables\n"
-        message = double_ratio_table(drBarrel_d,'BARREL',["JZ3W"])
-        message += double_ratio_table(drEC_d,'ENDCAP',["JZ3W"])
+        message = double_ratio_table(drBarrel_d,'BARREL',[args.dijet_sample])
+        message += double_ratio_table(drEC_d,'ENDCAP',[args.dijet_sample])
         print message
         
 
