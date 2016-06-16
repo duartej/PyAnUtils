@@ -45,6 +45,7 @@ CONTENT
    simulation in the MuonTrackingGeometry ATLAS's package
    * lazycmt:        compiles, config and clean ATLAS packages automaticaly
    * dvtrigeff:      ---
+   * ...      
 
 Use *help* function for detailed information of each module and script.
  
