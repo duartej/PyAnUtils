@@ -914,7 +914,6 @@ def double_ratio_table(regiondict,eta_region,mcsample):
     for i in regiondict.keys():
         lrad,hrad = RADIUS_REGIONS[i]
         for name,(ks_i,errKs_i) in filter(lambda (x,y): x in mcsample, regiondict[i].iteritems()):
-            print name
             message += line_content(lrad,hrad,ks_i,errKs_i)
             discrepancy = max(([abs(1.0-(ks_i+errKs_i)), abs(1.0-(ks_i-errKs_i))]))
             if discrepancy > discrepancy_max:
@@ -1049,8 +1048,6 @@ def main_dr(knumfile,eta_region,mcsample_used,metadata_file):
         for (i,kstup) in K_all.iteritems():
             regiondict[i]['all'] = kstup
         normfactor['all'] = get_ratio( (ksData0,errKsData0), (K_all[0][0],K_all[0][1]) )
-    print normfactor
-    print regiondict
     # Apply now the double ratio for all the regions
     dRdict = {}
     for i in sorted(regiondict.keys()):
