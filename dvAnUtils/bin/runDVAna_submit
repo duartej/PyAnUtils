@@ -561,8 +561,7 @@ if __name__ == '__main__':
     parser_prun.add_argument( "-m","--multiple-datasets",action='store_true',dest='multiple_ds',default=False,\
             help="Send the whole bunch of datasets in an unique JOB set (--inDS DS1,DS2,DS3,...)")
     parser_prun.add_argument( "--step",action='store',dest='step',default="BasicPlots",\
-            help="The algorithms(s) that are going to be run in the job, in order to"\
-            " define the ouput Dataset name [BasicPlots]")
+            help="The algorithms(s) that are going to be run in the job [BasicPlots]")
     parser_prun.add_argument( "-v","--version",action='store',dest='version',default="0",\
             help="The version number of the job")
     parser_prun.set_defaults(which="prun")
