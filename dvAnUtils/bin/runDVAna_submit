@@ -8,7 +8,9 @@
                  jobs of the  runDVAna executable using the clustermanager
                  script. 
   :inputs:       DATASETS which should be available in the AMI db
-  :dependencies: FAX (setupATLAS && lsetup fax)
+  :dependencies: Depending on the mode:
+                    FAX (setupATLAS && lsetup fax)
+                    PANDA (setupATLAS && lsetup fax)
 .. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
 """
 
