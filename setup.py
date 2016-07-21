@@ -16,6 +16,9 @@ setup(name='PyAnUtils',
             'dvAnUtils/bin/roibasisconverter', 'dvAnUtils/bin/fitmodel',
             'jobSender/bin/clustermanager','mtgAnUtils/bin/mtg_gs_summary',
             'dvAnUtils/bin/quickTrackPlotter','bin/getdecorations',
-            'dvAnUtils/bin/ks_submit_prun','dvAnUtils/bin/ks_submit_localbatch',
-            'dvAnUtils/bin/kshort_study'],
+            # TO BE DEPRECATED in favour of runDVAna_submit
+            'dvAnUtils/bin/ks_submit_prun',
+            'dvAnUtils/bin/ks_submit_localbatch',
+            'dvAnUtils/bin/runDVAna_submit',
+            'dvAnUtils/bin/kshort_study', ],
         )
