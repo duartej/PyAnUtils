@@ -580,7 +580,7 @@ if __name__ == '__main__':
             raise RuntimeError("The same number of outDS ('--outDS') are needed than the 'DS'")
         else:
             outDSs = args.outDS.split(",")
-        main_cluster(args.DSs,args.testarea,args.localfiles,outDSs,args.version,njobs=int(args.njobs))
+        main_cluster(args.DSs,args.testarea,args.localfiles,args.algorithm,outDSs,args.version,njobs=int(args.njobs))
     elif args.which == 'prun':
         main_prun(args.DSs,args.version,args.step,args.multiple_ds,args.simulate)
 
