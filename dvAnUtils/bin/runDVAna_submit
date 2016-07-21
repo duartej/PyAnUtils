@@ -11,6 +11,10 @@
   :dependencies: FAX (setupATLAS && lsetup fax)
 .. author:: jordi duarte-campderros <jorge.duarte.campderros@cern.ch>
 """
+
+# =============================================================================
+# CLUSTER RELATED FUNCTIONS
+
 # TO BE PROMOTED
 from contextlib import contextmanager
 import os
@@ -211,7 +215,6 @@ def getLocalFiles_and_Events(listfile,scope,dsname):
         dict of files and events contained in that file
     """
     from ROOT import TFile,TChain
-    import sys
     import os
 
     #collFiles= []
@@ -337,7 +340,7 @@ def create_bash(filelist,testarea,bashname,algorithm,outputname):
     f.close()
     os.chmod(scriptname,0755)
 
-def main(DSs,testarea,localfiles,algorithm,outDSs,version,njobs=200,events_per_job=None):
+def main_cluster(DSs,testarea,localfiles,algorithm,outDSs,version,njobs=200,events_per_job=None):
     """Steer the creation of the jobs. Per each dataset it will
         1. Obtain the list of files
         2. Create a directory 
@@ -387,47 +390,199 @@ def main(DSs,testarea,localfiles,algorithm,outDSs,version,njobs=200,events_per_j
             #FIXME: do it right away!
     print "Send the jobs to the cluster!!"
 
+# END --CLUSTER RELATED FUNCTIONS
+# =============================================================================
+
+# =============================================================================
+# GRID RELATED FUNCTIONS
+def main_prun(datasets,version,algorithm,multiple_ds,simulate=False):
+    """
+    """
+    import datetime,time
+    import getpass
+    from subprocess import Popen,PIPE
+
+    ts = time.time()
+    timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y%m%d_%H%M%S')
+    username = getpass.getuser()
+    logfile="prunsubmission_{0}_{1}.log".format(timestamp,username)
+    if simulate:
+        print "\033[1;33mSIMULATING\033[1;m, not sending anything to the grid"
+    else:
+        print "\033[1;34mINFO\033[1;m sending {0} jobs to the grid".format(algorithm)
+        print "\033[1;34mINFO\033[1;m log: {0} ".format(logfile)
+    
+    if multiple_ds:
+        ds_list=[]
+
+    # Get the datasets
+    loglines = []
+    # send all the input DS in one unique job
+    pre_command= 'prun --exec=\"runDVAna -a {0} -o {1} -f %IN\" '\
+            '--useRootCore --inDS={2} --outputs {1} --outDS {3} '\
+            '--nGBPerJob MAX'
+    pre_outDS = "user.{0}.{1}.{2}.{3}.{4}.v{5}"
+    for ds in datasets:
+        # extract a suitable name for the output
+        try:
+            # input DS with the repo_tab 
+            _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,in_version = \
+                    ds.split(":")[-1].split(".")
+        except ValueError:
+             # new 2016 data
+             try:
+                 _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,repo_tab,prV1,prV2 = \
+                         ds.split(":")[-1].split(".")
+                 in_version = prV1+"."+prV2
+             except ValueError:
+                 _d1,_d2,DSnumber,physics_short,step,format_type,ami_tags,post_step,in_version = \
+                        ds.split(":")[-1].split(".")
+                 # dummy repository tag
+                 repo_tab="xxxx"
+
+        outDS  = pre_outDS.format(username,physics_short,DSnumber,step,algorithm,version)
+        rootname = "{0}_V{1}.root".format(algorithm,version)
+        command= pre_command.format(algorithm,rootname,ds,outDS)
+        
+        if multiple_ds:
+            ds_list.append( (ds,outDS) )
+            # not send it
+            continue
+        
+        if simulate:
+            print command
+            continue
+        else:
+            print "\033[1;34mINFO\033[1;m Sending {0}".format(outDS)
+        p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+        #if p[1] != "":
+        #    message = "ERROR from prun:\n"
+        #    message += p[1]+"\n"
+        #    raise RuntimeError(message)
+        # The error stream is not well defined in prun...
+        loglines.append(p[1])
+    
+    if multiple_ds:
+        unique_inDS = ','.join(map(lambda x: x[0], ds_list))
+        # copy the ouDS but the DSnumber which it 
+        unique_outDS_split = ds_list[0][1].split('.')
+        # Extract the minimum and maximum DS number (only make sense in data)
+        ## ---- note that is highly dependent of the inDS format, so it could
+        ## ---- fail, in that case just put some dummy info
+        nindex = 3
+        foundit = False
+        for i in xrange(len(ds_list[0][0].split('.'))):
+            try: 
+                isInt = int(ds_list[0][0].split('.')[i])
+                nindex = i
+            except ValueError:
+                continue
+            minDS = min(map(lambda x: x[0].split('.')[nindex],ds_list))
+            maxDS = max(map(lambda x: x[0].split('.')[nindex],ds_list))
+            foundit = True
+            break
+        if not foundit:
+            minDS=0
+            maxDS=1
+        # rename the 3rd field (DS)
+        unique_outDS_split[3] = '{0}_{1}'.format(minDS,maxDS)
+        # the new name
+        unique_outDS = '.'.join(unique_outDS_split)
+        rootname = "{0}_{1}_{2}_V{3}.root".format(algorithm,minDS,maxDS,version)
+        command= pre_command.format(algorithm,rootname,unique_inDS,unique_outDS)
+        if simulate:
+            print command
+            return
+        p = Popen(command,stdout=PIPE,stderr=PIPE,shell=True).communicate()
+        loglines.append(p[1])
+       
+    if not simulate:
+        with open(logfile,"w") as f1:
+            f1.writelines(loglines)
+            f1.close()
+
+# END --GRID RELATED FUNCTIONS
+# =============================================================================
 if __name__ == '__main__':
+    from argparse import ArgumentParser,RawDescriptionHelpFormatter
+    import textwrap
+    import os
+    
     from optparse import OptionParser
     import os
     from os.path import expanduser
+    
+    usage  = "Submit a runDVAna jobs to a \033[1;54mcluster\033[1;m or "
+    usage += "to the \033[1;54mgrid\033[1;m. The script\n"
+    usage += "requires in both cases the use of a valid dataset name (DS) in the\n"
+    usage += "standard format 'scope:dsname'"
+    
+    parser = ArgumentParser(prog='runDVAna_submit',
+            formatter_class=RawDescriptionHelpFormatter,
+            description=textwrap.dedent(usage))
 
-    usage  = "usage: submit_localbatch.py DS1 DS2 ... [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option( "-a",action='store',dest='algorithm',\
+    # Sub-command parsers
+    subparsers = parser.add_subparsers(title='subcommands',
+            description='valid subcommands', 
+            help='additional help')
+
+    # -- CLUSTER
+    parser_cluster = subparsers.add_parser("cluster",help="Prepare jobs to be send them to the"\
+            " local cluster. The jobs are not actually sent, so the user should do it (through"\
+            " \033[1;54mclustermanager\033[1;m for instance")
+    parser_cluster.add_argument("DSs",nargs="+",action='store',help="The Datasets in the scope:dsname"\
+            " format")
+    parser_cluster.add_argument( "-a",action='store',dest='algorithm',\
             help="the DVAnalyses algorithm (the -a option of runDVAna) [BasicPlots]",\
             default="{0}".format('BasicPlots'))
-    parser.add_option( "--outDS",action='store',dest='outDS',\
+    parser_cluster.add_argument( "--outDS",action='store',dest='outDS',\
             help="the Dataset output names, if not given it creates a name based in the DS [None]",default=None)
-    parser.add_option( "-t",action='store',dest='testarea',\
+    parser_cluster.add_argument( "-t",action='store',dest='testarea',\
             help="the path to the test area [$HOME/work/private/DualUse]",\
             default="{0}/work/private/DualUse".format(expanduser("~")))
-    parser.add_option( "-j",action='store',dest='njobs',help="the number of jobs",\
+    parser_cluster.add_argument( "-j",action='store',dest='njobs',help="the number of jobs",\
             default=200)
-    parser.add_option( "-l","--local-files",action='store',dest='localfiles',\
+    parser_cluster.add_argument( "-l","--local-files",action='store',dest='localfiles',\
             metavar="LISTFILES.txt",help="the input files are located locally"\
             " and listed into LISTFILES.txt filed. With this option, it is only"\
             " valid to process one DS")
-    parser.add_option( "--process-version",action='store',dest='version',\
+    parser_cluster.add_argument( "--process-version",action='store',dest='version',\
             help="useful whenever the same job should be re-sent [0]",\
             default=0)
+    parser_cluster.set_defaults(which='cluster')
+    
+    # -- GRID
+    parser_prun = subparsers.add_parser("prun",help="Uses the grid infrastructure"\
+            " to send runDVAna jobs. Note that it requires to previously 'lsetup panda'")
+    parser_prun.add_argument("DSs",nargs="+",action='store',help="The Datasets in the scope:dsname"\
+            " format")
+    parser_prun.add_argument( "-s",action='store_true',dest='simulate',default=False,\
+            help="Don't send the jobs, just simulate and print the commands")
+    parser_prun.add_argument( "-m","--multiple-datasets",action='store_true',dest='multiple_ds',default=False,\
+            help="Send the whole bunch of datasets in an unique JOB set (--inDS DS1,DS2,DS3,...)")
+    parser_prun.add_argument( "--step",action='store',dest='step',default="BasicPlots",\
+            help="The algorithms(s) that are going to be run in the job, in order to"\
+            " define the ouput Dataset name [BasicPlots]")
+    parser_prun.add_argument( "-v","--version",action='store',dest='version',default="0",\
+            help="The version number of the job")
+    parser_prun.set_defaults(which="prun")
 
-    (opt,args) = parser.parse_args()
-    if len(args) < 1:
-        message = "\033[1;31msubmit_localbatch ERROR\033[1;m Missing list input datasets"
-        raise RuntimeError(message)
-    import sys
+    args = parser.parse_args()
 
-    # check that we have the same number of outDS than DS, otherwise raise an error
-    if not opt.outDS:
-        # same number of outDS than DSs (empty in that case)
-        outDSs = [None]*len(args)
-    elif len(opt.outDS.split(",")) != len(args):
-        # need to be the same number
-        raise RuntimeError("The same number of outDS ('--outDS') are needed than the 'DS'")
-    else:
-        outDSs = opt.outDS.split(",")
-    main(args,opt.testarea,opt.localfiles,opt.algorithm,outDSs,opt.version,njobs=int(opt.njobs))
+    if args.which == 'cluster':
+        # check that we have the same number of outDS than DS, otherwise raise an error
+        if not args.outDS:
+            # same number of outDS than DSs (empty in that case)
+            outDSs = [None]*len(args.DSs)
+        elif len(args.outDS.split(",")) != len(args.DSs):
+            # need to be the same number
+            raise RuntimeError("The same number of outDS ('--outDS') are needed than the 'DS'")
+        else:
+            outDSs = args.outDS.split(",")
+        main_cluster(args.DSs,args.testarea,args.localfiles,outDSs,args.version,njobs=int(args.njobs))
+    elif args.which == 'prun':
+        main_prun(args.DSs,args.version,args.step,args.multiple_ds,args.simulate)
+
 
 
     
