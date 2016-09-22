@@ -34,17 +34,10 @@ def main(filename,collections):
     """
     """
     import ROOT
-    from AthenaROOTAccess import transientTree
-    # use cppy instead, but how to deal with the persistent-transient cols?
-    
-    f = ROOT.TFile.Open(filename)
-    if f.IsZombie():
-    	message = "\033[31mgetdecorations ERROR\033[m Input '%s' Not Found"
-    	raise RuntimeError(message)
-    
-    # Make the transient tree
-    t = transientTree.makeTree(f)
-    t.GetEntry(0)
+    import PyUtils.PoolFile as PF
+    poolFile = PF.PoolFile( filename )
+    t = poolFile.poolFile.CollectionTree
+    dummy = t.GetEntry(0)
     
     if len(collections) == 0:
     	print "Should be included some collection to look at..."
@@ -60,10 +53,13 @@ def main(filename,collections):
 
     for i in collections:
         try:
-            obj = getattr(t,i).at(0)
+            #obj = getattr(t,i).at(0)
+            obj = getattr(t,i)
+            objAux = getattr(t,i+"Aux")
+            obj.setStore(objAux)
         except AttributeError:
             message = "\033[31mgetdecorations WARNING\033[m There is no container"
-            message+= "with instance name {0}".format(i)
+            message+= " with instance name {0}".format(i)
             print message
             continue
         deco[i] = []
@@ -84,7 +80,7 @@ if __name__ == '__main__':
     
     (opt,args) = parser.parse_args()
     if len(args) != 1:
-    	message = "\033[31mgetdecorations ERROR\033[m Missing mandatory input ROOT file"
+    	message = "\033[1;31mERROR\033[1;m Missing mandatory input ROOT file"
     	raise RuntimeError(message)
 
     # parse the collections
