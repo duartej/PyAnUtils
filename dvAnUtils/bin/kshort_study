@@ -125,7 +125,8 @@ def create_and_save_file_weights(rootfile,hdata,hmc,hname):
 
     return whisto
 
-def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
+def create_weights(_froot,_files,doplots,force,
+        treename="KsTree_KsSampleCreator",dijet_weight="dijet_weight"):
     """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
     new TTree 'weight_tree' vertex-wise for each MC sample. Note that
     the Created histograms already contain the MC event weights of the 
@@ -142,10 +143,21 @@ def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
     force: bool
         whether or not to force to re-calculate the weights whenever
         the weights are already present in the ROOT file
+    treename: str, default: 'KsTree_KsSampleCreator'
+        the name of the tree  
     dijet_weights: str, default: 'dijet_weights'
         the name of the branch where the MC event weight is present 
     """
     import ROOT 
+        
+    # The (kinematic, eta and pt) variables to be used to weight, 
+    # in order to take into account different branch names used
+    # in the LRT_Validation and in the KsSampleCreator algorithms
+    # FIXME: the names should be unified
+    vars2weight = ( "pseudorapidity","pt*1e-3")
+    if treename != "KsTree_KsSampleCreator":
+        # assuming track specific weights (LRTValidation)
+        vars2weight = ( "trk_eta","trk_pt*1e-3")
 
     # Build the TH2F ready 
     # -- Name of the histograms with var
@@ -178,7 +190,7 @@ def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
         h2histos[i] = (ROOT.TH2F(h2name,"",100,00,30.,100,-3.0,3.0), legend)
         h2histos[i][0].Sumw2()
         # Fill data
-        t = _froot[i].Get("KsTree_KsSampleCreator")
+        t = _froot[i].Get(treename)
         # Check if the dijet_weight branch is present, remove it otherwise
         dijet_weight_v = "1.0*{0}[0]".format(dijet_weight)
         # if getattr(t,dijet_weight) --> SEGMENTATION VIOLATION ??
@@ -187,7 +199,7 @@ def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
             print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
                     " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
                     " ignore this WARNING then".format(dijet_weight,fname)
-        t.Project(h2name,"pseudorapidity:pt*1e-3",dijet_weight_v)
+        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),dijet_weight_v)
         h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
         # and the zPV
         zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
@@ -227,12 +239,17 @@ def create_weights(_froot,_files,doplots,force,dijet_weight="dijet_weight"):
 
 def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
         dijet_weight_branchname="dijet_weight"):
-    """
-    FIXME: DOCS
+    """Create a new TTree which could be added as friend to the previous
+    one, incorporating the total weight, after applying the kinematic, zPV 
+    and MC weights. The new tree is written on the current pointing file .
+    
     Parameters
     ----------
     t: ROOT.TTree
-        the tree to modify
+        the main tree
+    weight_dict: 
+    weigth_treename: str
+    weight_branchname: str
     """
     import ROOT
     #from math import sqrt
@@ -255,8 +272,14 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
 
     # get the address of the needed variables
     _dummy = t.GetEntry(0)
-    etaV = getattr(t,'pseudorapidity')
-    ptV  = getattr(t,'pt')
+    eta_branch_name = "pseudorapidity"
+    pt_branch_name  = "pt"
+    if t.GetName() != "KsTree_KsSampleCreator":
+        # assuming track specific weights (LRTValidation)
+        eta_branch_name = "trk_eta"
+        pt_branch_name  = "trk_pt"
+    etaV = getattr(t,eta_branch_name)
+    ptV  = getattr(t,pt_branch_name)
     # carefull event-wise variable
     zpvV = getattr(t,'zPV')
     # the MC event weight
@@ -296,7 +319,7 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
     print
     ntree.Write("", ROOT.TObject.kOverwrite)    
 
-def main_weights(datasample,mcsamples,doplots,force_weight_calc):
+def main_weights(datasample,mcsamples,doplots,force_weight_calc,treename="KsTree_KsSampleCreator"):
     """Main steering function to create the weigths from a list of 
     samples. 
     The first step is to obtain the 2D and 1D weights DATA/MC using 
@@ -315,6 +338,8 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc):
     force_weight_calc: bool
         whether or not to force to re-calculate the weights whenever
         the weights are already present in the ROOT file
+    treename: str, default="KsTree_KsSampleCreator"
+        the name of the tree to use
     """
     import ROOT
     import os
@@ -347,7 +372,7 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc):
 
     if any(no_weights):
         # create the weights
-        weights = create_weights(_froots,fiddict,doplots,force_weight_calc)
+        weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename)
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
@@ -363,7 +388,7 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc):
         else:
             # Not found it, so built it
             print "\033[1;34mINFO\033[1;m Creating weight branch for {0}".format(f.GetName())
-            t = f.Get("KsTree_KsSampleCreator")
+            t = f.Get(treename)
             _dumm = t.GetEntry(0)
             weight_branchname = "weights"
             build_weight_branch(t,weights[i],weight_treename,weight_branchname)
@@ -431,7 +456,10 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
         raise RuntimeError("[JDC] INTERNAL ERROR NEEDS TO BE FIXED]")
 
     # convert into RooDataHist
-    #--- FIXME deberia incluir las dos regions en eta
+    # XXX: hardcoded
+    eta_branch_name = "pseudorapidity"
+    if treename != "KsTree_KsSampleCreator":
+        eta_branch_name = "trk_eta"
     roodatahist = {}
     for nametree,tree in trees.iteritems():
         if not isData:
@@ -447,12 +475,13 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
         # split in radius lenght regions: { 0: (a,b), 1:, (b,c), 2: (c,d), ..}
         for (reg,(l,h)) in regions.iteritems():
             # split in barrel and endcap
-            for (eta_reg, etacut) in [ ('BARREL', 'fabs(rapidity) < 1.0'),
-                    ('ENDCAP', 'fabs(rapidity) >= 1.0') ]:
+            for (eta_reg, etacut) in [ ('BARREL', 'fabs({0}) < 1.0'.format(eta_branch_name)),
+                    ('ENDCAP', 'fabs({0}) >= 1.0'.format(eta_branch_name)) ]:
                 # FIXME!! PROVISIONAL .. se puede hacer de otra forma... (I mean using unbinned)
                 _prov  = ROOT.TH1F("{0}_region_{1}_{2}_py".format(namedata,reg,eta_reg),"",100,350.,650.)
-                _dummy =  tree.Project(_prov.GetName(),"mass",\
-                        "(decayLength > {0} && decayLength < {1} && {3})*{2}".format(l,h,weights,etacut))
+                _dummy =  tree.Project(_prov.GetName(),"{0}mass".format(prefix),\
+                        "({4}decayLengthTransverse > {0} && {4}decayLengthTransverse < {1} && {3})*{2}".format(\
+                                        l,h,weights,etacut,prefix))
                 roodatahist["{0}_region{1}:{2}".format(namedata,reg,eta_reg)] = \
                         ROOT.RooDataHist("data_{0}_region{1}_{2}".format(namedata,reg,eta_reg),
                                 "Dataset Region{0}, {1}".format(reg,eta_reg),ROOT.RooArgList(obs),_prov)
@@ -611,7 +640,7 @@ def get_models_from_file(filename):
     return f,w,obsdict,modeldict,databkgdict,datasigdict
 
 
-def build_fit(filename,isData=False,plotsuffix='png'):
+def build_fit(filename,treename="KsTree_KsSampleCreator",isData=False,plotsuffix='png'):
     """Main steering function where performs:
         1. Obtain the data from the input files and convert
            them to the RooFit framework
@@ -626,7 +655,10 @@ def build_fit(filename,isData=False,plotsuffix='png'):
     plotsuffix: str, [png]
         a valid suffix for the plot
     
+    treename: str, [KsTree_KsSampleCreator]
+        the name of the tree
     isData: bool
+
 
     Returns
     -------
@@ -663,7 +695,7 @@ def build_fit(filename,isData=False,plotsuffix='png'):
     # 1.a Harvesting data and converting: from a given format we want a suitable 
     # format for the fitting, i.e to RooFit variables  
     # [1]- Note that the obtained dictionary has the keys following: SAMPLENAME_regionY:BARREL|ENDCAP
-    datahists = data_harvest_tree(f,mass,"KsTree_KsSampleCreator",RADIUS_REGIONS,isData)
+    datahists = data_harvest_tree(f,mass,treename,RADIUS_REGIONS,isData)
     
     # build the list of region models
     model_and_regions = {}
@@ -914,7 +946,6 @@ def double_ratio_table(regiondict,eta_region,mcsample):
     for i in regiondict.keys():
         lrad,hrad = RADIUS_REGIONS[i]
         for name,(ks_i,errKs_i) in filter(lambda (x,y): x in mcsample, regiondict[i].iteritems()):
-            print name
             message += line_content(lrad,hrad,ks_i,errKs_i)
             discrepancy = max(([abs(1.0-(ks_i+errKs_i)), abs(1.0-(ks_i-errKs_i))]))
             if discrepancy > discrepancy_max:
@@ -1049,8 +1080,6 @@ def main_dr(knumfile,eta_region,mcsample_used,metadata_file):
         for (i,kstup) in K_all.iteritems():
             regiondict[i]['all'] = kstup
         normfactor['all'] = get_ratio( (ksData0,errKsData0), (K_all[0][0],K_all[0][1]) )
-    print normfactor
-    print regiondict
     # Apply now the double ratio for all the regions
     dRdict = {}
     for i in sorted(regiondict.keys()):
@@ -1117,7 +1146,11 @@ def update_metadata(client,AtlasAPI,rootfilename,scope_dataset,metadict):
     """
     # get the generation ami-tag
     scope,dataset = scope_dataset.split(":")
-    camp,dsnumber,phys_short,step,data_type,ami_tags = dataset.split(".")
+    try:
+        camp,dsnumber,phys_short,step,data_type,ami_tags = dataset.split(".")
+    except ValueError:
+        raise RuntimeError("Invalid dataset name. It must be provided a oficial production"\
+                " dataset name (mc15_13TeV, ...)")
     gen_tag = ami_tags.split("_")[0]
     # and the quick name
     dijet = phys_short.split("_")[-1]
@@ -1168,7 +1201,8 @@ if __name__ == '__main__':
     usage  = "Main script to perform the post-processing step of the Kshort study.\n"
     usage += "This script requires as input files the ROOT files output from the \n"
     usage += "KsSampleCreator class from the DV_xAODAnalysis package ([1]) which \n"
-    usage += "contains a TTree named 'KsTree_KsSampleCreator'. This script can be \n"
+    usage += "contains a TTree named 'KsTree_KsSampleCreator'. The script can be \n"
+    usage += "used also with the LRValidation algorithm output. This script can be \n"
     usage += "invoked using different subcommands:\n"
     usage += "\n \033[1;34mweight\033[1;m\n"
     usage += "   1. Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV\n"
@@ -1213,18 +1247,24 @@ if __name__ == '__main__':
             " before and after using the weights")
     parser_weight.add_argument('--force',action='store_true',dest='force',help="Force to calculate"\
             " the weights even if they are already in the ROOT file")
-    parser_weight.set_defaults(which='weight',doplots=False,force=False)
+    parser_weight.add_argument('--treename',action='store',dest='treename',
+            help='Name of the tree, depending the used algorithm from the'\
+                    ' DV_xAODAnalysis package [KsTree_KsSampleCreator]')
+    parser_weight.set_defaults(which='weight',doplots=False,force=False,treename="KsTree_KsSampleCreator")
 
     # fitter 
     parser_fitter = subparsers.add_parser("fitter",help="Fits the mass branch of the input ROOT file to"\
             " a double gaussian for the signal (Kshorts) plus a polynomial background" )
     parser_fitter.add_argument('rootfilename',nargs='+',action='store',\
             metavar='ROOTFILE',help="ROOT file(s) with a 'KsTree_KsSampleCreator' TTree")
+    parser_fitter.add_argument('--treename',action='store',dest='treename',
+            help='Name of the tree, depending the used algorithm from the'\
+                    ' DV_xAODAnalysis package [KsTree_KsSampleCreator]')
     parser_fitter.add_argument('--ksnum_file',action='store',dest='ksnum_file',\
             metavar='KSHORT_NUM_FILE.dat',help="shelve file where is stored the number of Kshorts"\
             " per region and sample. This file is constructed by the \033[1;51mfitter\033[1;m sub-command"\
             " [kshorts_by_region.dat]", default='kshorts_by_region.dat')
-    parser_fitter.set_defaults(which='fitter')
+    parser_fitter.set_defaults(which='fitter',treename='KsTree_KsSampleCreator')
     
     # Metadata creator command parser
     parser_metadata = subparsers.add_parser("metadata",
@@ -1274,7 +1314,7 @@ if __name__ == '__main__':
 
     if args.which == 'weight':
         # create the weights and the plots if necessary
-        main_weights(args.dataname,args.mcsamples,args.doplots,args.force)
+        main_weights(args.dataname,args.mcsamples,args.doplots,args.force,args.treename)
     elif args.which == 'fitter':
         for rfilename in args.rootfilename:
             if not os.path.isfile(rfilename):
@@ -1287,7 +1327,7 @@ if __name__ == '__main__':
             else:
                 isData=False
                 dtype=rfilename.split(".")[0].split("_")[-1]
-            modelprobdict = build_fit(rfilename,isData=isData)
+            modelprobdict = build_fit(rfilename,args.treename,isData=isData)
             # Should write down the number of Kshorts with its error: 
             nKs_barrel_dict,nKs_endcap_dict = store_numKshorts(modelprobdict,args.ksnum_file)
     elif args.which == 'metadata':

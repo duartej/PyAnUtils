@@ -62,6 +62,12 @@ def main(filename,collections):
             message+= " with instance name {0}".format(i)
             print message
             continue
+        # Find an entry where we have at least one element
+        for iEvt in xrange(t.GetEntries()):
+            dummy = t.GetEntry(iEvt)
+            if obj_container.size() > 0:
+                break
+        obj = obj_container.at(0)
         deco[i] = []
         auxids = list(obj.getAuxIDs())
         for auxid in auxids:
