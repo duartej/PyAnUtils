@@ -456,8 +456,9 @@ class athenajob(workenv):
             lines = f.readlines()
         # secure and lock the FilesINput and skipEvents provided
         # by the user
-        prelines = [ "athenaCommonFlags.FilesInput.set_Value_and_Lock(FilesInput)" ,\
-                "athenaCommonFlags.SkipEvents.set_Value_and_Lock(SkipEvents)" ]
+        prelines = [ "athenaCommonFlags.FilesInput.set_Value_and_Lock(FilesInput)\n" ,\
+                "athenaCommonFlags.SkipEvents.set_Value_and_Lock(SkipEvents)\n",
+                "athenaCommonFlags.EvtMax.set_Value_and_Lock(EvtMax)\n"]
         try:
             impline = filter(lambda (i,l): 
                     l.find("from AthenaCommon.AthenaCommonFlags import athenaCommonFlags") == 0, enumerate(lines))[0][0]
@@ -468,7 +469,7 @@ class athenajob(workenv):
             return
 
         for k in xrange(len(prelines)):
-            lines.insert(impline+k,prelines[k])
+            lines.insert(impline+(k+1),prelines[k])
 
         with open(self.joboption,"w") as f:
             f.writelines(lines)
@@ -574,7 +575,7 @@ class athenajob(workenv):
         else:
             # athena.py jobOption.py job
             bashfile += 'cp %s .\n' % self.joboption
-            bashfile +='athena.py -c "SkipEvents=%i; theApp.EvtMax=%i; FilesInput=%s;" ' % \
+            bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
                     (ph.skipevts,ph.nevents,str(self.inputfiles))
             # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
             bashfile += self.joboption+" \n"
