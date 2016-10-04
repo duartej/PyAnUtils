@@ -351,6 +351,8 @@ class athenajob(workenv):
 
         input_type: str, optional, { 'ESD', 'RAW', 'HITS', 'RDO', 'AOD' }
             only valid with athenamode=='tf'
+        output_type: str, optional, 
+            only valid with athenamode=='tf'
         evtmax: int, optional
             number of events to be processed
         njobs: int, optional
@@ -365,21 +367,36 @@ class athenajob(workenv):
             raise RuntimeError('jobOption file not found %s' % joboptionfile)
         
         # check if it is a transformation job
-        self.isTFJ = False
-        if athenamode == 'tf':
-            self.isTFJ = True
-            self.tf_input_type = 'ESD'
-            VALIDINPUTS = [ 'ESD', 'RAW', 'HITS', 'RDO', 'AOD' ]
-            # filling the type of input (RAW,ESD,AOD)
-            # FIXME: check for valid types
-            if kw.has_key('input_type') :
-                try:
-                    self.tf_input_type = filter(lambda x: x == kw['input_type'],VALIDINPUTS)[0]
-                except IndexError:
-                    raise AttributeError("Invalid 'input_type'={0}, "\
-                            " see help(athenajob.__init__) to get the list of valid input types")
+        self.isTFJ = (athenamode == 'tf')
         self.useJOFile()
-        
+        if athenamode == 'tf':
+            # To be extracted from the jobOption
+            # ---- input file type
+            i_if = self.tf_parameters.find("--input")
+            if i_if == -1:
+                raise RuntimeError('The jobOption must include the \'--inputTYPEFile\' option')
+            self.tf_input_type = self.tf_parameters[i_if:].split()[0].replace("--input","").replace("File","")
+            if self.tf_input_type not in [ 'ESD', 'RAW', 'HITS', 'RDO', 'AOD' ]:
+                    raise AttributeError("Invalid input type found ='"+self.tf_input_type+"', "\
+                            " see help(athenajob.__init__) to get the list of valid input types")
+            # ---- output file and tpe
+            i_of = self.tf_parameters.find("--output")
+            if i_of == -1:
+                raise RuntimeError('The jobOption must include the \'--outputTYPEFile\' option')
+            self.tf_output_type = self.tf_parameters[i_of:].split()[0].replace("--output","").replace("File","")
+            self.outputfile = self.tf_parameters[i_of:].split()[1]
+
+            # --- remove the parameters related input file and outputfile
+            removethis = []
+            for _idnx in  [i_if, i_of ]:
+                removethis.append( ' '.join(self.tf_parameters[_idnx:].split()[:2]) )
+
+            # XXX: re-initialize tf_paramters
+            for _rm in removethis:
+                self.tf_parameters = self.tf_parameters.replace(_rm,"")
+            # -- just to be sure the user do not include some unwanted commands/options
+            self.tf_parameters = self.tf_parameters.replace("Reco_tf.py","")
+
         # Allowing EOS remote files
         if inputfiles.find('root://') == -1:
             self.remotefiles=False
@@ -569,8 +586,8 @@ class athenajob(workenv):
             # Transformation job
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
             bashfile += 'Reco_tf.py --fileValidation False --maxEvents {0}'\
-                    ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3} '\
-                    '{4}'.format(ph.nevents,ph.skipevts,self.tf_parameters,\
+                    ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3}File {4} '\
+                    '--ouput{5}File {6}'.format(ph.nevents,ph.skipevts,self.tf_parameters,
                     self.tf_input_type,' '.join(self.inputfiles),self.tf_output_type,self.outputfile)
         else:
             # athena.py jobOption.py job
