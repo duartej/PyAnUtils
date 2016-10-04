@@ -587,7 +587,7 @@ class athenajob(workenv):
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
             bashfile += 'Reco_tf.py --fileValidation False --maxEvents {0}'\
                     ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3}File {4} '\
-                    '--ouput{5}File {6}'.format(ph.nevents,ph.skipevts,self.tf_parameters,
+                    '--output{5}File {6}'.format(ph.nevents,ph.skipevts,self.tf_parameters,
                     self.tf_input_type,' '.join(self.inputfiles),self.tf_output_type,self.outputfile)
         else:
             # athena.py jobOption.py job
