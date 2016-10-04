@@ -582,6 +582,8 @@ class athenajob(workenv):
         bashfile += 'cd '+ph.setupfolder+'\n'
         bashfile += 'source $AtlasSetup/scripts/asetup.sh %s,%s,here %s\n' % (ph.version,ph.gcc,ph.extra_asetup)
         bashfile += 'cd -\n'
+        # Create a guard against malformed Workers (those which uses the same $HOME)
+        bashfile += 'tmpdir=`mktemp -d`\ncd $tmpdir;\n\n'
         if self.isTFJ:
             # Transformation job
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
@@ -597,6 +599,8 @@ class athenajob(workenv):
             # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
             bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
+        # remove the tmpdir
+        bashfile +="rm -rf $tmpdir\n"
         f=open(self.scriptname,"w")
         f.write(bashfile)
         f.close()
