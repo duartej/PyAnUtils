@@ -1,5 +1,5 @@
 =================================
-PyAnUtils: Physics Analysis Utils
+PyAnUtils: Physics Analysis Utils 
 =================================
 Container of utilities to do pysics analysis. It includes generic
 software to do plots, make useful functions, etc; as well as more 
@@ -7,6 +7,7 @@ specific ATLAS/CMS oriented.
                                                                   
 author: Jordi Duarte-Campderros (Nov.2014)                        
 email : jorge.duarte.campderros@cern                              
+[![Build Status](https://travis-ci.org/duartej/PyAnUtils.svg?branch=master)](https://travis-ci.org/duartej/PyAnUtils)
 
 
 INSTALLATION
