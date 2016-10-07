@@ -470,6 +470,9 @@ class athenajob(workenv):
 
         for k in xrange(len(prelines)):
             lines.insert(impline+(k+1),prelines[k])
+        # Post-lines: be sure the Event max and skip events are properly used
+        lines +="\ntheApp.EvtMax=athenaCommonFlags.EvtMax()\n"
+        lines +="svcMgr.EventSelector.SkipEvents=athenaCommonFlags.SkipEvents()\n"
 
         with open(self.joboption,"w") as f:
             f.writelines(lines)
