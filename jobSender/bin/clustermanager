@@ -106,7 +106,7 @@ if __name__ == '__main__':
                     njobs=opt.njobs,evtmax=opt.evtsmax)
         elif opt.type_we == 'reco_tf':
             we_instance = athenajob(opt.bashname,opt.joboption,opt.filenames,'tf',
-                    njobs=opt.njobs,evtmax=otp.evtsmax)
+                    njobs=opt.njobs,evtmax=opt.evtsmax)
         elif opt.type_we == 'blind':
             we_instance = blindjob(opt.bashname,opt.optionalfile,njobs=opt.njobs,
                     evtmax=opt.evtsmax)
