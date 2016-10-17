@@ -218,18 +218,16 @@ class ObservableSamplingProb(object):
         --------
         pdfmodels: the pool of PDF models
         """
-        # from PyAnUtils.dvAnUtils.pdfmodels import\
-        #        negative_binomial_pdf,negative_binomial_sum_pdf
-        from pdfmodels import * #negative_binomial_pdf,negative_binomial_sum_pdf
-        try:
-            model = eval(modelpdfname)
-        except NameError:
+        from importlib import import_module
+        _mod = import_module('dvAnUtils.pdfmodels')
+        if not hasattr(_mod,modelpdfname):
             raise NameError("There is no available model '%s'" % modelpdfname)
         # Is it there?
         if self.__models.has_key(modeltype):
             print "[WARNING] The model is already set up ignoring..."
             return
 
+        model = getattr(_mod,modelpdfname)
         # Instantiate the model using the observable
         self.__models[modeltype] = model(self.__getattribute__(self.__observable))
         self.__pdftypes[modeltype] = modelpdfname
@@ -278,7 +276,7 @@ class ObservableSamplingProb(object):
         #            self.__setattr__(cmd,getattr(ROOT.Roofit,cmd))
 
         from PyAnUtils.pyanfunctions import ExtraOpt        
-        aux = ExtraOpt( [ ('Extended',False) ] )
+        aux = ExtraOpt( [ ('Extended',False), ('SumW2Error',False) ] )
         aux.setkwd(cmds)
 
         #if aux.Extended:
@@ -310,7 +308,8 @@ class ObservableSamplingProb(object):
             print ' - MODEL: {0} [{1}] '.format(self.__pdftypes[modeltype],modeltype)
             print ' - DATA:  {0}       '.format(data.GetName())
             print 
-            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save(),RooFit.Extended(aux.Extended))#RooFit.NumCPU(nCPUs))
+            fit_result = self.__models[modeltype][0].fitTo(data,RooFit.Save(),RooFit.Extended(aux.Extended),
+                    RooFit.SumW2Error(aux.SumW2Error))     #RooFit.NumCPU(nCPUs))
             #fit_result = _fitToFunction(data,RooFit.Save())#RooFit.NumCPU(nCPUs))
             # check status and quality of covariance matrix: 
             # covQuality codes 3=Full,accuratte cov matrix, 2=FULL, but forced to POSITIVE DEFINED...
