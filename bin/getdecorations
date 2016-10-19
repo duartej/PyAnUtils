@@ -74,6 +74,9 @@ def main(filename,collections):
         auxids = list(obj.getAuxIDs())
         for auxid in auxids:
             deco[i].append((reg.getTypeName(auxid),reg.getName(auxid)))
+        # --- Add the dynamic components -->  TODO: pseudocode below
+        # for all the branches that fulfill objAuxDyn=getattr(t,i+"Aux")
+        # get the relevant info
             
     print printOut(deco)
 
