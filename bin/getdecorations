@@ -54,9 +54,8 @@ def main(filename,collections):
     for i in collections:
         try:
             #obj = getattr(t,i).at(0)
-            obj = getattr(t,i)
+            obj_container = getattr(t,i)
             objAux = getattr(t,i+"Aux")
-            obj.setStore(objAux)
         except AttributeError:
             message = "\033[31mgetdecorations WARNING\033[m There is no container"
             message+= " with instance name {0}".format(i)
@@ -65,6 +64,9 @@ def main(filename,collections):
         # Find an entry where we have at least one element
         for iEvt in xrange(t.GetEntries()):
             dummy = t.GetEntry(iEvt)
+            obj_container = getattr(t,i)
+            objAux = getattr(t,i+"Aux")
+            obj_container.setStore(objAux)
             if obj_container.size() > 0:
                 break
         obj = obj_container.at(0)
