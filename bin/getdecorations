@@ -10,14 +10,30 @@
 	  .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
                         adapted from an anonymous script found on the ATLAS twikis
 """
-# FIXME: TO BE DOCUMENTED
 
-def printOut(colinfodict):
-    """
+def printOut(colinfodict,extra_header=""):
+    """Formatting printout message
+
+    Parameters
+    ----------
+    colinfodict: dict( (str,list(str)) )
+        the list of decorators per each collection
+    extra_header: str, default: ""
+        a string to be appended to the end of the header
+        of the message
+
+    Return
+    ------
+    message: str
+        the formatted and ordered list of decorators per 
+        collection
     """
     message = ""
-    for name,declist in colinfodict.iteritems():
-        message += "Decorators found at {0}\n".format(name)
+    for name,declist in sorted(colinfodict.iteritems(),key=lambda (x,y): y):
+        message += "Decorators found at {0} {1}\n".format(name,extra_header)
+        # guard against empty lists
+        if len(declist) == 0:
+            return message+"++++ NO ELEMENTS FOUND ++++\n"
         sright  = max(map(lambda (x,y): len(y),declist))
         sleft = max(map(lambda (x,y): len(x),declist))
         premesg = "{0:<"+str(sleft)+"} :: {1:<"+str(sright)+"}\n"
@@ -31,10 +47,20 @@ def printOut(colinfodict):
     return message
 
 def main(filename,collections):
-    """
+    """Steers the decorator name extraction from the file
+
+    Parameters
+    ----------
+    filename: ROOT.TFile
+    collections: list(str)
+        The name of the collections to extract the decorators
     """
     import ROOT
-    import PyUtils.PoolFile as PF
+    try:
+        import PyUtils.PoolFile as PF
+    except ImportError:
+        raise ImportError("You need to setup an Athena release...")
+    # Get the file with the proper wrapper
     poolFile = PF.PoolFile( filename )
     t = poolFile.poolFile.CollectionTree
     dummy = t.GetEntry(0)
@@ -48,17 +74,17 @@ def main(filename,collections):
     
     reg = ROOT.SG.AuxTypeRegistry.instance()
 
-    # Checking the collections exist
     deco = {}
+    # -- for the dynamic store
+    decoDyn = {}
 
     for i in collections:
         try:
-            #obj = getattr(t,i).at(0)
             obj_container = getattr(t,i)
             objAux = getattr(t,i+"Aux")
         except AttributeError:
-            message = "\033[31mgetdecorations WARNING\033[m There is no container"
-            message+= " with instance name {0}".format(i)
+            message = "\033[1;31mgetdecorations WARNING\033[1;m There is no container"
+            message+= " with instance name '{0}'".format(i)
             print message
             continue
         # Find an entry where we have at least one element
@@ -69,16 +95,21 @@ def main(filename,collections):
             obj_container.setStore(objAux)
             if obj_container.size() > 0:
                 break
+        # Use this element to extract the auxiliary data (decorators)
         obj = obj_container.at(0)
         deco[i] = []
         auxids = list(obj.getAuxIDs())
         for auxid in auxids:
             deco[i].append((reg.getTypeName(auxid),reg.getName(auxid)))
-        # --- Add the dynamic components -->  TODO: pseudocode below
-        # for all the branches that fulfill objAuxDyn=getattr(t,i+"Aux")
-        # get the relevant info
-            
-    print printOut(deco)
+        # --- Now, check the dynamic components -->
+        decoDyn[i] = []
+        for branchname in filter(lambda x: x.GetName().find("{0}AuxDyn".format(i)) == 0,\
+                t.GetListOfBranches()):
+            # the relevant info is in the name of the tree
+            decoDyn[i].append( (branchname.GetName(), branchname.GetClassName()) )
+     
+    print printOut(deco,"[Static]")
+    print printOut(decoDyn,"[Dynamic]")
 
 if __name__ == '__main__':
     from optparse import OptionParser
