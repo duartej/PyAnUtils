@@ -34,6 +34,12 @@ def main(filename,collections):
     """
     """
     import ROOT
+    # -- Only valid within Athena infrastructure
+    # -- we should include an alternative for RootCore, 
+    #    using import ROOT ; ROOT.THtml.LoadAllLibs(); ROOT.xAOD.Init()
+    #    and ROOT.xAOD.MakeTransientTree 
+    #    DOn't forget ROOT.xAOD.ClearTransientTrees() before leaving
+    #    tp avpoid the break!!!
     import PyUtils.PoolFile as PF
     poolFile = PF.PoolFile( filename )
     t = poolFile.poolFile.CollectionTree

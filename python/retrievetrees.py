@@ -370,7 +370,10 @@ class xaodtree(storedtree):
         """
         import ROOT
         import cppyy
-        # let's assume we are inside ATLAS-- FIXME: CHECK IT
+        ROOT.THtml.LoadAllLibs()
+        # let's assume we are inside ATLAS
+        if ROOT.xAOD.Init().isFailure():
+            raise RuntimeError("RootCore infrastructure needs to be intialized")
 
         super(xaodtree,self).__init__(rootfiles,'CollectionTree')
         
