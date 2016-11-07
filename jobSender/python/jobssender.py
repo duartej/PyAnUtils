@@ -195,7 +195,7 @@ def getevt(filelist,**kw):
     for f in filelist:
         EntriesBefore=int(t.GetEntries())
         t.AddFile(f)
-        md[t] = int(t.GetEntries()-EntriesBefore)
+        md[f] = int(t.GetEntries()-EntriesBefore)
     # store metadata
     store_evts_metadata(md,prefixpath)
 
