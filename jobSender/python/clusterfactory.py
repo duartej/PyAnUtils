@@ -106,7 +106,12 @@ class clusterspec(object):
             message = "ERROR from {0}:\n".format(self.sendcom)
             message += p[1]+"\n"
             os.chdir(cwd)
-            raise RuntimeError(message)
+            print "\033[1;31mERROR SENDING JOB TO CLUSTER\033[1;m {0}".format(message)
+            self.ID = None
+            jobdsc.ID = self.ID
+            jobdsc.status = 'fail'
+            os.chdir(cwd)
+            return
         ## The job-id is released in the message:
         self.ID = self.getjobidfromcommand(p[0])
         jobdsc.ID = self.ID

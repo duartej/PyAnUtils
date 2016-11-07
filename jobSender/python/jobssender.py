@@ -94,6 +94,49 @@ def getremotepaths(remoteinputfiles):
 
     return remotefiles,nevents
 
+def get_evts_metadata(prefix):
+    """Obtain or create a shelve file containing the metadata
+    describing the events per file found in a folder which contains
+    a list of files
+
+    Parameters
+    ----------
+    prefix: str, the path to be pre-fixed to the '.events_per_file' 
+
+    Return
+    ------
+    md: dict( { 'evt_file_dict': { '
+        
+    """
+    import shelve
+    import os
+
+    # Open the file if exist, otherwise creates an empty dictionary
+    kk = shelve.open(os.path.join(prefix,".events_per_file"))
+    if kk.has_key('evt_file_dict'):
+        md = kk['evt_file_dict'].copy()
+    else:
+        md = {}
+    kk.close()
+    return md
+
+def store_evts_metadata(md,prefix):
+    """Store a shelve file containing the metadata describing the 
+    events per file found in a folder which contains a list of files
+    Note that the file is hardcoded to be '.events_per_file'
+    
+    Parameters
+    ------
+    md: { 'file0': events, ...}
+    prefix: str, the path to be prefixed to the '.events_per_file'
+    """
+    import shelve
+    import os
+    
+    kk = shelve.open(os.path.join(prefix,'.events_per_file'))
+    kk['evt_file_dict'] = md
+    kk.close()        
+
 def getevt(filelist,**kw):
     """ ..function:: getevt(filelist[,treename]) -> totalevts
     
@@ -114,7 +157,32 @@ def getevt(filelist,**kw):
     except ImportError:
         pass
     import ROOT
+    import os
 
+    # First check if there is exist the file in the folder
+    # in order to avoid the loading. Let's assume that file contain 
+    # the full path
+    prefixpath = os.path.dirname(filelist[0])
+    md = get_evts_metadata(prefixpath)
+    if len(md) > 0:
+        nevts = 0
+        print "\033[1;34mINFO\033[1;m Extracting events per file using"\
+                " the '.events_per_file'. Note you can remove the file to force a"\
+                " recalculation"
+        # XXX: Also we can do sum(md.values()), but the files are not checked
+        #      then... 
+        for f in filelist:
+            try: 
+                nevts += md[f]
+            except KeyError:
+                print "\033[1;33mWARNING\033[1;m Metafile '.events_per_file'"\
+                        " seems to be malformed, did not find '{0}'. "\
+                        "Probably '.events_per_file' should be recreated'".format(f)
+        if nevts == 0:
+            raise RuntimeError("No event was extracted from '.events_per_file'")
+        return nevts
+    # NOT FOUND THE METADATA, let's evaluate it, and stores a metadata file
+    
     if kw.has_key("treename"):
         treename=kw["treename"]
     else:
@@ -125,8 +193,13 @@ def getevt(filelist,**kw):
                 "[Tree:%s]: " % treename
     t = ROOT.TChain(treename)
     for f in filelist:
+        EntriesBefore=int(t.GetEntries())
         t.AddFile(f)
-    return t.GetEntries()    
+        md[t] = int(t.GetEntries()-EntriesBefore)
+    # store metadata
+    store_evts_metadata(md,prefixpath)
+
+    return t.GetEntries()   
 
 def bookeepingjobs(jobinstance):
     """.. function::bookeepingjobs(listjobs) 
