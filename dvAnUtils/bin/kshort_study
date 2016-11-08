@@ -126,7 +126,7 @@ def create_and_save_file_weights(rootfile,hdata,hmc,hname):
     return whisto
 
 def create_weights(_froot,_files,doplots,force,
-        treename="KsTree_KsSampleCreator",dijet_weight="dijet_weight"):
+        treename,ptranges,dijet_weight="dijet_weight"):
     """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
     new TTree 'weight_tree' vertex-wise for each MC sample. Note that
     the Created histograms already contain the MC event weights of the 
@@ -143,8 +143,10 @@ def create_weights(_froot,_files,doplots,force,
     force: bool
         whether or not to force to re-calculate the weights whenever
         the weights are already present in the ROOT file
-    treename: str, default: 'KsTree_KsSampleCreator'
+    treename: str
         the name of the tree  
+    ptranges: [float,float]
+        the ptrange to be used in the pt-eta weight histogram
     dijet_weights: str, default: 'dijet_weights'
         the name of the branch where the MC event weight is present 
     """
@@ -187,11 +189,13 @@ def create_weights(_froot,_files,doplots,force,
             continue
         print " --\ extracting info from {0}".format(fname)
         # Note I cannot include zPV because is event-wise
-        h2histos[i] = (ROOT.TH2F(h2name,"",100,00,30.,100,-3.0,3.0), legend)
+        h2histos[i] = (ROOT.TH2F(h2name,"",100,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0), legend)
         h2histos[i][0].Sumw2()
         # Fill data
         t = _froot[i].Get(treename)
         # Check if the dijet_weight branch is present, remove it otherwise
+        # -- Force to the pt-ranges  [GeV]
+        ptrange_cut = "({0} >= {1} && {0} <= {2})".format(vars2weight[1],ptranges[0],ptranges[1])
         dijet_weight_v = "1.0*{0}[0]".format(dijet_weight)
         # if getattr(t,dijet_weight) --> SEGMENTATION VIOLATION ??
         if not dijet_weight in map(lambda x: x.GetName(),t.GetListOfBranches()):
@@ -199,7 +203,7 @@ def create_weights(_froot,_files,doplots,force,
             print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
                     " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
                     " ignore this WARNING then".format(dijet_weight,fname)
-        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),dijet_weight_v)
+        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),'{0}*{1}'.format(dijet_weight_v,ptrange_cut))
         h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
         # and the zPV
         zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
@@ -319,7 +323,8 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
     print
     ntree.Write("", ROOT.TObject.kOverwrite)    
 
-def main_weights(datasample,mcsamples,doplots,force_weight_calc,treename="KsTree_KsSampleCreator"):
+def main_weights(datasample,mcsamples,doplots,force_weight_calc,
+        treename,ptranges):
     """Main steering function to create the weigths from a list of 
     samples. 
     The first step is to obtain the 2D and 1D weights DATA/MC using 
@@ -338,8 +343,10 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,treename="KsTree
     force_weight_calc: bool
         whether or not to force to re-calculate the weights whenever
         the weights are already present in the ROOT file
-    treename: str, default="KsTree_KsSampleCreator"
+    treename: str,
         the name of the tree to use
+    ptranges: list(float,float)
+        the pt-ranges to be used in the pt-eta weight TH2F
     """
     import ROOT
     import os
@@ -372,7 +379,7 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,treename="KsTree
 
     if any(no_weights):
         # create the weights
-        weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename)
+        weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename,ptranges)
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
@@ -1254,7 +1261,14 @@ if __name__ == '__main__':
     parser_weight.add_argument('--treename',action='store',dest='treename',
             help='Name of the tree, depending the used algorithm from the'\
                     ' DV_xAODAnalysis package [KsTree_KsSampleCreator]')
-    parser_weight.set_defaults(which='weight',doplots=False,force=False,treename="KsTree_KsSampleCreator")
+    parser_weight.add_argument('--pt-ranges',nargs=2,action='store',dest='ptranges',
+            metavar='pt',
+            help='The ranges to be used in the pt-eta TH2F histogram used to weight.'\
+                    ' This is useful to restrict the phase space when there is not'\
+                    ' enough MC events to populate the tails and therefore the weighting'
+                    ' procedure could produce wrong results [Default: 0.0 30.0]')
+    parser_weight.set_defaults(which='weight',doplots=False,force=False,
+            treename="KsTree_KsSampleCreator",ptranges=[0.0,30.0])
 
     # fitter 
     parser_fitter = subparsers.add_parser("fitter",help="Fits the mass branch of the input ROOT file to"\
@@ -1318,7 +1332,7 @@ if __name__ == '__main__':
 
     if args.which == 'weight':
         # create the weights and the plots if necessary
-        main_weights(args.dataname,args.mcsamples,args.doplots,args.force,args.treename)
+        main_weights(args.dataname,args.mcsamples,args.doplots,args.force,args.treename,args.ptranges)
     elif args.which == 'fitter':
         for rfilename in args.rootfilename:
             if not os.path.isfile(rfilename):
