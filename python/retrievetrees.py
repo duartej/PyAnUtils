@@ -163,7 +163,7 @@ class storedtree(object):
             setattr(self,aliasname,self._wise_values[aliasname][0])
             # Be careful, only if is a vector make sense
             try:
-                setattr(self,aliasname+'_size',self._wise_values[aliasname][0].size())
+                setattr(self,aliasname+'_size',self._wise_values[aliasname][0].size)
             except AttributeError:
                 pass
 
