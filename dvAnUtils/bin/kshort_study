@@ -151,15 +151,16 @@ def create_weights(_froot,_files,doplots,force,
         the name of the branch where the MC event weight is present 
     """
     import ROOT 
+    import sys
         
     # The (kinematic, eta and pt) variables to be used to weight, 
     # in order to take into account different branch names used
     # in the LRT_Validation and in the KsSampleCreator algorithms
     # FIXME: the names should be unified
-    vars2weight = ( "pseudorapidity","pt*1e-3")
+    vars2weight = ( "pseudorapidity","pt")
     if treename != "KsTree_KsSampleCreator":
         # assuming track specific weights (LRTValidation)
-        vars2weight = ( "trk_eta","trk_pt*1e-3")
+        vars2weight = ( "trk_eta","trk_pt")
 
     # Build the TH2F ready 
     # -- Name of the histograms with var
@@ -185,30 +186,71 @@ def create_weights(_froot,_files,doplots,force,
                 _k.GetName() == hzw_name[i], _froot[i].GetListOfKeys())) == 2:
             weights[i] = { h2dw_name[i]: _froot[i].Get(h2dw_name[i]), 
                 hzw_name[i]: _froot[i].Get(hzw_name[i]) }
-        if not force and not doplots:
-            continue
+        if len(weights) != 0 and not force and not doplots :
+                    continue
         print " --\ extracting info from {0}".format(fname)
         # Note I cannot include zPV because is event-wise
         # XXX: NOTE THE xbins for low statistics MINBIAS: to be changed
         h2histos[i] = (ROOT.TH2F(h2name,"",50,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0), legend)
         h2histos[i][0].Sumw2()
+        zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
+        zhistos[i][0].Sumw2()
         # Fill data
         t = _froot[i].Get(treename)
         # Check if the dijet_weight branch is present, remove it otherwise
         dijet_weight_v = "1.0*{0}[0]".format(dijet_weight)
-        # if getattr(t,dijet_weight) --> SEGMENTATION VIOLATION ??
+        isDijetWeightBranch=True
         if not dijet_weight in map(lambda x: x.GetName(),t.GetListOfBranches()):
+            isDijetWeightBranch=False
             dijet_weight_v = '1.0'
             print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
                     " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
                     " ignore this WARNING then".format(dijet_weight,fname)
-        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),'{0}'.format(dijet_weight_v))
+        # -- Setup access infrastructure ---------------------------------
+        # deactivate branches: speed-up
+        t.SetBranchStatus("*",0)
+        # -- reactivate only the branches we need
+        t.SetBranchStatus(vars2weight[0],1)
+        t.SetBranchStatus(vars2weight[1],1)
+        t.SetBranchStatus("zPV",1)
+        # -- direct access branches
+        xv = ROOT.std.vector("float")()
+        t.SetBranchAddress(vars2weight[1],xv)
+        yv = ROOT.std.vector("float")()
+        t.SetBranchAddress(vars2weight[0],yv)
+        zPV = ROOT.std.vector("float")()
+        t.SetBranchAddress("zPV",zPV)
+        # -- weight-related
+        if isDijetWeightBranch:
+            t.SetBranchStatus(dijet_weight,1)
+            dijet_weight_v = ROOT.std.vector("float")()
+            t.SetBranchAddress(dijet_weight,dijet_weight_v)
+        else:
+            # dummy weight
+            dijet_weight_v = [ 1.0 ]
+        # -- Setup access infrastructure DONE ----------------------------
+        # --- Progress bar
+        point = float(t.GetEntries())/100.0
+        for k in xrange(t.GetEntries()):
+            sys.stdout.write("\r\033[1;34m    \- INFO\033[1;m Reading tree"+\
+                    " [ "+"\b"+\
+                    str(int(float(k)/point)).rjust(3)+"%]")
+            sys.stdout.flush()
+            # end-progress bar
+            dum = t.GetEntry(k)
+            # -- filling histograms
+            for j in xrange(xv.size()):
+                h2histos[i][0].Fill(xv[j]*1e-3,yv[j],dijet_weight_v[0])
+            if zPV.size() > 0:
+                zhistos[i][0].Fill(zPV[0])
         h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
         # and the zPV
-        zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
-        zhistos[i][0].Sumw2()
-        t.Project(hzname,"zPV",dijet_weight_v)
         zhistos[i][0].Scale(1.0/zhistos[i][0].Integral())
+        # IMPORTANT, resetting branch address not to point 
+        # anymore to the vectors we used (otherwise it will 
+        # crash whenever we went out of scope)
+        t.ResetBranchAddresses()
+        print
     
     # Do some plots if required
     if doplots:
@@ -393,6 +435,18 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
     if any(no_weights):
         # create the weights
         weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename,ptranges)
+        # closing the files to assure everything was properly stored
+        # and avoid a crash when trying to fill the weight tree
+        # Before, put the newly created weights in the memory (not associated
+        # to a file)
+        #for _wdict in weights.values():
+        #    dum = map(lambda x: x.SetDirectory(0),_wdict.values())
+        #dum=map(lambda x: x.Close(),_froots.values())
+        ## and open it again
+        #_froots = dict( map(lambda (x,y): (x,ROOT.TFile.Open(y,"UPDATE")), fiddict.keys()) )
+        #for i,f in filter(lambda (_i,_z): _i != 0,_froots.iteritems()):
+        #    weights[i] = dict(map(lambda _x: (_x.GetName(),f.Get(_x.GetName())), 
+        #        filter(lambda x: x.GetName().lower().find('weights')!=-1,f.GetListOfKeys())))
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
