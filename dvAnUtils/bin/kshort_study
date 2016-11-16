@@ -74,7 +74,7 @@ def kinematic_plots(histos,xtitle,var):
     hframe.GetXaxis().SetTitle(xtitle)
     ylabel_pos_init= 0.85
     AtlasUtils.ROOT.ATLAS_LABEL(0.2,ylabel_pos_init)
-    AtlasUtils.ROOT.myText(0.34,ylabel_pos_init,1,"Work In Progress")
+    AtlasUtils.ROOT.myText(0.34,ylabel_pos_init,1,"Internal")
     prout = ROOT.TLatex()
     prout.SetNDC(True)
     prout.SetTextSize(0.035)
@@ -189,13 +189,12 @@ def create_weights(_froot,_files,doplots,force,
             continue
         print " --\ extracting info from {0}".format(fname)
         # Note I cannot include zPV because is event-wise
-        h2histos[i] = (ROOT.TH2F(h2name,"",100,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0), legend)
+        # XXX: NOTE THE xbins for low statistics MINBIAS: to be changed
+        h2histos[i] = (ROOT.TH2F(h2name,"",50,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0), legend)
         h2histos[i][0].Sumw2()
         # Fill data
         t = _froot[i].Get(treename)
         # Check if the dijet_weight branch is present, remove it otherwise
-        # -- Force to the pt-ranges  [GeV]
-        ptrange_cut = "({0} >= {1} && {0} <= {2})".format(vars2weight[1],ptranges[0],ptranges[1])
         dijet_weight_v = "1.0*{0}[0]".format(dijet_weight)
         # if getattr(t,dijet_weight) --> SEGMENTATION VIOLATION ??
         if not dijet_weight in map(lambda x: x.GetName(),t.GetListOfBranches()):
@@ -203,7 +202,7 @@ def create_weights(_froot,_files,doplots,force,
             print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
                     " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
                     " ignore this WARNING then".format(dijet_weight,fname)
-        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),'{0}*{1}'.format(dijet_weight_v,ptrange_cut))
+        t.Project(h2name,"{0}:{1}".format(vars2weight[0],vars2weight[1]),'{0}'.format(dijet_weight_v))
         h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
         # and the zPV
         zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
@@ -324,7 +323,7 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
     ntree.Write("", ROOT.TObject.kOverwrite)    
 
 def main_weights(datasample,mcsamples,doplots,force_weight_calc,
-        treename,ptranges):
+        treename,ptranges,**kwargs):
     """Main steering function to create the weigths from a list of 
     samples. 
     The first step is to obtain the 2D and 1D weights DATA/MC using 
@@ -347,6 +346,15 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
         the name of the tree to use
     ptranges: list(float,float)
         the pt-ranges to be used in the pt-eta weight TH2F
+    plot_title: str, optional
+        the title to appear in the plot (usually luminosity and 
+        center of mass energy). 
+        [Default: '#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}']
+    XXX-- NOT IMPLEMENTED YET---
+    legend_#: str, optional
+        the title to be used as legend per each MC sample
+        [Default: extracted from the filename]
+       -- NOT IMPLEMENTED YET---
     """
     import ROOT
     import os
@@ -354,9 +362,14 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
     for i in mcsamples+[datasample]:
         if not os.path.isfile(i):
             raise IOError("Root file not found '{0}'".format(i))
+    # Some defaults
+    if kwargs.has_key("plot_title"):
+        atlas_header_title=kwargs['plot_title']
+    else:
+        atlas_header_title='#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}'
 
     # Create the dictionary with legends and indices
-    fiddict = { (0,datasample): '#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}' } # FIXME LUMINOSITY
+    fiddict = { (0,datasample): atlas_header_title }
     # We have to assume some name convention: BLAH_BLAH_BLAH_jetjet_JZyW.root
     k=1
     for mcname in mcsamples:
@@ -911,7 +924,7 @@ def double_ratio_plot(dijet_name,dRdict,eta_region,plotname='KsRatio'):
     frame.SetYTitle("Double Ratio Data/MC" )
     h.Draw("SAME")
     AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.85)
-    AtlasUtils.ROOT.myText(0.34,0.85,1,"Work In Progress")
+    AtlasUtils.ROOT.myText(0.34,0.85,1,"Internal")
     AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}")
     AtlasUtils.ROOT.myText(0.7,0.65,1,ETA_REGIONS[eta_region])
     c.SaveAs("{0}_{1}_{2}.png".format(plotname,eta_region,dijet_name))
