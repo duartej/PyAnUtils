@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Fitting Kshorts using the output ROOT files from the KsSampleCreator class 
+Generic script used for the several steps needed to estimate the tracking
+efficiency using Kshorts. 
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
@@ -37,7 +38,7 @@ STYLE = { 0: 20,
 
 ###############################################################################
 ## WEIGHT RELATED FUNCTIONS
-def kinematic_plots(histos,xtitle,var):
+def kinematic_plots(histos,xtitle,var,extra=""):
     """FIXME DOC
 
     Parameters
@@ -66,9 +67,13 @@ def kinematic_plots(histos,xtitle,var):
         if y > ymax:
             ymax=y*1.6
     c = ROOT.TCanvas()
+    ymin=0.0
     if var == "eta":
         ymax = 1.3*ymax
-    hframe = c.DrawFrame(histos[0][0].GetBinLowEdge(1),0.0,
+    elif var == "pt":
+        ymin = 1e-5
+        ymax = 1.3*ymax
+    hframe = c.DrawFrame(histos[0][0].GetBinLowEdge(1),ymin,
             histos[0][0].GetXaxis().GetBinUpEdge(histos[0][0].GetNbinsX()),ymax)
     hframe.GetYaxis().SetTitle('A.U.')
     hframe.GetXaxis().SetTitle(xtitle)
@@ -88,6 +93,7 @@ def kinematic_plots(histos,xtitle,var):
             xinit = 0.65
         ypos = (ylabel_pos_init-0.05)-j*0.05
         if i == 0:
+            h.SetLineStyle(1)
             h.Draw("PESAME")
             marker[i] = ROOT.TMarker(0.0,0.0,h.GetMarkerStyle())
             marker[i].SetNDC(True)
@@ -104,17 +110,16 @@ def kinematic_plots(histos,xtitle,var):
         marker[i].Draw()
         prout.DrawLatex(xinit,ypos,legend)
         j+=1
-    c.SaveAs("kinematics_{0}.png".format(var))
-    c.SaveAs("kinematics_{0}.pdf".format(var))
+    if var == "pt":
+        c.SetLogy()
+    c.SaveAs("kinematics_{0}{1}.png".format(var,extra))
+    c.SaveAs("kinematics_{0}{1}.pdf".format(var,extra))
 
 def create_and_save_file_weights(rootfile,hdata,hmc,hname):
     """FIXME DOCS
     """
     import ROOT
     
-    # histo name
-    #hname = "{0}_weights".format(hmc.GetName())
-    #hname = "{0}_weights_{1}".format(hmc.GetName(),varname)
     # Delete previous version, if any
     rootfile.Delete(hname+';*')
     rootfile.cd()
@@ -125,8 +130,252 @@ def create_and_save_file_weights(rootfile,hdata,hmc,hname):
 
     return whisto
 
+def get_from_file(rootfile,object_name):
+    """Extract an object from a ROOT file
+
+    Parameters
+    ----------
+    rootfile: ROOT.TFile
+        the file to look at
+    object_name: str
+        the name of the object to be extracted
+
+    Return
+    ------
+    ROOT.TObject|None: the object if was found in the file,
+        otherwise it returns None. Note however that no check 
+        in the type was made
+    """
+    if len(set(filter(lambda x: x.GetName() == object, rootfile.GetListOfKeys()))) == 1:
+        return f.Get(object_name)
+    return None
+
+class weight_related_histos_class(object):
+    """Auxiliary class to take care of filling the to-be-weight 
+    histograms for a MC sample, but ready to deal also the 
+    weight-by-track-type case.
+    """
+    def __init__(self,split_weight):
+        """Auxiliary class to take of filling the histograms
+        needed for the weights on a MC sample. Can deal with 
+        the weight-by-track-type case
+
+        Parameters
+        ----------
+        split_weight: bool,
+            whether or not use different weight depending the track type
+
+        Attributes
+        ----------
+        is_split: bool
+            whether or not considere different weight depending on the
+            track type
+        isMC: whether or not the associated file is MC or DATA
+        name_conversor: dict(str:str)
+            the name of the histogram corresponding to all tracks ('weights'),  
+            LRT ('weights_LRT') and STD ('weights_STD')
+        __histos__: dict(str: TH2F)
+            the pt-eta histograms associated to the weight. The valid
+            keys are: 'weights' (all tracks), 'weights_STD' (STD-tracks
+            only) and 'weights_LRT' (LRT only). Note that the names of the
+            histograms contains the 'blahbalh_{0}_blha', in order to substitute
+            with the 'format' method and put 'weights' to be used by the __weights__
+        __zhisto__: ROOT.TH1F
+            the z-PV histogram
+        __weights__: dict(str: TH2F)
+            the final histograms already divided (DATA/MC)
+        """
+
+        self.__histos__ = {}
+        self.__zhisto__ = None
+        self.__weights__= {}
+        self.is_split   = split_weight
+        # is considered MC per default
+        self.isMC       = False
+        self.name_conversor = {}
+        # just different behaviour depending if we are using the 
+        # track type split or not (see _extended_fill and _simple_fill
+        # functions)
+        if self.is_split:
+            self.fill2D = self._extended_fill
+        else:
+            self.fill2D = self._simple_fill
+
+    def initialize(self,rootfile,ptranges,force):
+        """Create the ROOT TH2 for the sample
+
+        Parameters
+        ----------
+        rootfile: ROOT.TFile
+        ptranges: (float,float) [TO BE DEPRECATED?]
+            the ranges on the pt histo
+        force: bool
+            whether or not calculate the weights, even if
+            they are already in the file
+
+        Return
+        ------
+        bool: whether or not it contains the weights already, meaning
+            it is not needed to process the file again
+        """
+        import ROOT
+        import os
+
+        # pre-processing: get the histogram names (file-dependent)
+        hname = os.path.basename(rootfile.GetName()).replace('.root',"")
+        # See the trick to be used when store or re-get the bkg.
+        h2dw_names = [ "{0}_{1}_pt_eta".format(hname,"{0}") ]
+        self.name_conversor["weights"] = h2dw_names[0]
+        if self.is_split:
+            h2dw_names.append( h2dw_names[0].replace("{0}_pt","{0}_LRT_pt") )
+            self.name_conversor["weights_LRT"] = h2dw_names[-1]
+            h2dw_names.append( h2dw_names[0].replace("{0}_pt","{0}_STD_pt") )
+            self.name_conversor["weights_STD"] = h2dw_names[-1]
+        zhisto_name = hname+"_{0}_zPV"
+        # Check if the weights were already present in the file
+        for _hn in h2dw_names+[zhisto_name]:
+            real_names = _hn.format("weights")
+            self.__weights__[real_names] = get_from_file(rootfile,real_names)
+            if self.__weights__[real_names] == None:
+                self.__weights__.pop(real_names)
+        # check initialize, the class is ready to be used
+        self.isInitialized=True
+        # if the weights are in the file, return True, the client should
+        # skip further calculations (remember 2D for pt-eta plus the zPV)
+        if not force and ( (not self.is_split and len(self.__weights__) == 2) or
+                (self.is_split and len(self.__weights__) == 4) ):
+            return True
+        # otherwise instantiate the histograms
+        for _hn in h2dw_names:
+            self.__histos__[_hn] = ROOT.TH2F(_hn,"",50,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0)
+            self.__histos__[_hn].Sumw2()
+        # and the zPV
+        self.__zhisto__ = ROOT.TH1F(zhisto_name,"",100,-220.,220.)
+        self.__zhisto__.Sumw2()
+
+        return False
+
+    def get_2D_histos(self):
+        """Return the available histograms for pt-eta
+
+        Return
+        ------
+        list(TH2F)
+        """
+        return self.__histos__.values()
+
+    def get_zPV_histo(self):
+        """Return the zPV histogram
+
+        Return
+        ------
+        TH1F
+        """
+        return self.__zhisto__
+    
+    def get_weight_type_from_name(self,hname):
+        """Return the track-type weight histogram give the name
+
+        Parameter
+        ---------
+        hname: str
+            the name of the histogram
+
+        Return
+        ------
+        str: the weight type
+
+        Raise 
+        -----
+        IndexError: whenever the histogram with the given name doesn't exist
+
+        See
+        ---
+        get_2D_from_weight_type
+        """
+        return map(lambda (x,y): x, filter(lambda (x,y): y == hname, \
+                self.name_conversor.iteritems()))[0]
+
+    def get_TH2F_from_weight_type(self,w_type):
+        """Return the track-type weight histogram give the name
+
+        Parameter
+        ---------
+        w_type: str
+            the weight-type track
+
+        Return
+        ------
+        
+
+        Raise 
+        -----
+        KeyError: whenever the weight type doesn't exist
+        
+        See
+        ---
+        get_weight__type_from_name
+        """
+        return self.__histos__[self.name_conversor[w_type]]
+
+    def normalize(self):
+        """Normalize the histograms to 1
+        """
+        for _h in self.__histos__.values() + [ self.__zhisto__ ]:
+            _h.Scale(1.0/_h.Integral())
+
+    def zfill(self,zpv,w):
+        """Fill the z-PV histogram
+
+        Parameters
+        ----------
+        zpv: float
+            the value of the z-component of the primary vertex
+        w: float    
+            the per-event weight
+        """
+        _dummy = self.__zhisto__.Fill(zpv,w)
+    
+    def _extended_fill(self,pt,eta,_w,isLRT):
+        """Fills the histograms for the weights: track-type also
+        Parameters
+        ----------
+        pt: ROOT.std.vector("float")()
+            the vector for the pt values
+        eta: ROOT.std.vector("float")()
+            the vector for the eta values
+        _w: float
+            the per-event weight (MC)
+        isLRT: ROOT.std.vector("int")()
+            whether or not the track is LRT or not
+        """
+        for j in xrange(pt.size()):
+            _dummy = self.__histos__[self.name_conversor["weights"]].Fill(pt[j]*1e-3,eta[j],_w)
+            if isLRT[j]==1:
+                _dummy = self.__histos__[self.name_conversor["weights_LRT"]].Fill(pt[j]*1e-3,eta[j],_w)
+            else:
+                _dummy = self.__histos__[self.name_conversor["weights_STD"]].Fill(pt[j]*1e-3,eta[j],_w)
+
+
+    def _simple_fill(self,pt,eta,_w,isLRT=None):
+        """Fill the histograms for the weights: simple version
+        with no distintion between tracks
+
+        Parameters
+        ----------
+        pt: ROOT.std.vector("float")()
+            the vector for the pt values
+        eta: ROOT.std.vector("float")()
+            the vector for the eta values
+        _w: float
+            the per-event weight (MC)
+        """
+        for j in xrange(pt.size()):
+            self.__histos__[self.name_conversor["weights"]].Fill(pt[j]*1e-3,eta[j],_w)
+
 def create_weights(_froot,_files,doplots,force,
-        treename,ptranges,dijet_weight="dijet_weight"):
+        treename,ptranges,dijet_weight="dijet_weight",
+        split_weight=False):
     """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
     new TTree 'weight_tree' vertex-wise for each MC sample. Note that
     the Created histograms already contain the MC event weights of the 
@@ -148,7 +397,15 @@ def create_weights(_froot,_files,doplots,force,
     ptranges: [float,float]
         the ptrange to be used in the pt-eta weight histogram
     dijet_weights: str, default: 'dijet_weights'
-        the name of the branch where the MC event weight is present 
+        the name of the branch where the MC event weight is present
+    split_weight: bool, [default: False]
+        whether or not create different weights depending of the track
+        type
+
+    Return
+    ------
+    weights: dict(str: THF)
+        the histograms Data/MC 
     """
     import ROOT 
     import sys
@@ -156,7 +413,8 @@ def create_weights(_froot,_files,doplots,force,
     # The (kinematic, eta and pt) variables to be used to weight, 
     # in order to take into account different branch names used
     # in the LRT_Validation and in the KsSampleCreator algorithms
-    # FIXME: the names should be unified
+    # FIXME: the names should be unified or at least should be
+    #        provided as arguments
     vars2weight = ( "pseudorapidity","pt")
     if treename != "KsTree_KsSampleCreator":
         # assuming track specific weights (LRTValidation)
@@ -164,37 +422,21 @@ def create_weights(_froot,_files,doplots,force,
 
     # Build the TH2F ready 
     # -- Name of the histograms with var
-    h2histos = {}
+    histos_inst = {}
     zhistos = {}
     # -- Name of the histograms DATA/MC_i
-    h2dw_name = {}
     hzw_name  = {}
-    # -- the weight histograms
-    weights = {}
     print "\033[1;34mINFO\033[1;m Collecting data..."
     # Run the data (i=0) the last one
     for (i,fname),legend in sorted(_files.iteritems(),reverse=True):
+        # instantiate the histo classes and initialize
+        histos_inst[i] = (weight_related_histos_class(split_weight),legend)
+        # if the weights are already in the file, the init function 
+        # returns True
+        if histos_inst[i][0].initialize(_froot[i],ptranges,force) and not doplots:
+            continue
         # First get the names of everything
-        hname = fname.split('.')[0]
-        h2name=hname+"_pt_eta"
-        hzname = hname+"_zPV"
-        # -- Filling the name of the histos which will contain the weight
-        h2dw_name[i] = "{0}_weights_pt_eta".format(h2name)
-        hzw_name[i]    = "{0}_weights_zPV".format(hzname)
-        # And check if it is already present, then skip it
-        if not force and len(filter(lambda _k: _k.GetName() == h2dw_name[i] or \
-                _k.GetName() == hzw_name[i], _froot[i].GetListOfKeys())) == 2:
-            weights[i] = { h2dw_name[i]: _froot[i].Get(h2dw_name[i]), 
-                hzw_name[i]: _froot[i].Get(hzw_name[i]) }
-        if len(weights) != 0 and not force and not doplots :
-                    continue
         print " --\ extracting info from {0}".format(fname)
-        # Note I cannot include zPV because is event-wise
-        # XXX: NOTE THE xbins for low statistics MINBIAS: to be changed
-        h2histos[i] = (ROOT.TH2F(h2name,"",50,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0), legend)
-        h2histos[i][0].Sumw2()
-        zhistos[i] = (ROOT.TH1F(hzname,"",100,-220.,220.), legend)
-        zhistos[i][0].Sumw2()
         # Fill data
         t = _froot[i].Get(treename)
         # Check if the dijet_weight branch is present, remove it otherwise
@@ -206,6 +448,8 @@ def create_weights(_froot,_files,doplots,force,
             print "\033[1;33mWARNING\033[1;m Not found the MC event weight"\
                     " branch '{0}' in the root file {1}\n PROBABLY IS REAL DATA,"\
                     " ignore this WARNING then".format(dijet_weight,fname)
+            # put the flag as DATA
+            histos_inst[i][0].isMC=False
         # -- Setup access infrastructure ---------------------------------
         # deactivate branches: speed-up
         t.SetBranchStatus("*",0)
@@ -228,6 +472,14 @@ def create_weights(_froot,_files,doplots,force,
         else:
             # dummy weight
             dijet_weight_v = [ 1.0 ]
+        # Need the track type?
+        if split_weight:
+            t.SetBranchStatus("trk_isLRT",1)
+            isLRT = ROOT.std.vector("int")()
+            t.SetBranchAddress("trk_isLRT",isLRT)
+        else:
+            # dummy isLRT
+            isLRT = [ None ]
         # -- Setup access infrastructure DONE ----------------------------
         # --- Progress bar
         point = float(t.GetEntries())/100.0
@@ -239,13 +491,10 @@ def create_weights(_froot,_files,doplots,force,
             # end-progress bar
             dum = t.GetEntry(k)
             # -- filling histograms
-            for j in xrange(xv.size()):
-                h2histos[i][0].Fill(xv[j]*1e-3,yv[j],dijet_weight_v[0])
+            histos_inst[i][0].fill2D(xv,yv,dijet_weight_v[0],isLRT)
             if zPV.size() > 0:
-                zhistos[i][0].Fill(zPV[0])
-        h2histos[i][0].Scale(1.0/h2histos[i][0].Integral())
-        # and the zPV
-        zhistos[i][0].Scale(1.0/zhistos[i][0].Integral())
+                histos_inst[i][0].zfill(zPV[0],dijet_weight_v[0])
+        histos_inst[i][0].normalize()
         # IMPORTANT, resetting branch address not to point 
         # anymore to the vectors we used (otherwise it will 
         # crash whenever we went out of scope)
@@ -254,35 +503,58 @@ def create_weights(_froot,_files,doplots,force,
     
     # Do some plots if required
     if doplots:
-        pthistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionX(),leg)),h2histos.iteritems()))
-        kinematic_plots(pthistos,
-                xtitle='p_{T} [GeV]',
-                var='pt'
-                )
-        etahistos = dict(map(lambda (i,(h,leg)): (i,(h.ProjectionY(),leg)),h2histos.iteritems()))
-        kinematic_plots(etahistos,
-                xtitle='#eta',
-                var='eta'
-                )
-        kinematic_plots(zhistos,  
+        # re-format the structure, get rid of the class instance, substituting by 
+        # the histos and perform a plot per weight type
+        for hname_type in map(lambda x: histos_inst[0][0].get_weight_type_from_name(x.GetName()), \
+                histos_inst[0][0].get_2D_histos()):
+            # just picking up the 2D-histogram related to hname_type
+            pthistos = dict(map(lambda (i,(hinst,leg)): (i,(hinst.get_TH2F_from_weight_type(hname_type).ProjectionX(),leg)),\
+                    histos_inst.iteritems()))
+            kinematic_plots(pthistos,
+                    xtitle='p_{T} [GeV]',
+                    var='pt',
+                    extra="_"+hname_type
+                    )
+            etahistos = dict(map(lambda (i,(hinst,leg)): (i,\
+                    (hinst.get_TH2F_from_weight_type(hname_type).ProjectionY(),leg)),histos_inst.iteritems()))
+            kinematic_plots(etahistos,
+                    xtitle='#eta',
+                    var='eta',
+                    extra="_"+hname_type
+                    )
+        kinematic_plots(dict(map(lambda (i,(_hist,leg)): (i,(_hist.get_zPV_histo(),leg)),histos_inst.iteritems())),  
                 xtitle='z_{PV} [mm]',
                 var='zPV'
                 )
+
+    weights = {}
     # Build the weight histos 2D (pt, eta) + 1D zPV
     print "\033[1;34mINFO\033[1;m Creating the weights"
     # DATA/MC --> 0 index is data
-    # Build the weights
-    for (i,fname),legend in sorted(filter(lambda (x,y): x[0] != 0,_files.iteritems())):
-        # check if it's already filled
-        if weights.has_key(i):
+    # Build the weights: skip the 0!! (data)
+    for (i,(_hi,legend)) in sorted(filter(lambda (x,y): x != 0, histos_inst.iteritems())):
+        if len(_hi.__weights__) > 0:
             continue
-        w_pt_eta = create_and_save_file_weights(_froot[i],h2histos[0][0],h2histos[i][0],h2dw_name[i])
-        w_zpv    = create_and_save_file_weights(_froot[i],zhistos[0][0],zhistos[i][0],hzw_name[i])
-        weights[i] = { w_pt_eta.GetName(): w_pt_eta, w_zpv.GetName(): w_zpv }
-
+        # for each weight type (pt-eta histos)
+        for h2 in _hi.get_2D_histos():
+            # get the histo name for the data histogram
+            # first get the weight type from the MC
+            w_type = _hi.get_weight_type_from_name(h2.GetName())
+            # and now the histo name in data
+            hdata = histos_inst[0][0].get_TH2F_from_weight_type(w_type)
+            # the weighted histos, remember to include the word "weights" in the
+            # previously used histos
+            w_pt_type     = _hi.get_weight_type_from_name(h2.GetName())
+            w_pt_eta_name = h2.GetName().format("weights")
+            _hi.__weights__[w_pt_type] = create_and_save_file_weights(_froot[i],hdata,h2,w_pt_eta_name)
+        wz_name = _hi.get_zPV_histo().GetName().format("weights")
+        _hi.__weights__["weights_zPV"] = create_and_save_file_weights(_froot[i],\
+                histos_inst[0][0].get_zPV_histo(),_hi.get_zPV_histo(),wz_name)
+        weights[i] = _hi.__weights__
+    
     return weights
 
-def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
+def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         dijet_weight_branchname="dijet_weight"):
     """Create a new TTree which could be added as friend to the previous
     one, incorporating the total weight, after applying the kinematic, zPV 
@@ -292,9 +564,9 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
     ----------
     t: ROOT.TTree
         the main tree
-    weight_dict: 
-    weigth_treename: str
-    weight_branchname: str
+    weight_dict: dict(std: ROOT.TH1|2F)
+    weight_treename: str
+    weight_branchnames: list(str) --> to be deprecated, use the weightdict keys
     """
     import ROOT
     #from math import sqrt
@@ -303,17 +575,17 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
     # get the histogram for the zPV
     zpv_hname = filter(lambda x: x.lower().find('zpv') !=-1, weightdict.keys())[0]
     zpv_hist = weightdict[zpv_hname]
-    # get the histogram for the pt_eta
-    kin_hname = filter(lambda x: x.lower().find('pt_eta') !=-1, weightdict.keys())[0]
-    kin_hist = weightdict[kin_hname]
+    # get the histograms for the pt_eta
+    kin_hist_dict = dict(filter(lambda (x,y): x.lower().find('zpv') ==-1,\
+            weightdict.iteritems()))
 
-    # create the vector 
-    w = ROOT.std.vector(float)()
-    # and the new branch
-    #branch_w = t.Branch("weights",w)
+    # create the vectors
+    w = dict(map(lambda x: (x,ROOT.std.vector(float)()), kin_hist_dict.keys()))
+    
     # a new tree
     ntree = ROOT.TTree(weight_treename,"")
-    ntree.Branch(weight_branchname,w)
+    for weight_branchname,_v in w.iteritems():
+        ntree.Branch(weight_branchname,_v)
 
     # get the address of the needed variables
     _dummy = t.GetEntry(0)
@@ -342,13 +614,14 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
                     str(int(float(kentry)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
         kentry+=1
-        # intialize vector
-        w.clear()
+        # intialize vectors
+        _dummy = map(lambda _v: _v.clear(),w.values())
         # event-wise, only present if there is more than one DV
         if zpvV.size() == 0:
             ntree.Fill()
-            continue
-        w.reserve(etaV.size())
+            continue\
+        # reserve for all 
+        _dummy = map(lambda _v: _v.reserve(etaV.size()), w.values())
         # find event-wise weight
         zBin = zpv_hist.FindBin(zpvV[0])
         evtW_zPV = zpv_hist.GetBinContent(zBin)
@@ -357,16 +630,18 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchname,
         # and the event-wise MC generated weight 
         # and the vertex-wise
         for _pt,_eta in zip(ptV,etaV):
-            kinBin = kin_hist.FindBin(_pt*1e-3,_eta)
-            w.push_back(kin_hist.GetBinContent(kinBin)*evtW)
-        #branch_w.Fill()
+            # Get the bin (equal for all the pt-eta histograms,
+            # of course
+            kinBin = kin_hist_dict.values()[0].FindBin(_pt*1e-3,_eta)
+            for _wname,_kin_hist in kin_hist_dict.iteritems():
+                w[_wname].push_back(_kin_hist.GetBinContent(kinBin)*evtW)
         ntree.Fill()
     print
     ntree.Write("", ROOT.TObject.kOverwrite)    
 
 def main_weights(datasample,mcsamples,doplots,force_weight_calc,
         treename,ptranges,**kwargs):
-    """Main steering function to create the weigths from a list of 
+    """Main steering function to create the weights from a list of 
     samples. 
     The first step is to obtain the 2D and 1D weights DATA/MC using 
     a Eta and Pt (2D) and zPV (1D), after that the weight per event
@@ -391,7 +666,12 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
     plot_title: str, optional
         the title to appear in the plot (usually luminosity and 
         center of mass energy). 
-        [Default: '#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}']
+        [Default: '#sqrt{s}=13 TeV, #intLdt=33.3 fb^{-1}']
+    split_weight: bool, optional
+        flag to activate the storage of the weights by track type. 
+        By activating this flag, the weights are going to be calculated
+        per type-track and two extra weight trees weight_LRT weight_STD  
+        will be stored (besides the usual "weight")
     XXX-- NOT IMPLEMENTED YET---
     legend_#: str, optional
         the title to be used as legend per each MC sample
@@ -408,7 +688,9 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
     if kwargs.has_key("plot_title"):
         atlas_header_title=kwargs['plot_title']
     else:
-        atlas_header_title='#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}'
+        atlas_header_title='#sqrt{s}=13 TeV, #intLdt=33.3 fb^{-1}'
+    if kwargs.has_key("split_weight") and kwargs["split_weight"]:
+        split_weight=True
 
     # Create the dictionary with legends and indices
     fiddict = { (0,datasample): atlas_header_title }
@@ -434,24 +716,13 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
 
     if any(no_weights):
         # create the weights
-        weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename,ptranges)
-        # closing the files to assure everything was properly stored
-        # and avoid a crash when trying to fill the weight tree
-        # Before, put the newly created weights in the memory (not associated
-        # to a file)
-        #for _wdict in weights.values():
-        #    dum = map(lambda x: x.SetDirectory(0),_wdict.values())
-        #dum=map(lambda x: x.Close(),_froots.values())
-        ## and open it again
-        #_froots = dict( map(lambda (x,y): (x,ROOT.TFile.Open(y,"UPDATE")), fiddict.keys()) )
-        #for i,f in filter(lambda (_i,_z): _i != 0,_froots.iteritems()):
-        #    weights[i] = dict(map(lambda _x: (_x.GetName(),f.Get(_x.GetName())), 
-        #        filter(lambda x: x.GetName().lower().find('weights')!=-1,f.GetListOfKeys())))
+        weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename,\
+                ptranges,split_weight=split_weight)
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
                         ' skipping plots as well'
-    # We have the weigths, check if the branch is already there (only MC, of course)
+    # We have the weights, check if the branch is already there (only MC, of course)
     for i,f in filter(lambda (_i,_y_): _i != 0,_froots.iteritems()):
         f.cd()
         weight_treename = "weight_tree"
@@ -464,8 +735,9 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
             print "\033[1;34mINFO\033[1;m Creating weight branch for {0}".format(f.GetName())
             t = f.Get(treename)
             _dumm = t.GetEntry(0)
-            weight_branchname = "weights"
-            build_weight_branch(t,weights[i],weight_treename,weight_branchname)
+            # including track-type weights
+            weight_branchnames = filter(lambda x: x.lower().find("zpv") == -1, weights[i].keys())
+            build_weight_branch(t,weights[i],weight_treename,weight_branchnames)
             f.Close()
     # nothing else to do with the files?
     __dum = map(lambda _f:  _f.Close(),_froots.values())
@@ -546,7 +818,7 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
                 tree.AddFriend(tree_weight)
             except KeyError:
                 print '\033[1;33mWARNING\033[1;m MC file without tree "{0}". '\
-                        'You should run this "kshort_study weigth" first!'.format(nametree)
+                        'You should run this "kshort_study weight" first!'.format(nametree)
                 # anuling the weight tree
                 weights = 1.0 
 
@@ -1334,6 +1606,8 @@ if __name__ == '__main__':
                     ' This is useful to restrict the phase space when there is not'\
                     ' enough MC events to populate the tails and therefore the weighting'
                     ' procedure could produce wrong results [Default: 0.0 30.0]')
+    parser_weight.add_argument('--split-weight',action='store_true',dest='split_weight',
+            help='Whether to weight and normalize regarding the track type or not')
     parser_weight.set_defaults(which='weight',doplots=False,force=False,
             treename="KsTree_KsSampleCreator",ptranges=[0.0,30.0])
 
@@ -1399,7 +1673,9 @@ if __name__ == '__main__':
 
     if args.which == 'weight':
         # create the weights and the plots if necessary
-        main_weights(args.dataname,args.mcsamples,args.doplots,args.force,args.treename,args.ptranges)
+        main_weights(args.dataname,args.mcsamples,args.doplots,\
+                args.force,args.treename,args.ptranges,\
+                split_weight=args.split_weight)
     elif args.which == 'fitter':
         for rfilename in args.rootfilename:
             if not os.path.isfile(rfilename):
