@@ -247,7 +247,7 @@ class weight_related_histos_class(object):
             return True
         # otherwise instantiate the histograms
         for _hn in h2dw_names:
-            self.__histos__[_hn] = ROOT.TH2F(_hn,"",50,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0)
+            self.__histos__[_hn] = ROOT.TH2F(_hn,"",100,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0)
             self.__histos__[_hn].Sumw2()
         # and the zPV
         self.__zhisto__ = ROOT.TH1F(zhisto_name,"",100,-220.,220.)
@@ -533,6 +533,7 @@ def create_weights(_froot,_files,doplots,force,
     # DATA/MC --> 0 index is data
     # Build the weights: skip the 0!! (data)
     for (i,(_hi,legend)) in sorted(filter(lambda (x,y): x != 0, histos_inst.iteritems())):
+        # if it is already calculate them, don't do it again
         if len(_hi.__weights__) > 0:
             continue
         # for each weight type (pt-eta histos)
@@ -544,9 +545,8 @@ def create_weights(_froot,_files,doplots,force,
             hdata = histos_inst[0][0].get_TH2F_from_weight_type(w_type)
             # the weighted histos, remember to include the word "weights" in the
             # previously used histos
-            w_pt_type     = _hi.get_weight_type_from_name(h2.GetName())
             w_pt_eta_name = h2.GetName().format("weights")
-            _hi.__weights__[w_pt_type] = create_and_save_file_weights(_froot[i],hdata,h2,w_pt_eta_name)
+            _hi.__weights__[w_type] = create_and_save_file_weights(_froot[i],hdata,h2,w_pt_eta_name)
         wz_name = _hi.get_zPV_histo().GetName().format("weights")
         _hi.__weights__["weights_zPV"] = create_and_save_file_weights(_froot[i],\
                 histos_inst[0][0].get_zPV_histo(),_hi.get_zPV_histo(),wz_name)
