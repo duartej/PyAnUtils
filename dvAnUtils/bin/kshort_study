@@ -36,6 +36,9 @@ STYLE = { 0: 20,
         6: 6
         }
 
+# Allow to use few events
+__DEBUG = False
+
 ###############################################################################
 ## WEIGHT RELATED FUNCTIONS
 def kinematic_plots(histos,xtitle,var,extra=""):
@@ -45,6 +48,14 @@ def kinematic_plots(histos,xtitle,var,extra=""):
     ----------
     histos: 
     """
+    # be sure we have a proper histo
+    try:
+        if len(filter(lambda x: not x[0].InheritsFrom("TH1"),\
+                histos.values())) > 0 : 
+            return
+    except AttributeError:
+        return 
+
     import ROOT 
     from PyAnUtils.plotstyles import atlasStyle
     __atlasstyle = atlasStyle()
@@ -71,8 +82,12 @@ def kinematic_plots(histos,xtitle,var,extra=""):
     if var == "eta":
         ymax = 1.3*ymax
     elif var == "pt":
-        ymin = 1e-5
+        ymin = 1e-7
         ymax = 1.3*ymax
+    #elif var == 'ntrk':
+    #    ymin = 1e-4
+    #    ymax = 1.3*ymax
+
     hframe = c.DrawFrame(histos[0][0].GetBinLowEdge(1),ymin,
             histos[0][0].GetXaxis().GetBinUpEdge(histos[0][0].GetNbinsX()),ymax)
     hframe.GetYaxis().SetTitle('A.U.')
@@ -155,7 +170,7 @@ class weight_related_histos_class(object):
     histograms for a MC sample, but ready to deal also the 
     weight-by-track-type case.
     """
-    def __init__(self,split_weight):
+    def __init__(self,split_weight,weight_multiplicity):
         """Auxiliary class to take of filling the histograms
         needed for the weights on a MC sample. Can deal with 
         the weight-by-track-type case
@@ -164,6 +179,8 @@ class weight_related_histos_class(object):
         ----------
         split_weight: bool,
             whether or not use different weight depending the track type
+        weight_multiplicity: bool,
+            whether or not weight the track multiplicity distribution as well
 
         Attributes
         ----------
@@ -182,14 +199,19 @@ class weight_related_histos_class(object):
             with the 'format' method and put 'weights' to be used by the __weights__
         __zhisto__: ROOT.TH1F
             the z-PV histogram
+        __ntrkhisto__: ROOT.TH1F
+            the track-multiplicity histogram
         __weights__: dict(str: TH2F)
             the final histograms already divided (DATA/MC)
         """
 
         self.__histos__ = {}
         self.__zhisto__ = None
+        self.__ntrkhisto__ = None
         self.__weights__= {}
         self.is_split   = split_weight
+        # whether of not we consider multiplicity to be weighting on
+        self.__weight_in_multiplicity__ = weight_multiplicity
         # is considered MC per default
         self.isMC       = False
         self.name_conversor = {}
@@ -232,8 +254,9 @@ class weight_related_histos_class(object):
             h2dw_names.append( h2dw_names[0].replace("{0}_pt","{0}_STD_pt") )
             self.name_conversor["weights_STD"] = h2dw_names[-1]
         zhisto_name = hname+"_{0}_zPV"
+        ntrkhisto_name = hname+"_{0}_Ntrk"
         # Check if the weights were already present in the file
-        for _hn in h2dw_names+[zhisto_name]:
+        for _hn in h2dw_names+[zhisto_name,ntrkhisto_name]:
             real_names = _hn.format("weights")
             self.__weights__[real_names] = get_from_file(rootfile,real_names)
             if self.__weights__[real_names] == None:
@@ -242,9 +265,14 @@ class weight_related_histos_class(object):
         self.isInitialized=True
         # if the weights are in the file, return True, the client should
         # skip further calculations (remember 2D for pt-eta plus the zPV)
-        if not force and ( (not self.is_split and len(self.__weights__) == 2) or
-                (self.is_split and len(self.__weights__) == 4) ):
-            return True
+        if not force:
+            if self.__weight_in_multiplicity__ and \
+                    ( (not self.is_split and len(self.__weights__) == 3) or 
+                                (self.is_split and len(self.__weights__) == 5) ):
+                return True
+            elif ( (not self.is_split and len(self.__weights__) == 2) or 
+                    (self.is_split and len(self.__weights__) == 4) ):
+                return True
         # otherwise instantiate the histograms
         for _hn in h2dw_names:
             self.__histos__[_hn] = ROOT.TH2F(_hn,"",100,float(ptranges[0]),float(ptranges[1]),100,-3.0,3.0)
@@ -252,6 +280,24 @@ class weight_related_histos_class(object):
         # and the zPV
         self.__zhisto__ = ROOT.TH1F(zhisto_name,"",100,-220.,220.)
         self.__zhisto__.Sumw2()
+        # and the track multiplicity
+        if self.__weight_in_multiplicity__:
+            self.__ntrkhisto__ = ROOT.TH1F(ntrkhisto_name,"",120,-0.5,120)
+            self.__ntrkhisto__.Sumw2()
+        else:
+            # a fake histogram to deal when we don't need this weight
+            # just define the dummy functions that can be used at some
+            # point
+            class fake_histo():
+                def __init__(self):
+                    pass
+                def Integral(self):
+                    return 1
+                def Scale(self,v):
+                    pass
+                def Fill(self,v,w):
+                    pass
+            self.__ntrkhisto__ = fake_histo()
 
         return False
 
@@ -272,6 +318,15 @@ class weight_related_histos_class(object):
         TH1F
         """
         return self.__zhisto__
+    
+    def get_ntrk_histo(self):
+        """Return the track-multiplicity histogram
+
+        Return
+        ------
+        TH1F
+        """
+        return self.__ntrkhisto__
     
     def get_weight_type_from_name(self,hname):
         """Return the track-type weight histogram give the name
@@ -321,7 +376,8 @@ class weight_related_histos_class(object):
     def normalize(self):
         """Normalize the histograms to 1
         """
-        for _h in self.__histos__.values() + [ self.__zhisto__ ]:
+
+        for _h in self.__histos__.values() + [ self.__zhisto__, self.__ntrkhisto__ ]:
             _h.Scale(1.0/_h.Integral())
 
     def zfill(self,zpv,w):
@@ -335,6 +391,18 @@ class weight_related_histos_class(object):
             the per-event weight
         """
         _dummy = self.__zhisto__.Fill(zpv,w)
+    
+    def ntrkfill(self,ntrk,w):
+        """Fill the track-multiplicity histogram
+
+        Parameters
+        ----------
+        ntrk: int
+            the number of tracks
+        w: float    
+            the per-event weight
+        """
+        _dummy = self.__ntrkhisto__.Fill(ntrk,w)
     
     def _extended_fill(self,pt,eta,_w,isLRT):
         """Fills the histograms for the weights: track-type also
@@ -373,13 +441,35 @@ class weight_related_histos_class(object):
         for j in xrange(pt.size()):
             self.__histos__[self.name_conversor["weights"]].Fill(pt[j]*1e-3,eta[j],_w)
 
+#[ XXX: TO BE PROMOTED ]
+def get_branch_attached_vector(_tree,branch_name):
+    """Activate the branch, and attach a vector to it, 
+    returning the vector
+
+    [XXX: FINALIZE AND USE IT!! ]
+    """
+    pythonize = lambda x: "ROOT.std.{0}".format(\
+            s.replace("<",'("').replace(">",'")()'))
+    branch = filter(lambda x: x.GetName() == branch_name,
+            _tree.GetListOfBranches())[0]
+    # get the vector object
+    vector = eval(pythonize(branch.GetClassName()))
+    _tree.SetBranchStatus(branch_name,1)
+    _tree.SetBranchAddress(branch_name,vector)
+    return vector
+
 def create_weights(_froot,_files,doplots,force,
         treename,ptranges,dijet_weight="dijet_weight",
-        split_weight=False):
-    """Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV and a 
-    new TTree 'weight_tree' vertex-wise for each MC sample. Note that
-    the Created histograms already contain the MC event weights of the 
-    dijet samples
+        split_weight=False,multiplicity_weight=False):
+    """Creates  the TH histograms  DATA/MC in Pt and Eta (2Dim) and zPV 
+    and a  new  TTree 'weight_tree'  vertex-wise  for  each MC  sample. 
+    Under request a  track  multiplicity  histogram is  also  obtained,
+    however some stringent cuts have to be applied to select the events
+    (the histogram is specific for the MinBias case, where the data and
+    MC distribution for energy in the event and multiplicity  are  very
+    different).    
+    Note that the  created  histograms already  contain  the  MC  event
+    weights of the dijet samples
 
     Parameters
     ----------
@@ -401,6 +491,9 @@ def create_weights(_froot,_files,doplots,force,
     split_weight: bool, [default: False]
         whether or not create different weights depending of the track
         type
+    multiplicity_weight: bool, [default: False]
+        whether or not create different weights depending of the track
+        multiplicity
 
     Return
     ------
@@ -423,14 +516,13 @@ def create_weights(_froot,_files,doplots,force,
     # Build the TH2F ready 
     # -- Name of the histograms with var
     histos_inst = {}
-    zhistos = {}
     # -- Name of the histograms DATA/MC_i
     hzw_name  = {}
     print "\033[1;34mINFO\033[1;m Collecting data..."
     # Run the data (i=0) the last one
     for (i,fname),legend in sorted(_files.iteritems(),reverse=True):
         # instantiate the histo classes and initialize
-        histos_inst[i] = (weight_related_histos_class(split_weight),legend)
+        histos_inst[i] = (weight_related_histos_class(split_weight,multiplicity_weight),legend)
         # if the weights are already in the file, the init function 
         # returns True
         if histos_inst[i][0].initialize(_froot[i],ptranges,force) and not doplots:
@@ -464,6 +556,9 @@ def create_weights(_froot,_files,doplots,force,
         t.SetBranchAddress(vars2weight[0],yv)
         zPV = ROOT.std.vector("float")()
         t.SetBranchAddress("zPV",zPV)
+        cutFlow =  ROOT.std.vector("int")()
+        t.SetBranchStatus("cutFlow",1)
+        t.SetBranchAddress("cutFlow",cutFlow)
         # -- weight-related
         if isDijetWeightBranch:
             t.SetBranchStatus(dijet_weight,1)
@@ -480,10 +575,19 @@ def create_weights(_froot,_files,doplots,force,
         else:
             # dummy isLRT
             isLRT = [ None ]
+        # Need some extra cuts?
+        if multiplicity_weight:
+            t.SetBranchStatus("trk_tight_primary")
+            tight_primary = ROOT.std.vector("int")()
+            t.SetBranchAddress("trk_tight_primary",tight_primary)
         # -- Setup access infrastructure DONE ----------------------------
         # --- Progress bar
-        point = float(t.GetEntries())/100.0
-        for k in xrange(t.GetEntries()):
+        if __DEBUG:
+            n_entries = 10000
+        else:
+            n_entries = t.GetEntries()
+        point = float(n_entries)/100.0
+        for k in xrange(n_entries):
             sys.stdout.write("\r\033[1;34m    \- INFO\033[1;m Reading tree"+\
                     " [ "+"\b"+\
                     str(int(float(k)/point)).rjust(3)+"%]")
@@ -494,6 +598,10 @@ def create_weights(_froot,_files,doplots,force,
             histos_inst[i][0].fill2D(xv,yv,dijet_weight_v[0],isLRT)
             if zPV.size() > 0:
                 histos_inst[i][0].zfill(zPV[0],dijet_weight_v[0])
+            # Be careful: highly dependent of the cut-flow used
+            # XXX: 
+            if cutFlow.size() == 7:
+                histos_inst[i][0].ntrkfill(isLRT.size(),dijet_weight_v[0])
         histos_inst[i][0].normalize()
         # IMPORTANT, resetting branch address not to point 
         # anymore to the vectors we used (otherwise it will 
@@ -526,6 +634,10 @@ def create_weights(_froot,_files,doplots,force,
                 xtitle='z_{PV} [mm]',
                 var='zPV'
                 )
+        kinematic_plots(dict(map(lambda (i,(_hist,leg)): (i,(_hist.get_ntrk_histo(),leg)),histos_inst.iteritems())),  
+                xtitle='N_{trk}',
+                var='ntrk'
+                )
 
     weights = {}
     # Build the weight histos 2D (pt, eta) + 1D zPV
@@ -547,9 +659,15 @@ def create_weights(_froot,_files,doplots,force,
             # previously used histos
             w_pt_eta_name = h2.GetName().format("weights")
             _hi.__weights__[w_type] = create_and_save_file_weights(_froot[i],hdata,h2,w_pt_eta_name)
+        # the zPV weights
         wz_name = _hi.get_zPV_histo().GetName().format("weights")
         _hi.__weights__["weights_zPV"] = create_and_save_file_weights(_froot[i],\
                 histos_inst[0][0].get_zPV_histo(),_hi.get_zPV_histo(),wz_name)
+        # the multiplicity weights
+        if type(_hi.get_ntrk_histo()) == ROOT.TH1F:
+            wntrk_name = _hi.get_ntrk_histo().GetName().format("weights")
+            _hi.__weights__["weights_Ntrk"] = create_and_save_file_weights(_froot[i],\
+                    histos_inst[0][0].get_ntrk_histo(),_hi.get_ntrk_histo(),wntrk_name)
         weights[i] = _hi.__weights__
     
     return weights
@@ -572,16 +690,57 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
     #from math import sqrt
     import sys
 
+    # [XXX:PROVISIONAL]      
+    #      The size the cutflow member has to be. 
+    #      This is only valid when the NTrack weights are activated 
+    #      but it could be very dangerous if the cutflow is changed
+    #      So a better approach should be taken.
+    # [XXX:PROVISIONAL]
+    CUTFLOWSIZE=7
+
     # get the histogram for the zPV
     zpv_hname = filter(lambda x: x.lower().find('zpv') !=-1, weightdict.keys())[0]
     zpv_hist = weightdict[zpv_hname]
+    # get the histogram for the Ntrk, if any
+    # The accessor variables are defined here to take care on the 
+    # possibility that they were not created. In that case, some fake
+    # objects mimicking the behaviour of the real ones, are created
+    try:
+        ntrk_hname = filter(lambda x: x.lower().find('ntrk') !=-1, weightdict.keys())[0]
+        ntrk_hist = weightdict[ntrk_hname]
+        # needed for the ntrkV (if any)
+        _dumm = t.GetEntry(0)
+        cutFlow = ROOT.std.vector("int")()
+        t.SetBranchAddress("cutFlow",cutFlow)
+    except IndexError:
+        # fake histo class
+        class fake_object():
+            def __init__(self):
+                pass
+            def Fill(self,_d,_dd):
+                pass
+            def FindBin(self,_d):
+                return 1
+            def GetBinContent(self,_d):
+                return 1.0
+            def clear(self):
+                pass
+            def size(self):
+                # [NOTE1]: be sure the cutFlow.size cut is always
+                #          fulfilled
+                return CUTFLOWSIZE
+        #  faking the histo
+        ntrk_hist = fake_object()
+        # and faking the variables
+        cutFlow   = fake_object()
+    
     # get the histograms for the pt_eta
-    kin_hist_dict = dict(filter(lambda (x,y): x.lower().find('zpv') ==-1,\
+    kin_hist_dict = dict(filter(lambda (x,y): x.lower().find('zpv') ==-1 and x.lower().find('ntrk') == -1,\
             weightdict.iteritems()))
 
-    # create the vectors
-    w = dict(map(lambda x: (x,ROOT.std.vector(float)()), kin_hist_dict.keys()))
-    
+    # create the vectors 
+    w = dict(map(lambda x: (x,ROOT.std.vector("float")()), kin_hist_dict.keys()))
+
     # a new tree
     ntree = ROOT.TTree(weight_treename,"")
     for weight_branchname,_v in w.iteritems():
@@ -595,38 +754,60 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         # assuming track specific weights (LRTValidation)
         eta_branch_name = "trk_eta"
         pt_branch_name  = "trk_pt"
-    etaV = getattr(t,eta_branch_name)
-    ptV  = getattr(t,pt_branch_name)
+    etaV = ROOT.std.vector("float")()
+    t.SetBranchAddress(eta_branch_name,etaV)
+    ptV = ROOT.std.vector("float")()
+    t.SetBranchAddress(pt_branch_name,ptV)
     # carefull event-wise variable
-    zpvV = getattr(t,'zPV')
+    zpvV = ROOT.std.vector("float")()
+    t.SetBranchAddress("zPV",zpvV)
+    # see Ntrk variable is initialize before, given its 
+    # job dependent nature
     # the MC event weight
     if hasattr(t,dijet_weight_branchname):
-        evtW_dijet_v = getattr(t,dijet_weight_branchname)
+        evtW_dijet_v = ROOT.std.vector("float")()
+        t.SetBranchAddress(dijet_weight_branchname,evtW_dijet_v)
     else:
         evtW_dijet_v = [ 1.0 ]
     # Start the loop on the tree
     # --- Progress bar :)
-    pointpb = float(t.GetEntries())/100.0
+    if __DEBUG:
+        n_entries = 10000
+    else:
+        n_entries = t.GetEntries()
+    
     kentry = 0
+    pointpb = float(n_entries)/100.0
     for curT in t:
+        if kentry >= n_entries:
+            break
         sys.stdout.write("\r\033[1;34mINFO\033[1;m -- filling weight branch"+\
                     " [ "+"\b"+\
                     str(int(float(kentry)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
-        kentry+=1
+        kentry += 1
         # intialize vectors
-        _dummy = map(lambda _v: _v.clear(),w.values())
+        _dummy = map(lambda _v: _v.clear(),w.values() )
         # event-wise, only present if there is more than one DV
         if zpvV.size() == 0:
             ntree.Fill()
             continue\
+        # event-wise, only present if  pass the cut flow (Ntrack weights 
+        # present only, otherwise this cut has no effect, see above 
+        # in [NOTE1]
+        if cutFlow.size() < CUTFLOWSIZE:
+            ntree.Fill()
+            continue
         # reserve for all 
         _dummy = map(lambda _v: _v.reserve(etaV.size()), w.values())
         # find event-wise weight
         zBin = zpv_hist.FindBin(zpvV[0])
         evtW_zPV = zpv_hist.GetBinContent(zBin)
+        ntrkBin = ntrk_hist.FindBin(etaV.size())
+        evtW_Ntrk = ntrk_hist.GetBinContent(ntrkBin)
         evtW_dijet = evtW_dijet_v[0]
-        evtW = evtW_zPV*evtW_dijet
+        evtW = evtW_zPV*evtW_Ntrk*evtW_dijet
+
         # and the event-wise MC generated weight 
         # and the vertex-wise
         for _pt,_eta in zip(ptV,etaV):
@@ -638,6 +819,34 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         ntree.Fill()
     print
     ntree.Write("", ROOT.TObject.kOverwrite)    
+
+# [XXX: PROVISIONAL - TO BE PROMOTED ]
+def extract_variables(string_thing,_t):
+    branch_list = map(lambda x: x.GetName(), _t.GetListOfBranches())
+    return filter(lambda x: x.find(string_thing) != -1, branch_list)
+
+def get_histo_from(variable,bins,xmin,xmax,_tree,cut):
+    """ FIXME: DOC
+    """
+    import ROOT
+
+    h = ROOT.TH1F(variable.replace("*","").replace("(","").replace(")","")\
+            +str(hash(_tree))+str(hash(cut)),"",bins,xmin,xmax)
+    # just using the variables defined in variable and cuts: 
+    # The Friend also needs to be treated!!
+    #_tree.SetBranchStatus("*",0)
+    #dum = map(lambda fname: _tree.SetBranchStatus(fname,1),
+    #        extract_variables(variable,_tree))
+    #dum = map(lambda fname: _tree.SetBranchStatus(fname,1),
+    #        extract_variables(cut,_tree))
+
+    _tree.Project(h.GetName(),variable,cut)
+    # Re-activating all branches
+    #_tree.SetBranchStatus("*",1)
+
+    return h
+
+
 
 def main_weights(datasample,mcsamples,doplots,force_weight_calc,
         treename,ptranges,**kwargs):
@@ -672,6 +881,8 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
         By activating this flag, the weights are going to be calculated
         per type-track and two extra weight trees weight_LRT weight_STD  
         will be stored (besides the usual "weight")
+    multiplicity_weight: bool, optional
+        flag to activate the storage of the weights by track multiplicity. 
     XXX-- NOT IMPLEMENTED YET---
     legend_#: str, optional
         the title to be used as legend per each MC sample
@@ -691,6 +902,12 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
         atlas_header_title='#sqrt{s}=13 TeV, #intLdt=33.3 fb^{-1}'
     if kwargs.has_key("split_weight") and kwargs["split_weight"]:
         split_weight=True
+    else:
+        split_weight=False
+    if kwargs.has_key("multiplicity_weight") and kwargs["multiplicity_weight"]:
+        multiplicity_weight=True
+    else:
+        multiplicity_weight=False
 
     # Create the dictionary with legends and indices
     fiddict = { (0,datasample): atlas_header_title }
@@ -717,7 +934,7 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
     if any(no_weights):
         # create the weights
         weights = create_weights(_froots,fiddict,doplots,force_weight_calc,treename,\
-                ptranges,split_weight=split_weight)
+                ptranges,split_weight=split_weight,multiplicity_weight=multiplicity_weight)
     else:
         if doplots:
             print '\033[1;33mWARNING\033[1;m Weights not needed to be recreated,'\
@@ -735,10 +952,16 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
             print "\033[1;34mINFO\033[1;m Creating weight branch for {0}".format(f.GetName())
             t = f.Get(treename)
             _dumm = t.GetEntry(0)
-            # including track-type weights
-            weight_branchnames = filter(lambda x: x.lower().find("zpv") == -1, weights[i].keys())
+            # including track-type weights (XXX: not sure what is the meaning of that. Check it)
+            weight_branchnames = filter(lambda x: x.lower().find("zpv") == -1 and\
+                    x.lower().find("ntrk") == -1, weights[i].keys())
             build_weight_branch(t,weights[i],weight_treename,weight_branchnames)
-            f.Close()
+        f.Close()
+
+
+
+
+
     # nothing else to do with the files?
     __dum = map(lambda _f:  _f.Close(),_froots.values())
 
@@ -1557,6 +1780,14 @@ if __name__ == '__main__':
     usage += "\n \033[1;34mweight\033[1;m\n"
     usage += "   1. Creates the TH histograms DATA/MC in Pt and Eta (2Dim) and zPV\n"
     usage += "   2. Creates a new TTree 'weight_tree' vertex-wise for each MC sample\n"
+    usage += "   OPTIONAL:\n"
+    usage += "      1.1. The pt and eta histograms can be split byt track category: STD \n"
+    usage += "           (standard reco.) or LRT (large radius)\n"
+    usage += "      1.2. Creates the TH1 histogram in track multiplicity\n"
+    usage += "      2.1. In case 1.1. has been called the weight_tree will contain\n"
+    usage += "           two extra branches: weights_STD and weights_LRT.\n"
+    usage += "      2.1. In case 1.2. has been called the track multiplicity (per \n"
+    usage += "           event) weight is absorbed in the weight branch(es)\n"
     usage += "\n \033[1;34mfitter\033[1;m\n"
     usage += "   1. Obtain the data from the input files and convert them to the RooFit\n"
     usage += "      framework\n"
@@ -1608,6 +1839,10 @@ if __name__ == '__main__':
                     ' procedure could produce wrong results [Default: 0.0 30.0]')
     parser_weight.add_argument('--split-weight',action='store_true',dest='split_weight',
             help='Whether to weight and normalize regarding the track type or not')
+    parser_weight.add_argument('--multiplicity-weight',action='store_true',dest='multiplicity_weight',
+            help='Whether to weight and normalize regarding the track multiplicity or not')
+    parser_weight.add_argument('--debug',action='store_true',dest='debug',
+            help='Use only a portion of available event. For developement purposes')
     parser_weight.set_defaults(which='weight',doplots=False,force=False,
             treename="KsTree_KsSampleCreator",ptranges=[0.0,30.0])
 
@@ -1667,15 +1902,20 @@ if __name__ == '__main__':
 
 
     args = parser.parse_args()
-    
+
     # can set it up now, once the help was sent
     setcolors()
 
     if args.which == 'weight':
+        # are you debugging?
+        if args.debug:
+            __DEBUG = True
+            print "\033[1;31mDEBUG MODE ACTIVATED\033[1;m Not using all the events"
         # create the weights and the plots if necessary
         main_weights(args.dataname,args.mcsamples,args.doplots,\
                 args.force,args.treename,args.ptranges,\
-                split_weight=args.split_weight)
+                split_weight=args.split_weight,
+                multiplicity_weight=args.multiplicity_weight)
     elif args.which == 'fitter':
         for rfilename in args.rootfilename:
             if not os.path.isfile(rfilename):
