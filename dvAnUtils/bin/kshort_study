@@ -745,6 +745,9 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
     ntree = ROOT.TTree(weight_treename,"")
     for weight_branchname,_v in w.iteritems():
         ntree.Branch(weight_branchname,_v)
+    # and the event_weight
+    evt_w = ROOT.std.vector("float")()
+    ntree.Branch("event_weight",evt_w)
 
     # get the address of the needed variables
     _dummy = t.GetEntry(0)
@@ -787,15 +790,11 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         sys.stdout.flush()
         kentry += 1
         # intialize vectors
-        _dummy = map(lambda _v: _v.clear(),w.values() )
+        _dummy = map(lambda _v: _v.clear(),w.values()+[evt_w] )
         # event-wise, only present if there is more than one DV
-        if zpvV.size() == 0:
-            ntree.Fill()
-            continue\
-        # event-wise, only present if  pass the cut flow (Ntrack weights 
         # present only, otherwise this cut has no effect, see above 
         # in [NOTE1]
-        if cutFlow.size() < CUTFLOWSIZE:
+        if zpvV.size() == 0 or cutFlow.size() < CUTFLOWSIZE:
             ntree.Fill()
             continue
         # reserve for all 
@@ -807,6 +806,8 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         evtW_Ntrk = ntrk_hist.GetBinContent(ntrkBin)
         evtW_dijet = evtW_dijet_v[0]
         evtW = evtW_zPV*evtW_Ntrk*evtW_dijet
+        # fill the event weight
+        evt_w.push_back(evtW)
 
         # and the event-wise MC generated weight 
         # and the vertex-wise
