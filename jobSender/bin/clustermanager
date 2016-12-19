@@ -42,6 +42,9 @@ if __name__ == '__main__':
             default='',help="Space separated extra options to be delivered to the asetup")
     sendopt.add_option("-q","--queue",action="store",dest="queue",\
             help="Name of the queue to be send the job [Default: None]")
+    sendopt.add_option("--extra-opts",action="store",dest="extra_opts",\
+            help="Extra options to send the job (ex: '-l mem=5gb,vmem=10gb')."\
+            " Note that the options should be surrounded by \" [Default: None]")
     sendopt.add_option("-i","--inputfiles",action="store",dest="filenames",\
             help="Input root files (can be regular expresion)")
     sendopt.add_option("-n","--njobs",action="store",dest="njobs",\
@@ -112,7 +115,7 @@ if __name__ == '__main__':
                     evtmax=opt.evtsmax)
         else:
             raise AttributeError('-t option variable not recognized: "{0}"'.format(opt.type_we))
-        cluster = cluster_builder(simulate=opt.dryrun,queue=opt.queue)
+        cluster = cluster_builder(simulate=opt.dryrun,queue=opt.queue,extra_opts=opt.extra_opts)
         # Job instantation
         js   = job(cluster,we_instance)
         js.preparejobs(opt.asetup_options)

@@ -396,7 +396,11 @@ class taucluster(clusterspec):
             queue = kw['queue']
         else:
             queue = 'N'
-        self.extraopt  += [ '-q', queue , '-V' ]
+        self.extraopt += [ '-q', queue , '-V' ]
+        # Extra options to accomodate
+        if kw.has_key('extra_opts'):
+            for _at in kw['extra_opts'].split(" "):
+                self.extraopt.append(_at)
     
     def simulatedresponse(self,action):
         """ DO NOT USE this function, just for debugging proporses
