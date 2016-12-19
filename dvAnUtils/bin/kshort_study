@@ -575,11 +575,6 @@ def create_weights(_froot,_files,doplots,force,
         else:
             # dummy isLRT
             isLRT = [ None ]
-        # Need some extra cuts?
-        if multiplicity_weight:
-            t.SetBranchStatus("trk_tight_primary")
-            tight_primary = ROOT.std.vector("int")()
-            t.SetBranchAddress("trk_tight_primary",tight_primary)
         # -- Setup access infrastructure DONE ----------------------------
         # --- Progress bar
         if __DEBUG:
@@ -598,8 +593,8 @@ def create_weights(_froot,_files,doplots,force,
             histos_inst[i][0].fill2D(xv,yv,dijet_weight_v[0],isLRT)
             if zPV.size() > 0:
                 histos_inst[i][0].zfill(zPV[0],dijet_weight_v[0])
-            # Be careful: highly dependent of the cut-flow used
-            # XXX: 
+            # Be careful: highly dependent of the cut-flow used, but
+            # on the other hand, just needed for the minbias...
             if cutFlow.size() == 7:
                 histos_inst[i][0].ntrkfill(isLRT.size(),dijet_weight_v[0])
         histos_inst[i][0].normalize()
@@ -689,14 +684,6 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
     import ROOT
     #from math import sqrt
     import sys
-
-    # [XXX:PROVISIONAL]      
-    #      The size the cutflow member has to be. 
-    #      This is only valid when the NTrack weights are activated 
-    #      but it could be very dangerous if the cutflow is changed
-    #      So a better approach should be taken.
-    # [XXX:PROVISIONAL]
-    CUTFLOWSIZE=7
 
     # get the histogram for the zPV
     zpv_hname = filter(lambda x: x.lower().find('zpv') !=-1, weightdict.keys())[0]
@@ -793,8 +780,7 @@ def build_weight_branch(t,weightdict,weight_treename,weight_branchnames,
         _dummy = map(lambda _v: _v.clear(),w.values()+[evt_w] )
         # event-wise, only present if there is more than one DV
         # present only, otherwise this cut has no effect, see above 
-        # in [NOTE1]
-        if zpvV.size() == 0 or cutFlow.size() < CUTFLOWSIZE:
+        if zpvV.size() < 1:
             ntree.Fill()
             continue
         # reserve for all 
