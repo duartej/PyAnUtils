@@ -203,7 +203,7 @@ def getevt(filelist,**kw):
 
 def bookeepingjobs(jobinstance):
     """.. function::bookeepingjobs(listjobs) 
-    stores  the list of the jobdescription instances found in 'listjobs' and 
+    stores  the list of the taskdescription instances found in 'listjobs' and 
     which can be accessed using the accesingjobsinfo functions. 
     The function is useful to snapshot the status of the jobs
     amongst other information
@@ -217,7 +217,7 @@ def bookeepingjobs(jobinstance):
 
 def accessingjobsinfo(filename='.presentjobs'):
     """.. function::accessingjobsinfo(filename) 
-    retrieve a shelve object containing jobdescription objects
+    retrieve a shelve object containing taskdescription objects
     """
     import shelve
     d = shelve.open(filename)
@@ -228,51 +228,61 @@ def accessingjobsinfo(filename='.presentjobs'):
     
     return jobinstance
 
-class jobdescription(object):
-    """..class:: jobdescription
-
-    Class to store all the information relative to a job.
-    This class is used by the "job" class, which keep a list
-    of the tasks (jobdescription instances). The class provides 
-    the following information (in parenthesis it is indicated 
-    which class is the responsible of filling the datamember):
-     * path: the path where the job has been build (jobspec)
-     * script: the script to be sended to the cluster (jobspec)
+class taskdescription(object):
+    """Class to store all the information relative to a task 
+    of a job. This class is used by the "job" class, which 
+    keep a list of the tasks (taskdescription instances). The 
+    class provides the following information (in parenthesis 
+    it is indicated which class is the responsible of filling
+    the datamember):
+     * path: the path where the job has been build (workenv)
+     * script: the script to be sended to the cluster (workenv)
      * ID: job id in the cluster (clusterspec)
      * status: job status in the cluster (clusterspec)
-     * index: index of the job (regarding jobspec class)
+     * index: index of the job (regarding workenv class)
     """
     def __init__(self,**kw):
-        """..class:: jobdescription
+        """..class:: taskdescription
 
         Class to store all the information relative to a job.
         This class is used by the "job" class, which keep a list
-        of the tasks (jobdescription instances). The class provides 
+        of the tasks (taskdescription instances). The class provides 
         the following information (in parenthesis it is indicated 
         which class is the responsible of filling the datamember):
-         * path: the path where the job has been build (jobspec)
-         * script: the script to be sended to the cluster (jobspec)
-         * ID: job id in the cluster (clusterspec)
-         * status: job status in the cluster (clusterspec)
-         * index: index of the job (regarding jobspec class)
+
+        Attributes
+        ----------
+        path: str,
+            the path where the job has been build (workenv)
+        script: str, 
+            the script to be sended to the cluster (workenv)
+        parentID: int,
+            the job id in the batch system
+        ID: int[int], 
+            the total ID of the task (parentID[index])
+        status: str,
+            job status in the cluster (clusterspec)
+        index: str,
+            index of the job (regarding workenv class)
         """
         # I would need to check that the instance is build only
         # throught the buildfromcluster or buildfromjob methods
         # FIXME
-        self.path   = None
-        self.script = None
-        self.ID     = None
-        self.status = None
-        self.state  = None
-        self.index  = None
+        self.path    = None
+        self.script  = None
+        self.parentID= None
+        self.ID      = None
+        self.status  = None
+        self.state   = None
+        self.index   = None
         for _var,_value in kw.iteritems():
             setattr(self,_var,_value)
 
     def __str__(self):
         """..method ::__str__(self)
-        representation of a jobdescription
+        representation of a taskdescription
         """
-        repr = "<jobdescription instance>: Index:%i, ID:%i, state:%s (%s)" % \
+        repr = "<taskdescription instance>: Index:%i, ID:%s, state:%s (%s)" % \
                 (self.index,self.ID,self.state,self.status)
         return repr
 
@@ -281,29 +291,51 @@ STATUSCODE  = { 'fail': 31, 'ok': 32}
 STATESORDER = [ None, 'configured', 'submitted', 'running', 'finished', 'aborted' ]
 NLETTERS = max(map(lambda x: len(str(x)),STATESORDER))
 class job(object):
-    """
-    Class encapsulating a job. A job IS a "clusterspec" 
-    plus a "workenv", i.e. a work to be performed in a cluster.
-    The class provides the following information (in parenthesis 
-    it is indicated which class is the responsible of filling 
-    the datamember):
-     * path: the path where the job has been build (jobspec)
-     * script: the script to be sended to the cluster (jobspec)
+    """Class encapsulating a job. A job IS a "clusterspec" plus a 
+    "workenv", i.e. a work to be performed in a cluster and a list
+    of subjobs (or tasks, i.e: taskdescription). The class provides
+    the following information (in parenthesis it is indicated which
+    class is the responsible of filling the datamember):
+     * path: the path where the job has been build (workenv)
+     * script: the script to be sended to the cluster (workenv)
      * ID: job id in the cluster (clusterspec)
      * status: job status in the cluster (clusterspec)
-     * index: index of the job (regarding jobspec class)
+     * index: index of the job (regarding workenv class)
     """
     def __init__(self,cluster,we,**kw):
-        """...class:: job(cluster,we) 
+        """Any job is defined by a cluster (the batch system where
+        to send the job), a `workenv` (the type of job) and a list
+        of taskdescription instances (the actual information of 
+        every task in the cluster).
 
-        :param cluster: the cluster where the job is sent
-        :type  cluster: clusterspec concrete class instance
-        :param      we: the type of work the user want to perform
-        :type       we: workenv concrete class instance
+        Parameters
+        ----------
+        cluster clusterfactory.clustermanager 
+            the concrete clustermanager instance
+        we: workenvfactory.workenv
+            the concrete workenv instance describing what type of jobs
+            the user want to send
+
+        Attributes
+        ----------
+        cluster: clusterfactor.clustermanager concrete instance
+        weinst:  woekenvfactory.workenv concrete instance
+        tasklist: list(taskdescription)
+        jobID: list(int), the parent ID of the job (subsequent 
+            retries are appended in the list)
+        taskstates: dict(int: (str,str)), for each sub-job, the
+            state and the status is given
         """
         self.cluster = cluster
         self.weinst  = we
         self.tasklist= None
+        self.jobID   = []
+        # XXX: TO BE PROPAGATE FROM THE taskdescription
+        self.script  = None
+        self.path    = None
+        # XXX: OPTIONAL: as sum of its sub-tasks
+        self.status  = None
+        self.state   = None
         # Dict with keys are ID of the tasks, given the state and 
         # status, therefore no possibility to any task to be with 
         # two different states
@@ -314,32 +346,31 @@ class job(object):
             setattr(self,_var,_value)
 
     def preparejobs(self,asetup_extra):
-        """..method ::preparejobs()
-
-        wrapper to the workenv method. The tasks
-        are initialized
+        """Wrapper to the workenv method. The tasks are initialized
         """
         self.tasklist = self.weinst.preparejobs(asetup_extra)
+        # obtain the path and the script (common to all tasks)
+        self.script = self.tasklist[0].script
+        self.path   = self.tasklist[0].path
 
     def submit(self):
-        """..method ::submit
-
-        wrapper to the clusterspec method
+        """Submit the array job, wrapper to the clusterspec method
         """
-        for jb in self.tasklist:
-            self.cluster.submit(jb)
+        self.cluster.submit(self)
     
-    def resubmit(self,joblist):
-        """..method ::resubmit(joblist) 
+    def resubmit(self,tasklist):
+        """Resubmitting unsuccessful jobs. Note that only 'finished'
+        with 'fail' status, 'aborted' and 'configured' states are 
+        sensitives to be resubmitted. 
 
-        wrapper to the clusterspec resubmit method.
-        Note that only 'finished' with 'fail' status,
-        'aborted' and 'configured' states are sensitives 
-        to be resubmitted
+        Parameters
+        ----------
+        tasklist: list(int)
+            the index of the tasks to be submitted
         """
         # Get the list of jobs-to-be-resubmitted (jtbr) from the 
         # ('finished','fail') or 'aborted' ones
-        jobindexlist = map(lambda x: x.index,joblist)
+        jobindexlist = map(lambda x: x.index,tasklist)
         abortedindexlist  = map(lambda x: x,self.getdictof('aborted').keys())
         configuredindexlist  = map(lambda x: x,self.getdictof('configured').keys())
         finishedindexlist  = map(lambda x: x[0],\
@@ -358,19 +389,21 @@ class job(object):
             message += " state, resubmit has no sense in them, so they're ignored..."
             print message
 
-        toresubmit = filter(lambda x: x.index in toresubmitindices,joblist)
+        toresubmit = filter(lambda x: x.index in toresubmitindices,tasklist)
+        if len(toresubmit) == 0:
+            return
         print "Resubmitting jobs..."
-        for ik in toresubmit:
-            self.cluster.submit(ik)
+        self.cluster.submit(self,toresubmit)
 
-    def reconfigure(self,joblist):
-        """..method ::reconfigure(joblist) 
+    def reconfigure(self,tasklist):
+        """Just convert a job from 'None' state to 'configure' state
 
-        reconfigure method, just convert a job from 'None' state
-        to 'configure' state
+        Parameters
+        ----------
+        tasklist: list(jobsender.taskdescriptor)
         """
         # Get the list of jobs-to-be-reconfigured (jtbrc) from the submitted ones
-        jobindexlist = map(lambda x: x.index,joblist)
+        jobindexlist = map(lambda x: x.index,tasklist)
         indexlist  = map(lambda x: x,self.getdictof(None).keys())
         toreconfigureindices = list(set(jobindexlist).intersection(indexlist))
         # Eliminated from the jtbrc list the above ones
@@ -385,7 +418,7 @@ class job(object):
             message += " no sense in them, so they're ignored..."
             print message
 
-        toreconfigure = filter(lambda x: x.index in toreconfigureindices,joblist)
+        toreconfigure = filter(lambda x: x.index in toreconfigureindices,tasklist)
         print "Reconfiguring ..."
         for ik in toreconfigure:
             # FIXME: Sure? or must it be called from the self.workenv.reconfigure ??
@@ -393,15 +426,17 @@ class job(object):
             ik.state = 'configured'
             ik.status= 'ok'        
 
-    def kill(self,joblist):
-        """..method ::kill(joblist) 
-
-        wrapper to the clusterspec kill method.
+    def kill(self,tasklist):
+        """Wrapper to the clusterspec kill method.
         Note that only 'submitted' and 'running'
         states are sensitives to killing
+
+        Parameters
+        ----------
+        tasklist: list(jobsender.taskdescriptor)
         """
         # Get the list of jobs-to-be-killed (jtbk) from the submitted ones
-        jobindexlist = map(lambda x: x.index,joblist)
+        jobindexlist = map(lambda x: x.index,tasklist)
         sbindexlist  = map(lambda x: x,self.getdictof('submitted').keys())
         tokillsb = list(set(jobindexlist).intersection(sbindexlist))
         # Eliminated from the jtbk list the submitted ones (picked them up above)
@@ -421,53 +456,56 @@ class job(object):
             print message
 
         tokillindices = tokillsb+tokillrn
-        tokill = filter(lambda x: x.index in tokillindices,joblist)
+        tokill = filter(lambda x: x.index in tokillindices,tasklist)
         print "Killing them..."
         for ik in tokill:
             self.cluster.kill(ik)
 
 
     def getlistoftasks(self):
-        """..method ::getlistoftasks() -> jobdescriptionlist
+        """Getter to the taskdescription list of instances, 
+        i.e. the sub-jobs
 
-        return the jobdescription list of instances, i.e. the jobs
+        Return
+        ------
+        list(jobsender.taskdescriptor)
         """
         return self.tasklist
 
     def update(self):
-        """..method ::update() 
-        update the state and status of the job by looking at
-        the state of its tasks
+        """Update the state and status of the tasks
         """
         import sys
 
-        i=0
         point = float(len(self.tasklist))/100.0
         # Just checking in those with possible changing of state
         checkabletasks = filter(lambda x: x.state != 'finished' or
                 x.state != 'aborted',self.tasklist)
-        for jdsc in checkabletasks:
-            i+=1
+        for (i,task) in enumerate(checkabletasks):
             # Progress bar 
             sys.stdout.write("\r\033[1;34mINFO\033[1;m Checking job states "+\
                     "[ "+"\b"+str(int(float(i)/point)).rjust(3)+"%]")
             sys.stdout.flush()
             # end progress bar
-            self.cluster.getnextstate(jdsc,self.weinst.checkfinishedjob)
-            self.taskstates[jdsc.index] = (jdsc.state,jdsc.status)
+            self.cluster.getnextstate(task,self.weinst.checkfinishedjob)
+            self.taskstates[task.index] = (task.state,task.status)
         print
 
     def showstates(self):
-        """..method ::showstates()
-        print a summary of the states and status of the tasks
+        """Print a summary of the states and status of the tasks
         """
         #self.__cacheupdate__()
         message = "\033[1;34mINFO\033[1;m List of tasks with state:\n"
         for state in STATESORDER:
-            listof = self.getlistofindices(state)
+            listof,totaltasks = self.getlistofindices(state)
             if listof:
-                preformat = " + %"+str(NLETTERS)+"s: %s\n"
-                message += preformat % (str(state).upper(),listof)
+                decimal_length=len(str(len(self.tasklist)/10))+1
+                preformat = " + [#{0} tasks] {1}: {2}\n".\
+                        format("{0:"+str(decimal_length)+"d}",\
+                         "{1:>"+str(NLETTERS)+"s}","{2}")
+                message += preformat.format(totaltasks,state.upper(),listof)
+                #preformat = " + [%"+str(len(self.tasklist)+"i tasks] %"+str(NLETTERS)+"s: %s\n"
+                #message += preformat % (len(listof),str(state).upper(),listof)
         print message
         
     def getdictof(self,state):
@@ -478,17 +516,18 @@ class job(object):
         return dict(l)
    
     def getlistofindices(self,state):
-        """ ..getlistofindices(state) -> '[ind1, ind2, ...]'
+        """ ..getlistofindices(state) -> '[ind1, ind2, ...]', total_number
         return a string-like list of all the tasks indexs with the
         given state. Note that the status is coded in color (red is fail,
         green is ok)
         """
         prestatedict = self.getdictof(state)
         if len(prestatedict) == 0:
-            return None
+            return None,None
         # As all the prestatedict contains the same state, let's skip this 
         # redundance: { 'id': st, ...} 
         statedict = dict( map(lambda (id,(ste,stus)): (id,stus), prestatedict.iteritems()) )
+        total_number = len(statedict)
         # Obtaining a list of paired values. The edge are defining intervals
         # of numbers with the same state, note that all the operations are
         # done with the tuples (id,status)
@@ -516,7 +555,7 @@ class job(object):
 
         message = premessage[:-1]+"]"
 
-        return message
+        return message,total_number
 
 
 

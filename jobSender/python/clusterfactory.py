@@ -23,45 +23,75 @@ from abc import ABCMeta
 from abc import abstractmethod
 
 class clusterspec(object):
-    """ ..class:: clusterspec
-    
-    Class to deal with an specific cluster (cern/tau/...) cluster.
-    This base class serves as placeholder for the concrete implementation
-    of a cluster commands, environments,...
-    
-    Virtual Methods:
-     * simulatedresponse (debugging method)
-     * getjobidfromcommand
-     * getstatefromcommandline
-     * done
-     * failed
-     """
+    """Abstract class to deal with the cluster interaction. The
+    commands to send and monotoring jobs to a batch systems are
+    encapsulated here. The concrete classes are defined depending
+    the batch manager system and therefore, the specific commands
+    to be used, the specific environment variables, ...
+    """
     __metaclass__ = ABCMeta
     
-    def __init__(self,**kw):#joblist,**kw):
-        """ ..class:: jobspec
+    def __init__(self,array_variable,**kw):#joblist,**kw):
+        """Abstract class to deal with the cluster interaction. The
+        commands to send and monotoring jobs to a batch systems are
+        encapsulated here. The concrete classes are defined depending
+        the batch manager system and therefore, the specific commands
+        to be used, the specific environment variables, ...
         
-        Class to deal with an specific cluster (cern/tau/...) cluster.
-        This base class serves as placeholder for the concrete implementation
-        of a cluster commands, environments,...
-        
-        Virtual Methods (to be implemented in the concrete classes):
-         * simulatedresponse (debugging method)
-         * getjobidfromcommand    
-         * getstatefromcommandline
-         * failed
-         * done
+        Attributes
+        ----------
+        simulate: bool
+            whether is a simulation or not
+        array_variable: str (NOT IMPLEMENTED, VIRTUAL ATTRIBUTE)
+            the name of the environment variable used by the batching
+            system to identify an array job
+        logout_file: str
+            the name of the log output file
+        logerr_file: str
+            the name of the log error file
+        sendcom: str (NOT IMPLEMENTED, VA)
+            the name of the command from the batching system to send
+            jobs
+        extraopt: list(str)
+            the options which populate the `sendcom` command
+        arrayopt: [str,str]  (NOT IMPLEMENTED, VA)
+            the option to deal with the array jobs in the batch system
+        arrayformat: (NOT IMPLEMENTED, VA)
+            the format of the task jobs (the argument of the array job
+            option in the cluster batch system sender command)
+        statecom: str (NOT IMPLEMENTED, VA)
+            the name of the command to monitor the jobs
+        killcom: str (NOT IMPLEMENTED, VA)
+            the name of the command to kill jobs
+        ID: int  [TO BE DEPRECATED, ACTUALLY NOT NEEDED]
+            the identification number of the job in the batch system
+
+        Virtual methods
+        ---------------
+        simulatedresponse: debugging function
+        getjobidfromcommand: extract the job identifier 
+        getstatefromcommandline: extract the job state
+        failed
+        done
         """
         # If true, do not interact with the cluster, just for debugging
         self.simulate = False
         if kw.has_key('simulate'):
             self.simulate=kw['simulate']
-        # Name of the standard outputfile
-        self.logout_file = "STDOUT"
+        # Name of the standard and error outputfile
+        self.array_variable = array_variable
+        self.logout_file = "STDOUT.{0}".format(self.array_variable)
+        self.logerr_file = "STDERR.{0}".format(self.array_variable)
         # Actual command to send jobs
         self.sendcom     = None
         # Extra parameters/option to the command 
-        self.extraopt    = [ '-o', self.logout_file, '-e', 'STDERR']
+        self.extraopt    = [ '-o', self.logout_file, '-e', self.logerr_file]
+        # The option to be used for the array jobs
+        self.arrayopt = None
+        # The generic format for the array option (i.e, the format for 
+        # the arrayopt[0]).  The format will contain a {0} in order to 
+        # be used to set the tasks
+        self.arrayformat = None
         # Actual command to obtain the state of a job
         self.statecom    = None
         # Actual command to kill a job
@@ -69,33 +99,46 @@ class clusterspec(object):
         # List of jobdescription instances
         #self.joblist     = joblist
 
-    # DEPRECATED
-    #def submit(self):
-    #    """..method:: submit()
-    #    wrapper to submit(jobdsc) function, using all the
-    #    jobs in the list
-    #    """
-    #    for jb in self.joblist:
-    #        self.submitjob(jb)
-    
-    def submit(self,jobdsc):
-        """...method:: submit(jobdsc)
-         
-        function to send the jobs to the cluster.
+    def submit(self,jobdsc,taskstosend=None):
+        """Send an array job to the cluster.
 
-        :param jobdsc: jobdescription instance to be submitted
-        :type  jobdsc: jobdescription instance
+        Parameters
+        ----------
+        jobdsc: jobSender.jobssender.job instance
+            the job to be submitted
+        tasklist: list(jobsender.taskdescriptor) [Default: None)
+            the list of tasks to be sent. If None, 
+            it will send `self.njobs` tasks
         """
         from subprocess import Popen,PIPE
         import os
         cwd = os.getcwd()
         # Going to directory of sending
         os.chdir(jobdsc.path)
+        taskslist = []
+        # Filling the missing array info: ("-option","cluster_dep({0}-{1})")
+        if taskstosend:
+            taskslist = map(lambda x: x.index,taskstosend)
+            # Only the given tasks
+            self.arrayopt[1] = self.arrayformat.format("%PLACE")
+            for _task in taskstosend:
+                self.arrayopt[1] = self.arrayopt[1].replace("%PLACE",\
+                        "{0},%PLACE".format(_task.index))
+            # remove last comma and %PLACE
+            self.arrayopt[1] = self.arrayopt[1].replace(",%PLACE","")
+        else:
+            # No tasks listed, so all the available
+            taskslist = map(lambda x: x.index,jobdsc.tasklist)
+            self.arrayopt[1] = self.arrayopt[1].format(jobdsc.tasklist[0].index,\
+                    jobdsc.tasklist[-1].index)
         # Building the command to send to the shell:
         command = [ self.sendcom ]
         for i in self.extraopt:
             command.append(i)
-        command.append(jobdsc.script+'.sh')
+        for _i in self.arrayopt:
+            command.append(_i)
+        # FIXME: 
+        command.append(jobdsc.script+'.sh') 
         # Send the command
         if self.simulate:
             p = self.simulatedresponse('submit')
@@ -108,42 +151,55 @@ class clusterspec(object):
             os.chdir(cwd)
             print "\033[1;31mERROR SENDING JOB TO CLUSTER\033[1;m {0}".format(message)
             self.ID = None
-            jobdsc.ID = self.ID
-            jobdsc.status = 'fail'
+            jobdsc.jobID.append(self.ID)
+            for task in jobdsc.tasklist:
+                task.status = 'fail'
             os.chdir(cwd)
             return
         ## The job-id is released in the message:
         self.ID = self.getjobidfromcommand(p[0])
-        jobdsc.ID = self.ID
-        print "INFO:"+str(jobdsc.script)+'_'+str(jobdsc.index)+\
-                " submitted with cluster ID:"+str(self.ID)
-        # Updating the state and status of the job
-        jobdsc.state  = 'submitted'
-        jobdsc.status = 'ok'
+        jobdsc.jobID.append(self.ID)
+        # FIXME: the compact list of jobs
+        print "\033[1;34mINFO\033[1;m: Array job {0} submitted with cluster "\
+                "ID: {1}".format(jobdsc.script,jobdsc.jobID[-1])
+        if len(jobdsc.jobID) !=1: 
+            print "\033[1;34mINFO\033[1;m: Retrying JOB ({0}-attempt)".\
+                    format(len(jobdsc.jobID))
+        print "\033[1;34mINFO\033[1;m: with {0} tasks: {1}".format(len(taskslist),taskslist)
+        # Updating the state and status of the job tasks
+        for task in jobdsc.tasklist:
+            task.parentID = jobdsc.jobID[-1]
+            task.ID       = "{0}[{1}]".format(task.parentID,task.index)
+            task.state  = 'submitted'
+            task.status = 'ok'
         # Coming back to the original folder
         os.chdir(cwd)
     
-    def getnextstate(self,jobdsc,checkfinishedjob):
-        """..method:: getnextstate() -> nextstate,nextstatus
-        check the state and status of the job.
-
-        The life of a job follows the state workflow
-        None -> configured -> submitted -> running -> finished
+    def getnextstate(self,taskdsc,checkfinishedjob):
+        """Check the state and status of the job. The life of a job 
+        follows the state workflow
+            None -> configured -> submitted -> running -> finished
         Per each possible state (and status), just a few commands
-        can be used:
+        can be used.
+
+        Parameters
+        ----------
+        taskdsc: jobsender.taskdescriptor
+        checkfinishedjob: workenvfactory.workenv.checkfinishedjob 
+            the function to check if the job has finished or not
         """
-        if not jobdsc.state:
+        if not taskdsc.state:
             print "Job not configured yet, you should call the"\
                     " jobspec.preparejobs method"            
-        elif jobdsc.state == 'submitted' or jobdsc.state == 'running':
-            jobdsc.state,jobdsc.status=self.checkstate(jobdsc)
-            if jobdsc.state == 'finished':
+        elif taskdsc.state == 'submitted' or taskdsc.state == 'running':
+            taskdsc.state,taskdsc.status=self.checkstate(taskdsc)
+            if taskdsc.state == 'finished':
                 if self.simulate:
-                    self.status = self.simulatedresponse('finishing')
+                    taskdsc.status = self.simulatedresponse('finishing')
                 else:
-                    jobdsc.status = checkfinishedjob(jobdsc,self.logout_file)
-        #elif (jobdsc.state == 'finished' and jobdsc.status = 'fail') \
-        #        or jobdsc.state == 'aborted':
+                    taskdsc.status = checkfinishedjob(taskdsc,self.logout_file)
+        #elif (taskdsc.state == 'finished' and taskdsc.status = 'fail') \
+        #        or taskdsc.state == 'aborted':
 
     @abstractmethod
     def simulatedresponse(self,action):
@@ -176,7 +232,7 @@ class clusterspec(object):
         from subprocess import Popen,PIPE
         import os
         if jobdsc.state == 'submitted' or jobdsc.state == 'running':
-            command = [ self.statecom, str(jobdsc.ID) ]
+            command = [ self.statecom, "{0}".format(jobdsc.ID) ]
             if self.simulate:
                 p = self.simulatedresponse('checking')
             else:
@@ -238,12 +294,12 @@ class cerncluster(clusterspec):
     Concrete implementation of the clusterspec class dealing with
     the cluster at cern (usign lxplus as UI)
     """
-    def __init__(self,**kw):#joblist=None,**kw):
+    def __init__(self,**kw):
         """..class:: cerncluster 
         Concrete implementation of the clusterspec class dealing with
         the cluster at cern (usign lxplus as UI)
         """
-        super(cerncluster,self).__init__(**kw)#joblist,**kw)
+        super(cerncluster,self).__init__("${$LSB_JOBINDEX}",**kw)#joblist,**kw)
         self.sendcom   = 'bsub'
         self.statecom  = 'bjobs'
         self.killcom   = 'bkill'
@@ -252,6 +308,9 @@ class cerncluster(clusterspec):
         else:
             queue = '8nh'
         self.extraopt  += [ '-q', queue ]
+        # And the array option: 
+        self.arrayformat = '"arrayJob[{0}]"'
+        self.arrayopt = ['-J', self.arrayformat.format("{0}-{1}") ]
     
     def simulatedresponse(self,action):
         """..method:: simulatedresponse() -> clusterresponse
@@ -294,9 +353,13 @@ class cerncluster(clusterspec):
 
 
     def getjobidfromcommand(self,p):
-        """..method:: getjobidfromcommand()
-        function to obtain the job-ID from the cluster command
-        when it is sended (using sendcom)
+        """Obtain the job-ID from the output returned by the `bsub` 
+        command
+
+        Parameters
+        ----------
+        p: str
+            the ouput of the `bsub` command 
         """
         return int(p.split('Job')[-1].split('<')[1].split('>')[0])
     
@@ -337,23 +400,6 @@ class cerncluster(clusterspec):
             print message
             return 'aborted','fail'
     
-    # DEPRECATED
-    #def setjobstate(self,jobds,command):
-    #    """..method:: setjobstate(jobds,action) 
-    #    establish the state (and status) of the jobds ('jobdescription' 
-    #    instance) associated to this clusterspec instance, depending
-    #    of the 'command' being executed
-    #    """
-    #    if command == 'configuring':
-    #        self.joblist[-1].state   = 'configured'
-    #        self.joblist[-1].status  = 'ok'
-    #        self.joblist[-1].jobspec = self
-    #    elif command == 'submitting':
-    #        self.joblist[-1].state   = 'submit'
-    #        self.joblist[-1].status  = 'ok'
-    #    else:
-    #        raise RuntimeError('Unrecognized command "%s"' % command)
-    
     def failed(self):
         """..method:: failed()
          
@@ -388,7 +434,7 @@ class taucluster(clusterspec):
             queue in `qstat -Q -f`
 
         """
-        super(taucluster,self).__init__(**kw)#joblist,**kw)
+        super(taucluster,self).__init__("${PBS_ARRAYID}",**kw)
         self.sendcom   = 'qsub'
         self.statecom  = 'qstat'
         self.killcom   = 'qdel'
@@ -398,9 +444,12 @@ class taucluster(clusterspec):
             queue = 'N'
         self.extraopt += [ '-q', queue , '-V' ]
         # Extra options to accomodate
-        if kw.has_key('extra_opts'):
+        if kw.has_key('extra_opts') and kw["extra_opts"]:
             for _at in kw['extra_opts'].split(" "):
                 self.extraopt.append(_at)
+        # And the array option and format
+        self.arrayformat = "{0}"
+        self.arrayopt = [ "-t", self.arrayformat.format("{0}-{1}") ]
     
     def simulatedresponse(self,action):
         """ DO NOT USE this function, just for debugging proporses
@@ -484,7 +533,7 @@ class taucluster(clusterspec):
         # new attribute
         if not hasattr(self,"server_name"):
             self.server_name = '.'.join(p.split('.')[1:])
-        return int(p.split('.')[0])
+        return int(p.split('.')[0].replace("[]",""))
     
     def getstatefromcommandline(self,p):
         """parse the state of a job

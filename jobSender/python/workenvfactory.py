@@ -225,22 +225,21 @@ class blindjob(workenv):
           
         """
         import os
-        from jobssender import jobdescription
+        from jobssender import taskdescription
 
         cwd=os.getcwd()
 
         jdlist = []
+        # create the folder to send the jobs
+        foldername = "%sJob_%s" % (self.typealias,self.jobname)
+        os.mkdir(foldername)
+        os.chdir(foldername)
+        # create the local bashscript
+        self.createbashscript()#i=i)
         for i in xrange(self.njobs):
-            # create a folder
-            foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
-            os.mkdir(foldername)
-            os.chdir(foldername)
-            # create the local bashscript
-            self.createbashscript(i=i)
-            # Registring the jobs in jobdescription class instances
-            jdlist.append( 
-                    jobdescription(path=foldername,script=self.jobname,index=i)
-                    )
+            # some task dependent stuff should go here
+            jdlist.append(taskdescription(path=foldername,\
+                    script=self.jobname,index=i))
             jdlist[-1].state   = 'configured'
             jdlist[-1].status  = 'ok'
             jdlist[-1].workenv = self
@@ -250,9 +249,12 @@ class blindjob(workenv):
         return jdlist
 
     def createbashscript(self,**kw):
-        """..method:: creatdbashscript()
+        """Just copy the bash script to the working directory
 
-        the bash script is copied in the local path      
+        Note that this `blind` jobs are intended to be managed
+        by the user, therefore all references to the array job
+        variable should be there, for instance ${PBS_ARRAYID} 
+        for a PBS cluster system or %I in a LSF cluster system.
         """
         import shutil
         import os
@@ -264,17 +266,17 @@ class blindjob(workenv):
         # And re-point: WHY??
         #self.bashscript=localcopy
 
-        with open(localcopy,"rw") as f:
-            lines = f.readlines()
-        f.close()
-        newlines = map(lambda l: l.replace("%i",str(kw["i"])), lines)
+        #with open(localcopy,"rw") as f:
+        #    lines = f.readlines()
+        #f.close()
+        #newlines = map(lambda l: l.replace("%i",str(kw["i"])), lines)
 
-        with open(localcopy,"w") as f1:
-            f1.writelines(newlines)
-        f1.close()
-        # make it executable
-        st = os.stat(localcopy)
-        os.chmod(localcopy, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH )
+        #with open(localcopy,"w") as f1:
+        #    f1.writelines(newlines)
+        #f1.close()
+        ## make it executable
+        #st = os.stat(localcopy)
+        #os.chmod(localcopy, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH )
 
     # DEPRECATED!!
     #def getlistofjobs(self):
@@ -282,7 +284,7 @@ class blindjob(workenv):
     #    return the list of prepared jobs, if any, None otherwise
 
     #    :return: List of jobs prepared
-    #    :rtype:  list(jobdescription)        
+    #    :rtype:  list(taskdescription)        
     #    """
     #    return self.joblist
 
@@ -622,7 +624,7 @@ class athenajob(workenv):
           
         """
         import os
-        from jobssender import jobdescription
+        from jobssender import taskdescription
 
         cwd=os.getcwd()
 
@@ -637,9 +639,9 @@ class athenajob(workenv):
             self.createbashscript(setupfolder=usersetupfolder,\
                     version=athenaversion,\
                     gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
-            # Registring the jobs in jobdescription class instances
+            # Registring the jobs in taskdescription class instances
             jdlist.append( 
-                    jobdescription(path=foldername,script=self.jobname,index=i)
+                    taskdescription(path=foldername,script=self.jobname,index=i)
                     )
             jdlist[-1].state   = 'configured'
             jdlist[-1].status  = 'ok'
@@ -656,7 +658,7 @@ class athenajob(workenv):
     #    return the list of prepared jobs, if any, None otherwise
 
     #    :return: List of jobs prepared
-    #    :rtype:  list(jobdescription)        
+    #    :rtype:  list(taskdescription)        
     #    """
     #    return self.joblist
 
