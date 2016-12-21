@@ -80,8 +80,10 @@ class clusterspec(object):
             self.simulate=kw['simulate']
         # Name of the standard and error outputfile
         self.array_variable = array_variable
-        self.logout_file = "STDOUT.{0}".format(self.array_variable)
-        self.logerr_file = "STDERR.{0}".format(self.array_variable)
+        # XXX: Check if in the LSB cluster, the array index is
+        # automatically attached (as in the PBS cluster)
+        self.logout_file = "STDOUT"
+        self.logerr_file = "STDERR"
         # Actual command to send jobs
         self.sendcom     = None
         # Extra parameters/option to the command 

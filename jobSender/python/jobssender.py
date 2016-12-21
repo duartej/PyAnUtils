@@ -348,7 +348,7 @@ class job(object):
     def preparejobs(self,asetup_extra):
         """Wrapper to the workenv method. The tasks are initialized
         """
-        self.tasklist = self.weinst.preparejobs(asetup_extra)
+        self.tasklist = self.weinst.preparejobs(self.cluster.array_variable,asetup_extra)
         # obtain the path and the script (common to all tasks)
         self.script = self.tasklist[0].script
         self.path   = self.tasklist[0].path
@@ -520,6 +520,8 @@ class job(object):
         return a string-like list of all the tasks indexs with the
         given state. Note that the status is coded in color (red is fail,
         green is ok)
+
+        XXX: IMPLEMENT TO DEAL WITH A LIST (InSTEAD Of a STATE)
         """
         prestatedict = self.getdictof(state)
         if len(prestatedict) == 0:
@@ -556,6 +558,5 @@ class job(object):
         message = premessage[:-1]+"]"
 
         return message,total_number
-
 
 

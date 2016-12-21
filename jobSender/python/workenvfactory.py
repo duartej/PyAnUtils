@@ -64,6 +64,10 @@ class workenv(object):
         # Name of the script to be used to send jobs including the suffix 
         self.scriptname  = bashscriptname+'.sh'
 
+        # The name of the auxiliary files containing the 
+        # EventMax SkipEvent information per array job
+        self.auxiliary_info_filename="auxfile"
+
         # set the relevant variables used to check the kind
         # of job is
         self.__setneedenv__()
@@ -128,7 +132,7 @@ class workenv(object):
                 "__setneedenv__()" % (self.__class__.__name__))
 
     @abstractmethod
-    def preparejobs(self,extrabash=''):
+    def preparejobs(self,array_job_var,extrabash=''):
         """..method:: preparejobs()
         
         function to modify input scripts, make the cluster steer
@@ -214,7 +218,7 @@ class blindjob(workenv):
         # just dummy
         self.relevantvar = [ ('PWD','echo') ] 
 
-    def preparejobs(self,extra_asetup=''):
+    def preparejobs(self,array_job_var,extra_asetup=''):
         """..method:: preparejobs() -> listofjobs
         
         main function which builds the folder structure
@@ -244,7 +248,7 @@ class blindjob(workenv):
             jdlist[-1].status  = 'ok'
             jdlist[-1].workenv = self
             #self.setjobstate(jdlist[-1],'configuring') ---> Should I define one?
-            os.chdir(cwd)
+        os.chdir(cwd)
 
         return jdlist
 
@@ -502,14 +506,27 @@ class athenajob(workenv):
             f.writelines(lines)
 
 
-    def preparejobs(self,extra_asetup=''):
-        """..method:: preparejobs() -> listofjobs
-        
-        main function which builds the folder structure
-        and the needed files of the job, in order to be
-        sent to the cluster
+    def preparejobs(self,array_job_var,extra_asetup=''):
+        """Main function which builds the folder structure and the 
+        needed files of the job, in order to be sent to the cluster
+        This includes the creation of auxiliary files (two column,
+        space separated) with the "EvtMax SkipEvent" information
+        per array job, (see `auxiliary_info_filename` attribute)
+
+        Parameters
+        ----------
+        array_job_var: str
+            the environment variable which the batch system uses to 
+            identify each task of a job (${SOMETHING})
+        extra_asetup:
+
+        Return
+        ------
+        tasklist: list(jobsender.taskdescription)
         """
         import os
+        from jobssender import taskdescription
+        
         # Obtaining some Athena related-info (asetup,release,...)
         usersetupfolder = self.getuserasetupfolder()
         athenaversion = os.getenv('AtlasVersion')
@@ -521,8 +538,49 @@ class athenajob(workenv):
             self.jobOption_modification()
 
         # setting up the folder structure to send the jobs
-        # including the bashscripts
-        return self.settingfolders(usersetupfolder,athenaversion,compiler,extra_asetup)
+        # including the bashscript and the auxiliary file
+        cwd=os.getcwd()
+
+        # create a folder
+        foldername = "%sJob_%s" % (self.typealias,self.jobname)
+        os.mkdir(foldername)
+        os.chdir(foldername)
+        # Extract the events info per array task
+        jdlist = []
+        i=0
+        auxfile_info = ""
+        for (skipevts,nevents) in self.skipandperform:
+            # create a folder
+            #foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
+            #os.mkdir(foldername)
+            #os.chdir(foldername)
+            ## create the local bashscript
+            #self.createbashscript(setupfolder=usersetupfolder,\
+            #        version=athenaversion,\
+            #        gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
+            # the auxiliary file info
+            auxfile_info += "{0} {1}\n".format(nevents,skipevts)
+            # Registring the jobs in taskdescription class instances
+            jdlist.append(taskdescription(path=foldername,\
+                    script=self.jobname,index=i) )
+            jdlist[-1].state   = 'configured'
+            jdlist[-1].status  = 'ok'
+            jdlist[-1].workenv = self
+            #os.chdir(cwd)
+            i+=1
+        # create the auxiliary file and fill it 
+        f=open(self.auxiliary_info_filename,"w")
+        f.write(auxfile_info)
+        f.close()
+        # point the real name
+        self.auxiliary_info_filename = os.path.abspath(self.auxiliary_info_filename)
+        # create the local bashscript
+        self.createbashscript(array_variable=array_job_var,\
+                setupfolder=usersetupfolder,version=athenaversion,\
+                gcc=compiler,extra_asetup=extra_asetup)
+        os.chdir(cwd)
+
+        return jdlist
 
 
     def getuserasetupfolder(self):
@@ -555,16 +613,25 @@ class athenajob(workenv):
         return platform.python_compiler().lower().replace(' ','').replace('.','')[:-1]
 
     def createbashscript(self,**kw):
-        """..method:: createbashscript 
-         
-        function which creates the specific bashscript(s). Depend on the 
-        type of job
+        """Creates the specific bashscript(s). Note that this
+        function is assuming the existence of an auxiliary 
+        files (two column, space separated) which contain the 
+        "EventMax SkipEvents" per array job
+
+        Parameters (FIXME)
+        ----------
+        array_variable:
+        setupfolder:
+        version:
+        gcc:
+        extra_setup:
         """
         import os
         import datetime,time
 
         class placeholder(object):
             def __init__(self):
+                self.array_variable=None
                 self.setupfolder=None
                 self.version=None
                 self.gcc =None
@@ -594,18 +661,29 @@ class athenajob(workenv):
         bashfile += 'cd -\n'
         # Create a guard against malformed Workers (those which uses the same $HOME)
         bashfile += 'tmpdir=`mktemp -d`\ncd $tmpdir;\n\n'
+        # Extract the number of skip and max events from the auxiliary file 
+        bashfile += 'NLINE=`echo $(({0}+1))`\n'.format(ph.array_variable)
+        bashfile += 'EVTPAR=`head -{0} {1} |tail -1`\n'.format("${NLINE}",\
+                self.auxiliary_info_filename)
+        bashfile += 'EVTPARARRAY=(${EVTPAR})\n'
+        bashfile += 'EVTMAX=${EVTPARARRAY[0]}\n'
+        bashfile += 'SKIPEVT=${EVTPARARRAY[1]}\n'
         if self.isTFJ:
+            outfile = self.outputfile.replace(".root","-{0}.root".format(ph.array_variable))
             # Transformation job
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
             bashfile += '{0} --fileValidation False --maxEvents {1}'\
                     ' --skipEvents {2} --ignoreErrors \'True\' {3} --input{4}File {5} '\
-                    '--output{6}File {7}'.format(self.tf_command,ph.nevents,ph.skipevts,self.tf_parameters,
-                    self.tf_input_type,' '.join(self.inputfiles),self.tf_output_type,self.outputfile)
+                    '--output{6}File {7}'.\
+                    format(self.tf_command,"${EVTMAX}","${SKIPEVT}",self.tf_parameters,\
+                        self.tf_input_type,\
+                        ' '.join(self.inputfiles),\
+                        self.tf_output_type,outfile)
         else:
             # athena.py jobOption.py job
             bashfile += 'cp %s .\n' % self.joboption
-            bashfile +='athena.py -c "SkipEvents=%i; EvtMax=%i; FilesInput=%s;" ' % \
-                    (ph.skipevts,ph.nevents,str(self.inputfiles))
+            bashfile += 'athena.py -c "SkipEvents=${SKIPEVT}; EvtMax=${EVTMAX}; '\
+                    'FilesInput={0};" '.format(self.inputfiles)
             # Introduce a new key with any thing you want to introduce in -c : kw['Name']='value'
             bashfile += self.joboption+" \n"
         bashfile +="\ncp *.root %s/\n" % os.getcwd()
@@ -616,51 +694,70 @@ class athenajob(workenv):
         f.close()
         os.chmod(self.scriptname,0755)
 
-    def settingfolders(self,usersetupfolder,athenaversion,gcc,extra_asetup=''):
-        """..method:: settingfolders()
-        create the folder structure to launch the jobs: for each job
-        a folder is created following the notation:
-          * AthenaJob_self.jobname_jobdsc.index
-          
+    def settingfolders(self,array_job_var,usersetupfolder,\
+            athenaversion,gcc,extra_asetup=''):
+        """Create the folder structure to launch the jobs. This
+        includes the creation of auxiliary files (two column,
+        space separated) with the "EvtMax SkipEvent" information
+        per array job, (see `auxiliary_info_filename` attribute)
+
+        Parameters
+        ----------
+        array_job_var: str
+            the environment variable which the batch system uses to 
+            identify each task of a job (${SOMETHING})
+        usersetupfolder:
+        athenaversion:
+        gcc: 
+
+        extra_asetup:
+
+        Return
+        ------
+        tasklist: list(jobsender.taskdescription)
         """
         import os
         from jobssender import taskdescription
 
         cwd=os.getcwd()
 
+        # create a folder
+        foldername = "%sJob_%s" % (self.typealias,self.jobname)
+        os.mkdir(foldername)
+        os.chdir(foldername)
+        # create the local bashscript
+        self.createbashscript(array_variable=array_job_var,\
+                varsetupfolder=usersetupfolder,version=athenaversion,\
+             gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
         jdlist = []
         i=0
+        auxfile_info = ""
         for (skipevts,nevents) in self.skipandperform:
             # create a folder
-            foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
-            os.mkdir(foldername)
-            os.chdir(foldername)
-            # create the local bashscript
-            self.createbashscript(setupfolder=usersetupfolder,\
-                    version=athenaversion,\
-                    gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
+            #foldername = "%sJob_%s_%i" % (self.typealias,self.jobname,i)
+            #os.mkdir(foldername)
+            #os.chdir(foldername)
+            ## create the local bashscript
+            #self.createbashscript(setupfolder=usersetupfolder,\
+            #        version=athenaversion,\
+            #        gcc=gcc,skipevts=skipevts,nevents=nevents,extra_asetup=extra_asetup)
+            # the auxiliary file info
+            auxfile_info += "{0} {1}\n".format(nevents,skipevts)
             # Registring the jobs in taskdescription class instances
-            jdlist.append( 
-                    taskdescription(path=foldername,script=self.jobname,index=i)
-                    )
+            jdlist.append(taskdescription(path=foldername,\
+                    script=self.jobname,index=i) )
             jdlist[-1].state   = 'configured'
             jdlist[-1].status  = 'ok'
             jdlist[-1].workenv = self
             #self.setjobstate(jdlist[-1],'configuring') ---> Should I define one?
             os.chdir(cwd)
             i+=1
+        # create the auxiliary file and fill it 
+        f=open(self.auxiliary_info_filename,"w")
+        f.write(bashfile)
+        f.close()
 
         return jdlist
-
-    # DEPRECATED!!
-    #def getlistofjobs(self):
-    #    """..method:: getlistofjobs() -> [ listofjobs ]
-    #    return the list of prepared jobs, if any, None otherwise
-
-    #    :return: List of jobs prepared
-    #    :rtype:  list(taskdescription)        
-    #    """
-    #    return self.joblist
 
     @staticmethod
     def checkfinishedjob(jobdsc,logfilename):
@@ -672,6 +769,7 @@ class athenajob(workenv):
 
         FIXME: Static class do not have make use of the self?
         """
+        import glob
         #if self.isTFJ:
         #    succesjobcode=['PyJobTransforms.main','trf exit code 0']
         #else:
@@ -684,10 +782,14 @@ class athenajob(workenv):
         # outfile
         #logout = os.path.join(folderout,"STDOUT")
         # -- defined as logfilename
-        logout = os.path.join(jobdsc.path,logfilename)
-        if not os.path.isfile(logout):
-            if DEBUG:
-                print "Not found the logout file '%s'" % logout
+        logout_pre = os.path.join(jobdsc.path,logfilename)
+        # Note we are dealing with array jobs, we need to find 
+        # the related job array index (covering the case where 
+        # there is . (dot) or - (dash) or both)
+        try: 
+            logout = glob.glob("{0}[.-]{1}".format(logout_pre,jobdsc.index))[0]
+        except IndexError:
+            print "Not found the logout file '%s'" % logout_pre
             return 'fail'
 
         f = open(logout)
