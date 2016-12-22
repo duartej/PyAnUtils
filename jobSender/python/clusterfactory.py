@@ -22,6 +22,53 @@
 from abc import ABCMeta
 from abc import abstractmethod
 
+def get_compact_list(tasklist):
+    """ Return a string-like list of all the components of the list
+    compactified by joining the edges of a list of consecutives 
+    numbers, and printed between a dash (-). For non-consecutive 
+    numbers, a comman (,) separate the two closest numbers.
+    
+    Example
+    -------
+    Given a list 
+        [1,2,3,4,5,45,48,51,52,53,60], 
+    this function will return: 
+        '1-5,45,48,51-53,60'
+
+    Parameters
+    ----------
+    tasklist: list(int)
+
+    Return
+    ------
+    str: the compactified version of the tasklist
+    """
+    # Obtaining a list of paired values. The edge are defining intervals
+    # of numbers with the same state, note that all the operations are
+    # done with the tuples (id,status)
+    idinit = sorted(tasklist)[0]
+    currentinit = idinit
+    currentlast = currentinit
+    compactlist = []
+    for id in sorted(tasklist)[1:]:
+        if id-1 != currentlast:
+            compactlist.append( (currentinit,currentlast) )
+            currentinit = id
+        currentlast = id
+    # last set
+    compactlist.append( (currentinit,currentlast) )
+    
+    premessage = ""
+    for (idi,idf) in compactlist:
+        if idi == idf:
+            premessage+= "{0},".format(idi)
+        else:
+            premessage+= "{0}-{1},".format(idi,idf)
+
+    message = premessage[:-1]
+
+    return message
+
 class clusterspec(object):
     """Abstract class to deal with the cluster interaction. The
     commands to send and monotoring jobs to a batch systems are
@@ -122,12 +169,7 @@ class clusterspec(object):
         if taskstosend:
             taskslist = map(lambda x: x.index,taskstosend)
             # Only the given tasks
-            self.arrayopt[1] = self.arrayformat.format("%PLACE")
-            for _task in taskstosend:
-                self.arrayopt[1] = self.arrayopt[1].replace("%PLACE",\
-                        "{0},%PLACE".format(_task.index))
-            # remove last comma and %PLACE
-            self.arrayopt[1] = self.arrayopt[1].replace(",%PLACE","")
+            self.arrayopt[1] = self.arrayformat.format(get_compact_list(taskslist))
         else:
             # No tasks listed, so all the available
             taskslist = map(lambda x: x.index,jobdsc.tasklist)
@@ -167,7 +209,8 @@ class clusterspec(object):
         if len(jobdsc.jobID) !=1: 
             print "\033[1;34mINFO\033[1;m: Retrying JOB ({0}-attempt)".\
                     format(len(jobdsc.jobID))
-        print "\033[1;34mINFO\033[1;m: with {0} tasks: {1}".format(len(taskslist),taskslist)
+        print "\033[1;34mINFO\033[1;m: with {0} tasks: {1}".format(len(taskslist),\
+                get_compact_list(taskslist))
         # Updating the state and status of the job tasks
         for task in jobdsc.tasklist:
             task.parentID = jobdsc.jobID[-1]

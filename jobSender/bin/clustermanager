@@ -15,6 +15,7 @@ from jobSender.clusterfactory import cluster_builder
 from jobSender.jobssender     import bookeepingjobs,accessingjobsinfo,job
 
 if __name__ == '__main__':
+    # FIXME: Migration ot ArgumentParser
     from optparse import OptionParser,OptionGroup
     import os
 
