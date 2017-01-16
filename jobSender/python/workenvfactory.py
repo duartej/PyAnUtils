@@ -789,9 +789,9 @@ class athenajob(workenv):
         try: 
             logout = glob.glob("{0}[.-]{1}".format(logout_pre,jobdsc.index))[0]
         except IndexError:
-            print 
-            print "Not found the logout file '{0}.{1}'".format(logout_pre,jobdsc.index)
-            print
+            #print 
+            #print "Not found the logout file '{0}.{1}'".format(logout_pre,jobdsc.index)
+            #print
             return 'fail'
 
         f = open(logout)
