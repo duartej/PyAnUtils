@@ -573,7 +573,8 @@ def create_weights(_froot,_files,doplots,force,
             isLRT = ROOT.std.vector("int")()
             t.SetBranchAddress("trk_isLRT",isLRT)
         else:
-            # dummy isLRT
+            # dummy isLRT: FIXME:: SHOULD BE CHANGE, otherwise crash when
+            #                      using .size
             isLRT = [ None ]
         # -- Setup access infrastructure DONE ----------------------------
         # --- Progress bar
@@ -595,8 +596,10 @@ def create_weights(_froot,_files,doplots,force,
                 histos_inst[i][0].zfill(zPV[0],dijet_weight_v[0])
             # Be careful: highly dependent of the cut-flow used, but
             # on the other hand, just needed for the minbias...
-            if cutFlow.size() == 7:
-                histos_inst[i][0].ntrkfill(isLRT.size(),dijet_weight_v[0])
+            # FIXME::: THIS SHOULD BE CHANGE! NOT PROTABLE BETWEEN THE TWO WAYS OF
+            #          WORKING
+            #if cutFlow.size() == 7:
+            #    histos_inst[i][0].ntrkfill(isLRT.size(),dijet_weight_v[0])
         histos_inst[i][0].normalize()
         # IMPORTANT, resetting branch address not to point 
         # anymore to the vectors we used (otherwise it will 
