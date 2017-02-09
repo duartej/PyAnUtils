@@ -964,9 +964,9 @@ def main_weights(datasample,mcsamples,doplots,force_weight_calc,
 # GLOBAL DEFINITION:
 # the radius regions mapped to an int (used as identifier)
 # Defined as global to be coherently used along all the subcommands
-#RADIUS_REGIONS = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)} # mm
+RADIUS_REGIONS = { 0: (5.,10.), 1: (10.,15.), 2: (15.,25), 3: (25.,40.)} # mm
 #RADIUS_REGIONS = { 0: (5.,30), 1: (30.,45.), 2: (45,300)} # mm
-RADIUS_REGIONS = { 0: (5.,30), 1: (30.,300.)} # mm, only inside and outside beampipe
+#RADIUS_REGIONS = { 0: (5.,30), 1: (30.,300.)} # mm, only inside and outside beampipe
 ETA_REGIONS = { 'BARREL': '|#eta| < 1', 'ENDCAP': '|#eta| #geq 1' }
 
 def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_tree"):
@@ -998,6 +998,8 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
         
     """
     import ROOT
+    import os
+    import re
     trees   = dict(map(lambda x: (x.GetName(),rootfile.Get(x.GetName())), 
                 filter(lambda x: x.GetName().find(treename)==0,
                         rootfile.GetListOfKeys()) ))
@@ -1009,9 +1011,13 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
         namedata = 'data'
     else:
         weights  = "weights"
-        # WARNING: the files should follow the naming convention!
-        #namedata = rootfile.GetName().split(".")[0].split("_")[-1]
-        namedata = rootfile.GetName().split(".")[1]
+        # WARNING: the files should follow the naming convention! At least
+        # Contains the word JZ
+        try:
+            namedata = re.match( r'.*_(JZ\dW).*', os.path.basename(rootfile.GetName()), re.M|re.I).group(1)
+        except RuntimeError:
+            raise RuntimeError("The filename '{0}' does not contains the "\
+                    " dijet name in it, i.e. JZ[]W".format(os.path.basename(rootfile.GetName())))
 
     # Problem ... FIXME Should be changed
     if len(trees) > 1:
@@ -1044,7 +1050,7 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
                 # FIXME!! PROVISIONAL .. se puede hacer de otra forma... (I mean using unbinned)
                 _prov  = ROOT.TH1F("{0}_region_{1}_{2}_py".format(namedata,reg,eta_reg),"",100,350.,650.)
                 _dummy =  tree.Project(_prov.GetName(),"{0}mass".format(prefix),\
-                        "({4}fligthDistanceTransverse > {0} && {4}fligthDistanceTransverse < {1} && {3})*{2}".format(\
+                        "({4}decayLength > {0} && {4}decayLength < {1} && {3})*{2}".format(\
                                         l,h,weights,etacut,prefix))
                 roodatahist["{0}_region{1}:{2}".format(namedata,reg,eta_reg)] = \
                         ROOT.RooDataHist("data_{0}_region{1}_{2}".format(namedata,reg,eta_reg),
@@ -1123,7 +1129,7 @@ def plot(result,mass,model,data,plotname,title="",isData=False):
     AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.88)
     AtlasUtils.ROOT.myText(0.34,0.88,1,"Internal")
     if isData:
-        AtlasUtils.ROOT.myText(0.2,0.81,1,"#sqrt{s} = 13 TeV, #intLdt=3.2 fb^{-1}") 
+        AtlasUtils.ROOT.myText(0.2,0.81,1,"#sqrt{s} = 13 TeV, #intLdt=6.8 fb^{-1}") 
     else:
         # assume that in the plotname there is info about the sample
         dijet=plotname.split("'")[0].split("_")[-1].split(".")[0]
@@ -1232,11 +1238,16 @@ def build_fit(filename,treename="KsTree_KsSampleCreator",isData=False,plotsuffix
 
     import os
     import ROOT
-    #if isData:
-    #    dtype='_'.join(filename.split(".")[1].split('_')[-2:])
-    #else:
-    #    dtype=filename.split(".")[0].split("_")[-1]
-    dtype = filename.split(".")[1]
+    import re
+    if isData:
+        dtype = filename.split(".")[1]
+    else:
+        # Just extract JZxW
+        try:
+            dtype = re.match( r'.*_(JZ\dW).*', os.path.basename(filename), re.M|re.I).group(1)
+        except AttributeError:
+            raise RuntimeError("The filename '{0}' does not contains the "\
+                    " dijet name in it, i.e. JZ[]W".format(filename))
     fworkfile = 'kshort_fits_{0}.root'.format(dtype)
     # FIXME: ACTIVATE that when working
     # First of all, if the file is already there, just get it
@@ -1466,7 +1477,7 @@ def double_ratio_plot(dijet_name,dRdict,eta_region,plotname='KsRatio'):
     h.Draw("SAME")
     AtlasUtils.ROOT.ATLAS_LABEL(0.2,0.85)
     AtlasUtils.ROOT.myText(0.34,0.85,1,"Internal")
-    AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=3.2 fb^{-1}")
+    AtlasUtils.ROOT.myText(0.2,0.75,1,"#sqrt{s}=13 TeV, #intLdt=6.8 fb^{-1}")
     AtlasUtils.ROOT.myText(0.7,0.65,1,ETA_REGIONS[eta_region])
     c.SaveAs("{0}_{1}_{2}.png".format(plotname,eta_region,dijet_name))
     c.SaveAs("{0}_{1}_{2}.pdf".format(plotname,eta_region,dijet_name))
@@ -1554,7 +1565,7 @@ pb  = 1.0
 fb  = 1e-3*pb
 invfb=1./fb
 
-def get_weighted_sum(kshort_region_dict,metadata_name,lumi=3.2*invfb):
+def get_weighted_sum(kshort_region_dict,metadata_name,lumi=6.81*invfb):
     """Obtain the weighted sum of the dijet samples. For each samples, 
     the number of events are weighted to the same luminosity:
 
@@ -1576,7 +1587,7 @@ def get_weighted_sum(kshort_region_dict,metadata_name,lumi=3.2*invfb):
     metadata_name: str
         the name where to find the metadata file created with the 
         'metadata' subcommand
-    lumi: float, [default: 3.2 invfb]
+    lumi: float, [default: 6.8 invfb]
         the luminosity to be weighted
 
     Returns
