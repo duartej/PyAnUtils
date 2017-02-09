@@ -1010,7 +1010,8 @@ def data_harvest_tree(rootfile,obs,treename,regions,isData,tree_weight="weight_t
     else:
         weights  = "weights"
         # WARNING: the files should follow the naming convention!
-        namedata = rootfile.GetName().split(".")[0].split("_")[-1]
+        #namedata = rootfile.GetName().split(".")[0].split("_")[-1]
+        namedata = rootfile.GetName().split(".")[1]
 
     # Problem ... FIXME Should be changed
     if len(trees) > 1:
@@ -1231,10 +1232,11 @@ def build_fit(filename,treename="KsTree_KsSampleCreator",isData=False,plotsuffix
 
     import os
     import ROOT
-    if isData:
-        dtype='_'.join(filename.split(".")[0].split('_')[-2:])
-    else:
-        dtype=filename.split(".")[0].split("_")[-1]
+    #if isData:
+    #    dtype='_'.join(filename.split(".")[1].split('_')[-2:])
+    #else:
+    #    dtype=filename.split(".")[0].split("_")[-1]
+    dtype = filename.split(".")[1]
     fworkfile = 'kshort_fits_{0}.root'.format(dtype)
     # FIXME: ACTIVATE that when working
     # First of all, if the file is already there, just get it
