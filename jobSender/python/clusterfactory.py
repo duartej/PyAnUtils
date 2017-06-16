@@ -22,35 +22,103 @@
 from abc import ABCMeta
 from abc import abstractmethod
 
+
+def get_compact_list(tasklist):
+    """ Return a string-like list of all the components of the list
+    compactified by joining the edges of a list of consecutives 
+    numbers, and printed between a dash (-). For non-consecutive 
+    numbers, a comma (,) separate the two closest numbers.
+    Example
+    -------
+    Given a list 
+        [1,2,3,4,5,45,48,51,52,53,60], 
+    this function will return: 
+        '1-5,45,48,51-53,60'
+
+    Parameters
+    ----------
+    tasklist: list(int)
+
+    Return
+    ------
+    str: the compactified version of the tasklist
+    """
+    # Obtaining a list of paired values. The edge are defining intervals
+    # of numbers with the same state, note that all the operations are
+    # done with the tuples (id,status)
+    idinit = sorted(tasklist)[0]
+    currentinit = idinit
+    currentlast = currentinit
+    compactlist = []
+    for id in sorted(tasklist)[1:]:
+        if id-1 != currentlast:
+            compactlist.append( (currentinit,currentlast) )
+            currentinit = id
+        currentlast = id
+    # last set
+    compactlist.append( (currentinit,currentlast) )
+    premessage = ""
+    for (idi,idf) in compactlist:
+        if idi == idf:
+            premessage+= "{0},".format(idi)
+        else:
+            premessage+= "{0}-{1},".format(idi,idf)
+    message = premessage[:-1]
+        
+    return message
+
+
 class clusterspec(object):
-    """ ..class:: clusterspec
-    
-    Class to deal with an specific cluster (cern/tau/...) cluster.
-    This base class serves as placeholder for the concrete implementation
-    of a cluster commands, environments,...
-    
-    Virtual Methods:
-     * simulatedresponse (debugging method)
-     * getjobidfromcommand
-     * getstatefromcommandline
-     * done
-     * failed
-     """
+    """Abstract class to deal with the cluster interaction. The
+    commands to send and monotoring jobs to a batch systems are
+    encapsulated here. The concrete classes are defined depending
+    the batch manager system and therefore, the specific commands
+    to be used, the specific environment variables, ...
+    """
     __metaclass__ = ABCMeta
     
     def __init__(self,**kw):#joblist,**kw):
-        """ ..class:: jobspec
+        """Abstract class to deal with the cluster interaction. The
+        commands to send and monotoring jobs to a batch systems are
+        encapsulated here. The concrete classes are defined depending
+        the batch manager system and therefore, the specific commands
+        to be used, the specific environment variables, ...
+
+        Attributes
+        ----------
+        simulate: bool
+            whether is a simulation or not
+        array_variable: str (NOT IMPLEMENTED, VIRTUAL ATTRIBUTE)
+            the name of the environment variable used by the batching
+            system to identify an array job
+        logout_file: str
+            the name of the log output file
+        logerr_file: str
+            the name of the log error file
+        sendcom: str (NOT IMPLEMENTED, VA)
+            the name of the command from the batching system to send
+            jobs
+        extraopt: list(str)
+            the options which populate the `sendcom` command
+        arrayopt: [str,str]  (NOT IMPLEMENTED, VA)
+            the option to deal with the array jobs in the batch system
+        arrayformat: (NOT IMPLEMENTED, VA)
+            the format of the task jobs (the argument of the array job
+            option in the cluster batch system sender command)
+        statecom: str (NOT IMPLEMENTED, VA)
+            the name of the command to monitor the jobs
+        killcom: str (NOT IMPLEMENTED, VA)
+            the name of the command to kill jobs
+        ID: int  [TO BE DEPRECATED, ACTUALLY NOT NEEDED]
+            the identification number of the job in the batch system
         
-        Class to deal with an specific cluster (cern/tau/...) cluster.
-        This base class serves as placeholder for the concrete implementation
-        of a cluster commands, environments,...
-        
-        Virtual Methods (to be implemented in the concrete classes):
-         * simulatedresponse (debugging method)
-         * getjobidfromcommand    
-         * getstatefromcommandline
-         * failed
-         * done
+        Virtual methods
+        ---------------
+        simulatedresponse: debugging function
+        getjobidfromcommand: extract the job identifier 
+        getstatefromcommandline: extract the job state
+        failed
+        done
         """
         # If true, do not interact with the cluster, just for debugging
         self.simulate = False
@@ -69,22 +137,12 @@ class clusterspec(object):
         # List of jobdescription instances
         #self.joblist     = joblist
 
-    # DEPRECATED
-    #def submit(self):
-    #    """..method:: submit()
-    #    wrapper to submit(jobdsc) function, using all the
-    #    jobs in the list
-    #    """
-    #    for jb in self.joblist:
-    #        self.submitjob(jb)
-    
     def submit(self,jobdsc):
-        """...method:: submit(jobdsc)
+        """Send a job to the cluster
          
-        function to send the jobs to the cluster.
-
-        :param jobdsc: jobdescription instance to be submitted
-        :type  jobdsc: jobdescription instance
+        Parameters
+        ----------
+        jobdsc: jobSender.jobsender.jobdescription
         """
         from subprocess import Popen,PIPE
         import os
@@ -106,7 +164,12 @@ class clusterspec(object):
             message = "ERROR from {0}:\n".format(self.sendcom)
             message += p[1]+"\n"
             os.chdir(cwd)
-            raise RuntimeError(message)
+            print "\033[1;31mERROR SENDING JOB TO CLUSTER\033[1;m {0}".format(message)
+            self.ID = None
+            jobdsc.ID = self.ID
+            jobdsc.status = 'fail'
+            os.chdir(cwd)
+            return
         ## The job-id is released in the message:
         self.ID = self.getjobidfromcommand(p[0])
         jobdsc.ID = self.ID
@@ -119,13 +182,17 @@ class clusterspec(object):
         os.chdir(cwd)
     
     def getnextstate(self,jobdsc,checkfinishedjob):
-        """..method:: getnextstate() -> nextstate,nextstatus
-        check the state and status of the job.
-
-        The life of a job follows the state workflow
-        None -> configured -> submitted -> running -> finished
+        """Check the state and status of the job. The life of a job 
+        follows the state workflow
+            None -> configured -> submitted -> running -> finished
         Per each possible state (and status), just a few commands
-        can be used:
+        can be used.
+        
+        Parameters
+        ----------
+        jobdsc: jobsender.jobdescriptor
+        checkfinishedjob: workenvfactory.workenv.checkfinishedjob 
+            the function to check if the job has
         """
         if not jobdsc.state:
             print "Job not configured yet, you should call the"\
@@ -171,7 +238,7 @@ class clusterspec(object):
         from subprocess import Popen,PIPE
         import os
         if jobdsc.state == 'submitted' or jobdsc.state == 'running':
-            command = [ self.statecom, str(jobdsc.ID) ]
+            command = [ self.statecom, "{0}".format(jobdsc.ID) ]
             if self.simulate:
                 p = self.simulatedresponse('checking')
             else:
@@ -391,7 +458,11 @@ class taucluster(clusterspec):
             queue = kw['queue']
         else:
             queue = 'N'
-        self.extraopt  += [ '-q', queue , '-V' ]
+        self.extraopt += [ '-q', queue , '-V' ]
+        # Extra options to accomodate
+        if kw.has_key('extra_opts') and kw["extra_opts"]:
+            for _at in kw['extra_opts'].split(" "):
+                self.extraopt.append(_at)
     
     def simulatedresponse(self,action):
         """ DO NOT USE this function, just for debugging proporses

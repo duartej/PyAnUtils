@@ -394,8 +394,13 @@ class athenajob(workenv):
             # XXX: re-initialize tf_paramters
             for _rm in removethis:
                 self.tf_parameters = self.tf_parameters.replace(_rm,"")
-            # -- just to be sure the user do not include some unwanted commands/options
-            self.tf_parameters = self.tf_parameters.replace("Reco_tf.py","")
+            #  The tf command per default, if no other was introduced by the user
+            self.tf_command = "Reco_tf.py"
+            if self.tf_parameters.find('_tf.py') != -1:
+                thecommand = self.tf_parameters.split('_tf.py')[0].strip()
+                self.tf_command = '{0}_tf.py'.format(thecommand)
+            # -- remove it from parameters (commands/options)
+            self.tf_parameters = self.tf_parameters.replace(self.tf_command,"")
 
         # Allowing EOS remote files
         if inputfiles.find('root://') == -1:
@@ -590,9 +595,9 @@ class athenajob(workenv):
         if self.isTFJ:
             # Transformation job
             # convert the list of files into a space separated string (' '.join(self.inputfiles)
-            bashfile += 'Reco_tf.py --fileValidation False --maxEvents {0}'\
-                    ' --skipEvents {1} --ignoreErrors \'True\' {2} --input{3}File {4} '\
-                    '--output{5}File {6}'.format(ph.nevents,ph.skipevts,self.tf_parameters,
+            bashfile += '{0} --fileValidation False --maxEvents {1}'\
+                    ' --skipEvents {2} --ignoreErrors \'True\' {3} --input{4}File {5} '\
+                    '--output{6}File {7}'.format(self.tf_command,ph.nevents,ph.skipevts,self.tf_parameters,
                     self.tf_input_type,' '.join(self.inputfiles),self.tf_output_type,self.outputfile)
         else:
             # athena.py jobOption.py job

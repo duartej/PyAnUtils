@@ -163,7 +163,7 @@ class storedtree(object):
             setattr(self,aliasname,self._wise_values[aliasname][0])
             # Be careful, only if is a vector make sense
             try:
-                setattr(self,aliasname+'_size',self._wise_values[aliasname][0].size())
+                setattr(self,aliasname+'_size',self._wise_values[aliasname][0].size)
             except AttributeError:
                 pass
 
@@ -370,7 +370,10 @@ class xaodtree(storedtree):
         """
         import ROOT
         import cppyy
-        # let's assume we are inside ATLAS-- FIXME: CHECK IT
+        ROOT.THtml.LoadAllLibs()
+        # let's assume we are inside ATLAS
+        if ROOT.xAOD.Init().isFailure():
+            raise RuntimeError("RootCore infrastructure needs to be intialized")
 
         super(xaodtree,self).__init__(rootfiles,'CollectionTree')
         
