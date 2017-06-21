@@ -326,8 +326,13 @@ class job(object):
 
         wrapper to the clusterspec method
         """
+        import time
+
         for jb in self.tasklist:
             self.cluster.submit(jb)
+            # wait 2 seconds, before submit the next one
+            # FIXME: JUST do that for the taucluster
+            time.sleep(2)
     
     def resubmit(self,joblist):
         """..method ::resubmit(joblist) 
