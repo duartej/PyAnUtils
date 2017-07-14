@@ -10,11 +10,11 @@ setup(name='PyAnUtils',
         # See https://docs.python.org/2/distutils/setupscript.html#listing-whole-packages
         # for changes in the package distribution
         package_dir={'PyAnUtils':'python','dvAnUtils':'dvAnUtils/python',
-            'jobSender':'jobSender/python','mtgAnUtils':'mtgAnUtils/python'},
-        packages = ['PyAnUtils','dvAnUtils','jobSender','mtgAnUtils' ],
+            'mtgAnUtils':'mtgAnUtils/python'},
+        packages = ['PyAnUtils','dvAnUtils','mtgAnUtils' ],
         scripts=['bin/mtgfastfullcmp','bin/lazycmt','dvAnUtils/bin/dvtrigeff',
             'dvAnUtils/bin/roibasisconverter', 'dvAnUtils/bin/fitmodel',
-            'jobSender/bin/clustermanager','mtgAnUtils/bin/mtg_gs_summary',
+            'mtgAnUtils/bin/mtg_gs_summary',
             'dvAnUtils/bin/quickTrackPlotter','bin/getdecorations',
             # TO BE DEPRECATED in favour of runDVAna_submit
             'dvAnUtils/bin/ks_submit_prun',
