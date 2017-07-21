@@ -19,6 +19,5 @@ setup(name='PyAnUtils',
             # TO BE DEPRECATED in favour of runDVAna_submit
             'dvAnUtils/bin/ks_submit_prun',
             'dvAnUtils/bin/ks_submit_localbatch',
-            'dvAnUtils/bin/runDVAna_submit',
             'dvAnUtils/bin/kshort_study', ],
         )
