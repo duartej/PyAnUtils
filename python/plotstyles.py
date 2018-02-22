@@ -254,6 +254,128 @@ def njStyle():
     #ROOT.gStyle.ls();
     return njStyle
 
+def get_sifca_style(squared=False,stat_off=False):
+    """Return a ROOT.gStyle to be used for the SIFCA group
+    """
+    import ROOT
+    
+    ROOT.GloStyle = ROOT.gStyle
+    
+    sifcaStyle = ROOT.TStyle("sifcaStyle", "sifcaStyle")
+    ROOT.gStyle = sifcaStyle
+    
+    #----------------------------------------------------------------------------
+    # Legend
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetTextFont(132)
+    sifcaStyle.SetTextSize(0.045)
+    sifcaStyle.SetLegendBorderSize(0)
+    sifcaStyle.SetLegendFillColor(0)
+
+    
+    #----------------------------------------------------------------------------
+    # Canvas
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetCanvasBorderMode(  0)
+    sifcaStyle.SetCanvasBorderSize( 10)
+    sifcaStyle.SetCanvasColor     (  0)
+    sifcaStyle.SetCanvasDefH(550)
+    sifcaStyle.SetCanvasDefW(700)
+    #sifcaStyle.SetCanvasDefX      ( 10)
+    #sifcaStyle.SetCanvasDefY      ( 10)
+    #
+    ##----------------------------------------------------------------------------
+    ## Pad
+    ##----------------------------------------------------------------------------
+    sifcaStyle.SetPadBorderMode  (   0)
+    sifcaStyle.SetPadBorderSize  (  10)
+    sifcaStyle.SetPadColor       (   0)
+    sifcaStyle.SetPadBottomMargin(0.14)
+    sifcaStyle.SetPadTopMargin   (0.08)
+    sifcaStyle.SetPadLeftMargin  (0.14)
+    sifcaStyle.SetPadRightMargin (0.08)
+    if squared:
+        sifcaStyle.SetCanvasDefH(700)
+        sifcaStyle.SetCanvasDefW(724)
+        sifcaStyle.SetPadRightMargin (0.18)
+    
+    #----------------------------------------------------------------------------
+    # Frame
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetFrameFillStyle ( 0)
+    sifcaStyle.SetFrameFillColor ( 0)
+    sifcaStyle.SetFrameLineColor ( 1)
+    sifcaStyle.SetFrameLineStyle ( 0)
+    sifcaStyle.SetFrameLineWidth ( 2)
+    sifcaStyle.SetFrameBorderMode( 0)
+    sifcaStyle.SetFrameBorderSize(10)
+    
+    #----------------------------------------------------------------------------
+    # Hist
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetHistFillColor(0)
+    sifcaStyle.SetHistFillStyle(1)
+    sifcaStyle.SetHistLineColor(1)
+    sifcaStyle.SetHistLineStyle(0)
+    sifcaStyle.SetHistLineWidth(2)
+    
+    #----------------------------------------------------------------------------
+    # Func
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetFuncWidth(2)
+    
+    #----------------------------------------------------------------------------
+    # Title
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetTitleBorderSize(    0)
+    sifcaStyle.SetTitleFillColor (    0)
+    sifcaStyle.SetTitleAlign     (   23)
+    sifcaStyle.SetTitleFont(132)
+    sifcaStyle.SetTitleSize(0.045)
+    
+    sifcaStyle.SetPalette(56)
+    #----------------------------------------------------------------------------
+    # Stat
+    #----------------------------------------------------------------------------
+    sifcaStyle.SetStatBorderSize(0)
+    sifcaStyle.SetStatColor(0)
+    if stat_off:
+        sifcaStyle.SetOptStat       (0)
+    
+    #----------------------------------------------------------------------------
+    # Axis
+    #----------------------------------------------------------------------------
+    #sifcaStyle.SetPadTickX   (           1)  # Tick marks on the opposite side of the frame
+    #sifcaStyle.SetPadTickY   (           1)  # Tick marks on the opposite side of the frame
+    sifcaStyle.SetTitleFont(132, "x")
+    sifcaStyle.SetTitleFont(132, "y")
+    sifcaStyle.SetTitleFont(132, "z")
+    sifcaStyle.SetTitleSize(0.045,"x")
+    sifcaStyle.SetTitleSize(0.045,"y")
+    sifcaStyle.SetTitleSize(0.045,"z")
+
+    sifcaStyle.SetTitleOffset(1.4,"x")
+    sifcaStyle.SetTitleOffset(1.2,"y")
+    sifcaStyle.SetTitleOffset(1.2,"z")
+    if squared:
+        sifcaStyle.SetTitleOffset(1.4,"x")
+        sifcaStyle.SetTitleOffset(1.6,"y")
+        sifcaStyle.SetTitleOffset(1.4,"z")
+
+    sifcaStyle.SetLabelFont(132, "x")
+    sifcaStyle.SetLabelFont(132, "y")
+    sifcaStyle.SetLabelFont(132, "z")
+    sifcaStyle.SetLabelSize(0.045,"x")
+    sifcaStyle.SetLabelSize(0.045,"y")
+    sifcaStyle.SetLabelSize(0.045,"z")
+
+    # ---------------------------------------
+    # Extra
+    # ---------------------------------------    
+    sifcaStyle.SetNumberContours(99)
+    
+    return sifcaStyle
+
 def setpalette(name="rainbow", ncontours=99):
     """.. function::setpalette()
     
