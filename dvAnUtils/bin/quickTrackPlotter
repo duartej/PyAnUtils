@@ -55,6 +55,43 @@ def getcollection(tree,name):
     return filter(lambda x: x.GetName().lower().find('aux.') == -1, k)# not including auxiliar
 
 
+def getdisplacedvertices(tree,namevert):
+    """
+    """
+    # constant to be removed from here!
+    LLP_PDG = [ 1000022 ]
+    try:
+        vertices = getattr(tree,namevert)
+    except AttributeError:
+        # Not initialized
+        tree.activate_variable(namevert)
+        vertices = getattr(tree,namevert)
+
+    # Start the loop 
+    dv = []
+    for vertex in vertices:
+        # 1-particle in and more than one out
+        if vertex.nIncomingParticles() != 1 or \
+                vertex.nOutgoingParticles() <= 1:
+            continue
+        inpart = vertex.incomingParticle(0)
+        # Is the incoming particle the LSP 
+        if inpart.pdgId() not in LLP_PDG:
+            continue
+        if not inpart.hasDecayVtx():
+            continue
+        # should use the decayed (status==2)
+        if inpart.status() != 2:
+            continue
+        dv.append(vertex)
+    return dv
+
+def getradius(vertex):
+    """
+    """
+    from math import sqrt
+    return sqrt(vertex.x()**2.0+vertex.y()**2.+vertex.z()**2.)
+
 
 def setuphistos(hcont,name,nbins,xlow,xmax):
     """
@@ -166,7 +203,15 @@ def main(filenames,plotsuf,**kwd):
     # -- Total hits
     setuphistos(h,"nHits",71,0,70.)
     # ------
-    
+
+    # -- MonteCarlo truth [just when exist]
+    # -- regular tracks
+    h.create_and_book_histo("d0rDV","d_{0} vs. r_{DV}",50,0,300,
+            npoints_y=100,ylow=0,yhigh=300)
+    # -- re-tracked (not-matched)
+    h.create_and_book_histo("d0rDV_h","d_{0} vs. r_{DV}",50,0,300,
+            npoints_y=100,ylow=0,yhigh=300)
+
     print "------------------------------------------------------"
     totalregrec   = 0
     totalrechighd0= 0 
@@ -179,7 +224,8 @@ def main(filenames,plotsuf,**kwd):
                     " [ "+"\b"+\
                     str(int(float(i)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
-        #print "[%i] Number of particles:      %i       %i" % (i,tracksInDet_normal.size(),tracksInDet_highd0.size())
+        # -- MonteCarlo Truth info [FIXME just when exits]
+        dv = getdisplacedvertices(t,'TruthVertices')
         regulartracks = []
         for k in xrange(tracks_normal.size()):
             track = tracks_normal[k]
@@ -201,6 +247,9 @@ def main(filenames,plotsuf,**kwd):
             h.nHits.Fill(pixel+sct+trt)
             # Keep the track to compare
             regulartracks.append(track)
+            # [FIXME: just when there is]
+            for _vertex in dv:
+                h.d0rDV.Fill(getradius(_vertex),abs(track.d0()))
         nmatched = 0
         for k in xrange(tracks_highd0.size()):
             trackH = tracks_highd0[k]
@@ -223,7 +272,7 @@ def main(filenames,plotsuf,**kwd):
             h.nHits_hA.Fill(pixel+sct+trt)
             # Just care about the new ones
             #matched = filter(lambda (eta,phi): sqrt((trackH.eta()-eta)**2.+(trackH.phi()-phi)**2.) < 0.001,reg_etaphi)
-            if not ismatchedtrack(trackH,regulartracks,False,0.05):
+            if not ismatchedtrack(trackH,regulartracks,False,0.01):
                 h.d0_h.Fill(trackH.d0())
                 h.err_d0_h.Fill(trackH.definingParametersCovMatrixVec()[0]/trackH.d0())
                 h.z0_h.Fill(trackH.z0())
@@ -235,6 +284,9 @@ def main(filenames,plotsuf,**kwd):
                 h.nSCTHits_h.Fill(sct)
                 h.nTRTHits_h.Fill(trt)
                 h.nHits_h.Fill(pixel+sct+trt)
+                # [FIXME: just when there is]
+                for _vertex in dv:
+                    h.d0rDV_h.Fill(getradius(_vertex),abs(trackH.d0()))
             else:
                 nmatched += 1
         # Total number of reco-tracks
@@ -303,6 +355,20 @@ def main(filenames,plotsuf,**kwd):
     regularrecophase.SetFillStyle(0)
     regularrecophase.Draw()
     c.SaveAs("highd0tracks_d0z0."+plotsuf)
+
+    # MC- Truth
+    setpalette('inv_darkbody')
+    c.Close()
+    c = ROOT.TCanvas()
+    set_attr_plotobject(h.d0rDV,ytitle='d_{0} [mm]',xtitle='r_{DV} [mm]',color=None)
+    h.d0rDV.Draw("COLZ")
+    c.SaveAs("regulartracks_d0rDV."+plotsuf)
+    
+    c.Close()
+    c = ROOT.TCanvas()
+    set_attr_plotobject(h.d0rDV_h,ytitle='d_{0} [mm]',xtitle='r_{DV} [mm]',color=None)
+    h.d0rDV_h.Draw("COLZ")
+    c.SaveAs("highd0tracks_d0rDV."+plotsuf)
 
     h.removehistos()
 
