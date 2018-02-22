@@ -1,0 +1,115 @@
+#!/usr/bin/python
+"""Check if two root files are the same.
+The procedure is:
+"""
+
+def read_dir(dir):
+    """Recursive function to read down a ROOT directory
+    """
+    import ROOT 
+    pass
+
+class file_metrics(object):
+    """A dummy class to compare two TTree between two root files
+    but just looking at their byte size
+    """
+    def __init__(self,tree):
+        """Constructor with the tree
+        """
+        self._metric_entries = tree.GetEntries()
+        self._metric_zipbytes = tree.GetZipBytes()
+        self._metric_totalbytes = tree.GetTotBytes()
+
+    def entries(self):
+        return self._metric_entries
+    
+    def zip_bytes(self):
+        return self._metric_zipbytes
+    
+    def total_bytes(self):
+        return self._metric_totalbytes
+
+    def __ne__(self,other):
+        """Only if the 3 elements of the metric are equal
+        """
+        return not self.__eq__(other)
+
+    def __eq__(self,other):
+        """Only if the 3 elements of the metric are equal
+        """
+        for metric_name in filter(lambda x: x.find('_metric') != -1,dir(self)):
+            if getattr(self,metric_name) != getattr(other,metric_name):
+                print metric_name
+                return False
+        return True
+
+def fill_file_metrics(f):
+    """Obtain a dictionary with the available trees and their file_metrics filled
+
+    Parameters:
+    f: ROOT.TFile
+        the root file
+
+    Return
+    ------
+    tree_metrics: dict(str,file_metrics)
+    """
+    trees = map(lambda i: f.Get(i.GetName()),filter(lambda x: x.GetClassName() == "TTree", f.GetListOfKeys()))
+    # build the trees with its metrics
+    tree_metrics = dict(map(lambda t: (t.GetName(),file_metrics(t)),trees))
+
+    return tree_metrics
+
+def compare_files(f1name,f2name):
+    """Compare two ROOT files by.
+    """
+    import ROOT
+
+    f1 = ROOT.TFile(f1name)
+    # Extract file structure and end up with atomic objects
+    # to compare (Trees, Histograms, ...) --> 
+    # FIXME only check for trees in the current directory!
+    tree_metrics_1 = fill_file_metrics(f1)
+    f1.Close()
+
+    # Same 
+    f2 = ROOT.TFile(f2name)
+    tree_metrics_2 = fill_file_metrics(f2)
+    f2.Close()
+
+    # Start the checks
+    # 1. the trees
+    if tree_metrics_1.keys() != tree_metrics_2.keys():
+        message="Found different trees in the two files"
+        return False,message
+    # 2. their content
+    for tree_name,fmetric in tree_metrics_1.iteritems():
+        if fmetric != tree_metrics_2[tree_name]:
+            message = "Tree '{0}' metrics differ between the two files:\n".format(tree_name)
+            message +="                 [   File 1    |    File 2      ]\n"
+            message +=" Entries    :  {0:15d} | {1:15d}\n".format(fmetric.entries(),tree_metrics_2[tree_name].entries())
+            message +=" Zip bytes  :  {0:15d} | {1:15d}\n".format(fmetric.zip_bytes(),tree_metrics_2[tree_name].zip_bytes())
+            message +=" Total bytes:  {0:15d} | {1:15d}\n".format(fmetric.total_bytes(),tree_metrics_2[tree_name].total_bytes())
+            return False,message
+    
+    return True,""
+
+
+if __name__ == '__main__':
+    from argparse import ArgumentParser,Action
+    
+    mesdsc ="Check if two ROOT files contain the same data"
+    parser = ArgumentParser(prog='rootfile_checker',description=mesdsc)
+
+    parser.add_argument("file1",help="The first file to compare")
+    parser.add_argument("file2",help="The second file to compare")
+
+    args = parser.parse_args()
+
+    result,message = compare_files(args.file1,args.file2)
+    
+    if not result:
+        print "\033[1;31mFiles differ!!\033[1;m {0}".format(message)
+    else:
+        print "\033[1;34mEquivalent files\033[1;m"
+

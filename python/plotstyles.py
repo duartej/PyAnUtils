@@ -97,7 +97,7 @@ def squaredStyle():
     squaredStyle.SetTitleY         (0.99)
     squaredStyle.SetTitleFont(42, "")
     
-    squaredStyle.SetPalette(1)
+    squaredStyle.SetPalette(53)
     #----------------------------------------------------------------------------
     # Stat
     #----------------------------------------------------------------------------
@@ -153,15 +153,32 @@ def njStyle():
     njStyle.SetPadColor(10);
     njStyle.SetTitleFillColor(0);
     njStyle.SetStatColor(10);
-
-    #dont put a colored frame around the plots
-    njStyle.SetFrameBorderMode(0);
-    njStyle.SetCanvasBorderMode(0);
-    njStyle.SetPadBorderMode(0);
-    njStyle.SetLegendBorderSize(0);
+    
+    #----------------------------------------------------------------------------
+    # Canvas
+    #----------------------------------------------------------------------------
+    njStyle.SetCanvasBorderMode(  0)
+    njStyle.SetCanvasBorderSize( 10)
+    njStyle.SetCanvasColor     (  0)
+    njStyle.SetCanvasDefH      (450)
+    njStyle.SetCanvasDefW      (600)
+    njStyle.SetCanvasDefX      ( 10)
+    njStyle.SetCanvasDefY      ( 10)
+    
+    #----------------------------------------------------------------------------
+    # Pad
+    #----------------------------------------------------------------------------
+    njStyle.SetPadBorderMode  (   0)
+    njStyle.SetPadBorderSize  (   8)
+    njStyle.SetPadColor       (   0)
+    njStyle.SetPadBottomMargin(0.15)
+    njStyle.SetPadTopMargin   (0.08)
+    njStyle.SetPadLeftMargin  (0.10)
+    njStyle.SetPadRightMargin (0.10)
+    
 
     #use the primary color palette
-    njStyle.SetPalette(1);
+    njStyle.SetPalette(53);
     
     #set the default line color for a histogram to be black
     njStyle.SetHistLineColor(ROOT.kBlack);
@@ -176,21 +193,32 @@ def njStyle():
     njStyle.SetTitleColor(ROOT.kBlack);
      
     #set the margins
-    njStyle.SetPadBottomMargin(0.15);
-    njStyle.SetPadTopMargin(0.08);
-    njStyle.SetPadRightMargin(0.10);
-    njStyle.SetPadLeftMargin(0.15);
+    #njStyle.SetPadBottomMargin(0.15);
+    #njStyle.SetPadTopMargin(0.08);
+    #njStyle.SetPadRightMargin(0.10);
+    #njStyle.SetPadLeftMargin(0.15);
 
     #set axis label and title text sizes
-    njStyle.SetLabelFont(52,"xyz");
-    njStyle.SetLabelSize(0.05,"xyz");
-    njStyle.SetLabelOffset(0.015,"xyz");
-    njStyle.SetTitleFont(52,"xyz");
-    njStyle.SetTitleSize(0.05,"xyz");
-    njStyle.SetTitleOffset(1.2,"yz");
-    njStyle.SetTitleOffset(1.5,"x");
+    njStyle.SetLabelFont(52,"x");
+    njStyle.SetLabelFont(52,"y");
+    njStyle.SetLabelFont(52,"z");
+    njStyle.SetLabelSize(0.05,"x");
+    njStyle.SetLabelSize(0.05,"y");
+    njStyle.SetLabelSize(0.05,"z");
+    njStyle.SetLabelOffset(0.015,"x");
+    njStyle.SetLabelOffset(0.015,"y");
+    njStyle.SetLabelOffset(0.015,"z");
+    njStyle.SetTitleFont(52,"x");
+    njStyle.SetTitleFont(52,"y");
+    njStyle.SetTitleFont(52,"z");
+    njStyle.SetTitleSize(0.04,"x");
+    njStyle.SetTitleSize(0.04,"y");
+    njStyle.SetTitleSize(0.04,"z");
+    njStyle.SetTitleXOffset(1.6);
+    njStyle.SetTitleYOffset(1.2);
+    njStyle.SetTitleOffset(1.1,"z");
     njStyle.SetStatFont(52);
-    njStyle.SetStatFontSize(0.09);
+    njStyle.SetStatFontSize(0.08);
     njStyle.SetTitleBorderSize(0);
     njStyle.SetStatBorderSize(0);
     njStyle.SetTextFont(52);
@@ -217,7 +245,7 @@ def njStyle():
     
     #marker settings
     njStyle.SetMarkerStyle(20);
-    njStyle.SetMarkerSize(0.7);
+    njStyle.SetMarkerSize(0.6);
     njStyle.SetLineWidth(2); 
 
     #done
