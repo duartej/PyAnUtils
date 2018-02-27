@@ -329,6 +329,10 @@ def get_sifca_style(squared=False,stat_off=False):
     #----------------------------------------------------------------------------
     sifcaStyle.SetTitleBorderSize(    0)
     sifcaStyle.SetTitleFillColor (    0)
+    if squared:
+        sifcaStyle.SetTitleX         (0.56)
+    else:
+        sifcaStyle.SetTitleX         (0.5)
     sifcaStyle.SetTitleAlign     (   23)
     sifcaStyle.SetTitleFont(132)
     sifcaStyle.SetTitleSize(0.045)
