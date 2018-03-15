@@ -95,6 +95,35 @@ class ExtraOpt:
         for key,initval in self._defaults.iteritems():
             setattr(self,key,initval)
 
+class Bunch(object):
+    """Just to load a ROOT file and dump all its content as 
+    globals (similarly to a CLING root session)
+    
+    Example
+    -------
+    After the initialization, the objects of the ROOT file
+    can be accessed as data members of the instance
+
+    >>> d = Bunch("rootfilename")
+    """
+    def __init__(self,fname):
+        """Return a bunched ROOT file with all the contents
+        of the ROOT file as data members of the instance
+
+        Parameters
+        ----------
+        fname: str
+            The root file
+        """
+        import ROOT
+        from PyAnUtils.plotstyles import get_sifca_style
+        st = get_sifca_style(stat_off=True)
+        st.cd()
+        ROOT.gROOT.ForceStyle()
+        self._f = ROOT.TFile.Open(fname)
+        for i in self._f.GetListOfKeys():  
+            self.__dict__[i.GetName()] = self._f.Get(i.GetName())
+
 #def draw_error_band(graph):
 #    """Draw the contour error bar
 #    """

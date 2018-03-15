@@ -1,0 +1,40 @@
+#!/bin/bash
+
+############################################################
+# Launch a python interpreter 'a la' root cling interpreter
+# way, putting in memory all the elements of the ROOT file.
+# 
+# Assumes a input file, otherwise load the Bunch class
+# to CLING-rootify and put a message in screen about that
+# 
+# J.Duarte-Campderros 2018-03-15, CERN/IFCA
+# jorge.duarte.campderros@cern.ch
+
+# Mimic the interpreter message
+CFGDIR=$(/usr/bin/env python-config --configdir)
+PYVERS=$(/usr/bin/env python -c "import sys; print 'Python {0}'.format(sys.version);")
+echo ${PYVERS}
+echo ROOT `/usr/bin/env root-config --version`
+echo "======================================================= "
+echo "ROOT and 'Bunch' class activated. Use the 'Bunch' class "
+echo 'and access the contents of any object within the file   '
+echo 'directly by its name which is data members of "d"'
+echo ">>> d=Bunch('rootfilename.root')"
+echo "======================================================= "
+if [ "X"$@ == "X" ];
+then
+    OPT="import ROOT; print 'import ROOT'"
+else
+    # Check the file
+    if [ ! -e $1 ]; 
+    then
+        echo "Filename does not exist: "'$1'
+        exit
+    fi
+    echo "File '$1' already loaded..."
+    echo "Available instance: 'd'"
+    OPT="d=Bunch('$1');"
+fi
+/usr/bin/env python -i -c "from PyAnUtils.pyanfunctions import Bunch; ${OPT}"
+
+
