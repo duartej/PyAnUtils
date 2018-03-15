@@ -10,6 +10,14 @@
 # J.Duarte-Campderros 2018-03-15, CERN/IFCA
 # jorge.duarte.campderros@cern.ch
 
+# Check there is a pythonstartup file, with the -i flag
+# is not automatically execute, so do it explicitelly
+STARTUP=""
+if [ -e ${PYTHONSTARTUP} ];
+then
+    STARTUP="execfile('${PYTHONSTARTUP}');"
+fi
+
 # Mimic the interpreter message
 CFGDIR=$(/usr/bin/env python-config --configdir)
 PYVERS=$(/usr/bin/env python -c "import sys; print 'Python {0}'.format(sys.version);")
@@ -35,6 +43,6 @@ else
     echo "Available instance: 'd'"
     OPT="d=Bunch('$1');"
 fi
-/usr/bin/env python -i -c "from PyAnUtils.pyanfunctions import Bunch; ${OPT}"
+/usr/bin/env python -i -c "${STARTUP} from PyAnUtils.pyanfunctions import Bunch; ${OPT}"
 
 
