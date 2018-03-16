@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Check if two root files are the same.
 The procedure is:
 """
@@ -9,7 +9,7 @@ def read_dir(dir):
     import ROOT 
     pass
 
-class file_metrics(object):
+class tree_metrics(object):
     """A dummy class to compare two TTree between two root files
     but just looking at their byte size
     """
@@ -43,6 +43,42 @@ class file_metrics(object):
                 return False
         return True
 
+class histo_metrics(object):
+    """A file metrics for the histograms
+    """
+    def __init__(self,histo):
+        """Constructor with the histogram, to avoid 
+        loosing it, store it here and keep it in 
+        memory even if the file was removed
+        """
+        import ROOT
+        
+        self.h = histo
+        self.h.SetDirectory(0)
+        self._metric_entries = self.h.Integral()
+
+    def entries(self):
+        return int(self._metric_entries)
+    
+    def __ne__(self,other):
+        """The Kolgomorov-Smirnov test must return 1,
+        if equal
+        """
+        return not self.__eq__(other)
+
+    def __eq__(self,other):
+        """The Kolgomorov-Smirnov test must return 1,
+        if equal
+        """
+        if self.entries() != other.entries():
+            return False
+        if self.entries() == 0:
+            # Don't do the KS test, because will fail without
+            # data
+            return True
+        return (abs(self.h.KolmogorovTest(other.h)-1.0) < 1e-9)
+    
+
 def fill_file_metrics(f):
     """Obtain a dictionary with the available trees and their file_metrics filled
 
@@ -52,13 +88,19 @@ def fill_file_metrics(f):
 
     Return
     ------
-    tree_metrics: dict(str,file_metrics)
+    (tree_metrics_dict,histo_metric_ditt): dict(str,tree_metrics),dict(str,histo_metrics)
     """
+    # Trees
     trees = map(lambda i: f.Get(i.GetName()),filter(lambda x: x.GetClassName() == "TTree", f.GetListOfKeys()))
-    # build the trees with its metrics
-    tree_metrics = dict(map(lambda t: (t.GetName(),file_metrics(t)),trees))
+    # Histograms
+    histos= filter(lambda obj: obj.InheritsFrom("TH1"),\
+            map(lambda i: f.Get(i.GetName()),filter(lambda x: x.GetClassName().find("TH") == 0, f.GetListOfKeys())))
 
-    return tree_metrics
+    # build the trees with its metrics
+    tree_metrics_dict = dict(map(lambda t: (t.GetName(),tree_metrics(t)),trees))
+    histo_metrics_dict = dict(map(lambda h: (h.GetName(),histo_metrics(h)),histos))
+
+    return tree_metrics_dict,histo_metrics_dict
 
 def compare_files(f1name,f2name):
     """Compare two ROOT files by.
@@ -68,28 +110,40 @@ def compare_files(f1name,f2name):
     f1 = ROOT.TFile(f1name)
     # Extract file structure and end up with atomic objects
     # to compare (Trees, Histograms, ...) --> 
-    # FIXME only check for trees in the current directory!
-    tree_metrics_1 = fill_file_metrics(f1)
+    tree_metrics_1,histo_metrics_1 = fill_file_metrics(f1)
     f1.Close()
 
     # Same 
     f2 = ROOT.TFile(f2name)
-    tree_metrics_2 = fill_file_metrics(f2)
+    tree_metrics_2,histo_metrics_2 = fill_file_metrics(f2)
     f2.Close()
 
     # Start the checks
     # 1. the trees
+    message = ""
     if tree_metrics_1.keys() != tree_metrics_2.keys():
         message="Found different trees in the two files"
         return False,message
     # 2. their content
     for tree_name,fmetric in tree_metrics_1.iteritems():
         if fmetric != tree_metrics_2[tree_name]:
-            message = "Tree '{0}' metrics differ between the two files:\n".format(tree_name)
+            message += "Tree '{0}' metrics differ between the two files:\n".format(tree_name)
             message +="                 [   File 1    |    File 2      ]\n"
             message +=" Entries    :  {0:15d} | {1:15d}\n".format(fmetric.entries(),tree_metrics_2[tree_name].entries())
             message +=" Zip bytes  :  {0:15d} | {1:15d}\n".format(fmetric.zip_bytes(),tree_metrics_2[tree_name].zip_bytes())
             message +=" Total bytes:  {0:15d} | {1:15d}\n".format(fmetric.total_bytes(),tree_metrics_2[tree_name].total_bytes())
+            return False,message
+    # 3. the Histos
+    if histo_metrics_1.keys() != histo_metrics_2.keys():
+        message="Found different Histograms in the two files"
+        return False,message
+    # 2. their content
+    for histo_name,hmetric in histo_metrics_1.iteritems():
+        if hmetric != histo_metrics_2[histo_name]:
+            message += "Histogram '{0}' differ between the two files:\n".format(histo_name)
+            message += "Kolmogorov-Smirnov test failed!\n"
+            message +="                 [   File 1    |    File 2      ]\n"
+            message +=" Entries    :  {0:15d} | {1:15d}\n".format(hmetric.entries(),histo_metrics_2[histo_name].entries())
             return False,message
     
     return True,""
