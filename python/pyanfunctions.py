@@ -125,10 +125,8 @@ class Bunch(object):
         else: 
             self._f = fname
         for i in self._f.GetListOfKeys():
-            print "UO",i.GetName()
             self.__dict__[i.GetName()] = self._f.Get(i.GetName())
             if isinstance(self.__dict__[i.GetName()],ROOT.TDirectoryFile):
-                print i.GetName()
                 self.__dict__[i.GetName()] = Bunch(self._f.Get(i.GetName()))
 
 
