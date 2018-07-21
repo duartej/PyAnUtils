@@ -120,9 +120,17 @@ class Bunch(object):
         st = get_sifca_style(stat_off=True)
         st.cd()
         ROOT.gROOT.ForceStyle()
-        self._f = ROOT.TFile.Open(fname)
-        for i in self._f.GetListOfKeys():  
+        if isinstance(fname,basestring):
+            self._f = ROOT.TFile.Open(fname)
+        else: 
+            self._f = fname
+        for i in self._f.GetListOfKeys():
+            print "UO",i.GetName()
             self.__dict__[i.GetName()] = self._f.Get(i.GetName())
+            if isinstance(self.__dict__[i.GetName()],ROOT.TDirectoryFile):
+                print i.GetName()
+                self.__dict__[i.GetName()] = Bunch(self._f.Get(i.GetName()))
+
 
 #def draw_error_band(graph):
 #    """Draw the contour error bar

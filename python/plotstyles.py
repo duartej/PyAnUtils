@@ -337,7 +337,7 @@ def get_sifca_style(squared=False,stat_off=False):
     sifcaStyle.SetTitleFont(132)
     sifcaStyle.SetTitleSize(0.045)
     
-    sifcaStyle.SetPalette(56)
+    sifcaStyle.SetPalette(57)
     #----------------------------------------------------------------------------
     # Stat
     #----------------------------------------------------------------------------
