@@ -323,6 +323,7 @@ def get_sifca_style(squared=False,stat_off=False):
     # Func
     #----------------------------------------------------------------------------
     sifcaStyle.SetFuncWidth(2)
+    sifcaStyle.SetFuncColor(ROOT.kRred+1_
     
     #----------------------------------------------------------------------------
     # Title
@@ -377,6 +378,8 @@ def get_sifca_style(squared=False,stat_off=False):
     # Extra
     # ---------------------------------------    
     sifcaStyle.SetNumberContours(99)
+    sifcaStyle.SetMarkerStyle(20)
+    sifcaStyle.SetMarkerSize(0.7)
     
     return sifcaStyle
 
