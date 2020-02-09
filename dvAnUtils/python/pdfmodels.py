@@ -6,7 +6,12 @@
    :platform: Unix
       :synopsis: ROOT.RooAbsPdf wrappers to be used by the samplingprob class
     .. moduleauthor:: Jordi Duarte-Campderros <jorge.duarte.campderros@cern.ch>
+
+XXX --- TO BE MOVE INTO sifca-utils package --- XXX
 """
+import ROOT
+
+from PyAnUtils.pyanfunctions import ExtraOpt
 
 # ------------------  HELPER FUNCTION ---------------------------
 def get_ordered_models(family):
@@ -104,8 +109,6 @@ def negative_binomial_pdf(obs,**kwd):
     with a success efficiency (probability) of 
     .. math:: \varepsilon=1-p
     """
-    import ROOT
-    from PyAnUtils.pyanfunctions import ExtraOpt
     opt = ExtraOpt( [('k','k'), ('k_title','number of failures'), 
         ('kmin',0),('kmax',100),('kinit',None),
         ('p','p'),('p_title','success probability'),
@@ -189,9 +192,6 @@ def negative_binomial_pdf_conditional(obs,**kwd):
     --------
     negative_binomial_pdf: see the implementation notes
     """
-    import ROOT
-    from PyAnUtils.pyanfunctions import ExtraOpt
-    
     opt = ExtraOpt( [('k','k'), ('k_title','number of failures'), 
         ('kmin',0),('kmax',100),('kinit',None),
         ('p','p'),('p_title','success probability from conditional nbd'),
@@ -267,7 +267,6 @@ def negative_binomial_sum_pdf(obs):
     --------
     negative_binomial_pdf
     """
-    import ROOT
     obsname = obs.GetName()
 
     # first binomial
@@ -320,7 +319,6 @@ def negative_binomial_sum_pdf_conditional(obs):
     --------
     negative_binomial_pdf
     """
-    import ROOT
     obsname = obs.GetName()
 
     # first binomial
@@ -374,7 +372,6 @@ def negative_binomial_Ksum_pdf_conditional(order,obs):
     --------
     negative_binomial_pdf
     """
-    import ROOT
     obsname = obs.GetName()
 
     nbd_s  = []
@@ -502,8 +499,6 @@ def double_gauss(mass,**opt):
     c1_bkg: ROOT.RooRealVar
         The order 1 coefficient of the Chebychev pol.
     """
-    import ROOT
-
     defaults = { 'low_mass': 350.0, 'high_mass':650.,
             'mean': 497.0, 'low_mean': 490., 'high_mean': 510.,
             'sgm_narrow': 5.0, 'low_sgm_narrow': 0.01, \
@@ -576,3 +571,280 @@ def double_gauss(mass,**opt):
             nsig,nbkg,mean,sgm_narrow,sgm_broad,\
               frac_gauss_nw,c0_bkg,c1_bkg
 
+
+def langaus(obs,**opt):
+    """Build a Landau convoluted with a Gaussian ROOT.RooRealPdf
+
+    Parameters
+    ----------
+    obs: ROOT.RooRealVar
+        The observable associated to the PDF
+    
+    opt: dict(), optional
+        the keyword dictionary intended to be used for the initial
+        values for the parameters of the PDF. See below
+        
+        low_obs: 0.0,   range (low) for the observable
+        high_obs: 20,   range (up) for the observable
+        mean: 10.0,     MPV-landau initial
+        low_mean: 1.0,  mean parameter minimum
+        high_mean: 14., mean parameter maximum
+        sigma: 2.0,     standard deviation initial value
+        low_sigma: 0.01 std. dev. minimum
+        low_sigma: 10.0 std. dev. maximum
+        sigma_lan: 0.4, Landau sigma initial value (scale parameter)
+        low_sigma_lan: 0.0 Landau sigma minimum
+        low_sigma_lan: 1.0 Landau sigma maximum
+
+    Returns
+    -------
+    lang,landau,gaus,mpv,sl,mg,sg
+
+    lang: ROOT.RooFFTConvPdf
+        The convolution of the Landau x Gaus
+    landau: ROOT.RooLandau
+        The Landau distribution related with the particle energy lost
+    gaus: ROOT.RooGaussian
+        The gauss related with the electronic resolution
+    mpv: ROOT.RooRealVar
+        The energy lost most probable value in ToT units
+    sl: ROOT.RooRealVar
+        The scale parameter of the Landau
+    mg: ROOT.RooRealVar
+        The mean of the gaus (fixed ot zero as it is convoluted, assumed
+        no bias in the ToT, just resolution effects)
+    sg: ROOT.RooRealVar
+        The standard deviation given by the resolution of the electronics 
+    """
+    defaults = { 'low_obs': 0.0, 'high_obs':20.,
+            'mean': 10.0, 'low_mean': 1.0, 'high_mean': 14.,
+            'sigma': 2.0, 'low_sigma': 0.01, 'high_sigma': 10.0,
+            'sigma_lan': 0.4, 'low_sigma_lan': 0.0, 'high_sigma_lan': 1.0
+            }
+    obsname = obs.GetName()
+    
+    class final_vals():
+        """ empty placeholder 
+        """
+        def __init__(self):
+            pass
+    fv = final_vals()
+
+    for key,value in defaults.iteritems():
+        if key in opt.keys():
+            setattr(fv,key,opt[key])
+        else:
+            setattr(fv,key,value)
+
+    # Construct gauss(t,mg,sg)
+    # mean gaus
+    mg = ROOT.RooRealVar("mg","mg",0)
+    sg = ROOT.RooRealVar("sg","sg",fv.sigma,fv.low_sigma,fv.high_sigma)
+    gaus = ROOT.RooGaussian("gauss","gauss",obs,mg,sg)
+
+    # The most probable value of the Landau
+    mpv = ROOT.RooRealVar("mpv","mpv landau",fv.mean,fv.mean-fv.sigma,fv.mean+fv.sigma)
+    # The landau sigma
+    sl  = ROOT.RooRealVar("sl","sigma landau",fv.sigma_lan,fv.low_sigma_lan,fv.high_sigma_lan) 
+    landau = ROOT.RooLandau("landau","landau",obs,mpv,sl)
+
+    # Contstruct convolution
+    #bins to be used for FFT sampling
+    obs.setBins(5000,"cache")
+    ## Construct landau (x) gauss
+    lang = ROOT.RooFFTConvPdf("landxgaus","landau (X) gauss",obs,landau,gaus)
+
+    return lang,landau,gaus,mpv,sl,mg,sg
+
+def langaus_plus_poisson(obs,**opt):
+    """Build a Landau convoluted with a Gaussian ROOT.RooRealPdf, plus
+    a Poissonian, to take into account a large inefficiency area. In this
+    area, the charge carriers can be trapped or suffer different effects 
+    and not measuring the whole available energy. 
+    XXX --  Poissonan process?? -- XXX
+
+    Parameters
+    ----------
+    obs: ROOT.RooRealVar
+        The observable associated to the PDF
+    
+    opt: dict(), optional
+        the keyword dictionary intended to be used for the initial
+        values for the parameters of the PDF. See below
+        
+        low_obs: 0.0,   range (low) for the observable
+        high_obs: 20,   range (up) for the observable
+        mean: 10.0,     MPV-landau initial
+        low_mean: 1.0,  mean parameter minimum
+        high_mean: 14., mean parameter maximum
+        sigma: 2.0,     standard deviation initial value
+        low_sigma: 0.01 std. dev. minimum
+        low_sigma: 10.0 std. dev. maximum
+        sigma_lan: 0.4, Landau sigma initial value (scale parameter)
+        low_sigma_lan: 0.0 Landau sigma minimum
+        low_sigma_lan: 1.0 Landau sigma maximum
+        lmbda: 1.0, Poisson scale or mean number of ocurrences
+        low_lmbda: 0.01 Poisson scale mininum
+        low_lmbda: 2.0  Poisson scale maximum
+
+    Returns
+    -------
+    lg,lang,poisson,landau,gaus,mpv,sl,mg,sg,lmbda,signalfrac
+
+    lg: ROOT.RooAddPdf
+        The langaus + poisson
+    lang: ROOT.RooFFTConvPdf
+        The convolution of the Landau x Gaus
+    poisson: ROOT.RooPoisson
+        The Poisson distribution to model the ineficient area
+    landau: ROOT.RooLandau
+        The Landau distribution related with the particle energy lost
+    gaus: ROOT.RooGaussian
+        The gauss related with the electronic resolution
+    mpv: ROOT.RooRealVar
+        The energy lost most probable value in ToT units
+    sl: ROOT.RooRealVar
+        The scale parameter of the Landau
+    mg: ROOT.RooRealVar
+        The mean of the gaus (fixed ot zero as it is convoluted, assumed
+        no bias in the ToT, just resolution effects)
+    sg: ROOT.RooRealVar
+        The standard deviation given by the resolution of the electronics 
+    lmbda: ROOT.RooRealVar
+        The average amount of measured energy in the inefficient region
+    signalfrac: ROOT.RooRealVar
+        The fraction of landau events over the total
+    """
+    defaults = { 'low_obs': 0.0, 'high_obs':20.,
+            'mean': 10.0, 'low_mean': 1.0, 'high_mean': 14.,
+            'sigma': 2.0, 'low_sigma': 0.01, 'high_sigma': 10.0,
+            'sigma_lan': 0.4, 'low_sigma_lan': 0.0, 'high_sigma_lan': 1.0,
+            'lmbda': 1.0, 'low_lmbda': 0.01, 'high_lmbda': 2.0,
+            }
+    class final_vals():
+        """ empty placeholder 
+        """
+        def __init__(self):
+            pass
+    fv = final_vals()
+
+    for key,value in defaults.iteritems():
+        if key in opt.keys():
+            setattr(fv,key,opt[key])
+        else:
+            setattr(fv,key,value)
+    
+    # langaus
+    lang,landau,gaus,mpv,sl,mg,sg = langaus(obs,low_obs=fv.low_obs,high_obs=fv.high_obs,
+            mean=fv.mean, low_mean=fv.low_mean, high_mean=fv.high_mean,
+            sigma=fv.sigma, low_sigma=fv.low_sigma, high_sigma=fv.high_sigma,
+            sigma_lan=fv.sigma_lan, low_sigma_lan=fv.low_sigma_lan, high_sigma_lan=fv.high_sigma_lan)
+    # Poisson
+    # The poisson mean
+    lmbda = ROOT.RooRealVar("lambda","lambda poisson",fv.lmbda,fv.low_lmbda,fv.high_lmbda)
+    # Note the True to avoid discrete bins
+    poisson = ROOT.RooPoisson('bkg','poisson bkg',obs,lmbda,True)
+    
+    # Plus extra variable
+    signalfrac = ROOT.RooRealVar("signalfrac","Fraction of low charge clusters",0.5,0.,1.)
+    
+    # Adding them
+    lg = ROOT.RooAddPdf("clusterToT","Cluster charge with low cluster charge",lang,poisson,signalfrac)
+
+    return lg,lang,poisson,landau,gaus,mpv,sl,mg,sg,lmbda,signalfrac
+
+
+def langaus_plus_exp(obs,**opt):
+    """Build a Landau convoluted with a Gaussian ROOT.RooRealPdf, plus
+    a Exponential, to take into account a large inefficiency area. In this
+    area, the charge carriers can be trapped or suffer different effects 
+    and not measuring the whole available energy. 
+    XXX --  Exponential process?? -- XXX
+
+    Parameters
+    ----------
+    obs: ROOT.RooRealVar
+        The observable associated to the PDF
+    
+    opt: dict(), optional
+        the keyword dictionary intended to be used for the initial
+        values for the parameters of the PDF. See below
+        
+        low_obs: 0.0,   range (low) for the observable
+        high_obs: 20,   range (up) for the observable
+        mean: 10.0,     MPV-landau initial
+        low_mean: 1.0,  mean parameter minimum
+        high_mean: 14., mean parameter maximum
+        sigma: 2.0,     standard deviation initial value
+        low_sigma: 0.01 std. dev. minimum
+        low_sigma: 10.0 std. dev. maximum
+        sigma_lan: 0.4, Landau sigma initial value (scale parameter)
+        low_sigma_lan: 0.0 Landau sigma minimum
+        low_sigma_lan: 1.0 Landau sigma maximum
+        lmbda: 1.0, Exponential mean number of ocurrences
+        low_lmbda: 0.01 exp scalemininum
+        low_lmbda: 2.0  exp scalemaximum
+
+    Returns
+    -------
+    lg,lang,exp,landau,gaus,mpv,sl,mg,sg,lmbda,signalfrac
+
+    lg: ROOT.RooAddPdf
+        The langaus + poisson
+    lang: ROOT.RooFFTConvPdf
+        The convolution of the Landau x Gaus
+    exp: ROOT.RooExponential
+        The Exp distribution to model the ineficient area
+    landau: ROOT.RooLandau
+        The Landau distribution related with the particle energy lost
+    gaus: ROOT.RooGaussian
+        The gauss related with the electronic resolution
+    mpv: ROOT.RooRealVar
+        The energy lost most probable value in ToT units
+    sl: ROOT.RooRealVar
+        The scale parameter of the Landau
+    mg: ROOT.RooRealVar
+        The mean of the gaus (fixed ot zero as it is convoluted, assumed
+        no bias in the ToT, just resolution effects)
+    sg: ROOT.RooRealVar
+        The standard deviation given by the resolution of the electronics 
+    lmbda: ROOT.RooRealVar
+        The average amount of measured energy in the inefficient region
+    signalfrac: ROOT.RooRealVar
+        The fraction of landau events over the total
+    """
+    defaults = { 'low_obs': 0.0, 'high_obs':20.,
+            'mean': 10.0, 'low_mean': 1.0, 'high_mean': 14.,
+            'sigma': 2.0, 'low_sigma': 0.01, 'high_sigma': 10.0,
+            'sigma_lan': 0.4, 'low_sigma_lan': 0.0, 'high_sigma_lan': 1.0,
+            'lmbda': -1.0, 'low_lmbda': -10.0, 'high_lmbda': 4.0,
+            }
+    class final_vals():
+        """ empty placeholder 
+        """
+        def __init__(self):
+            pass
+    fv = final_vals()
+
+    for key,value in defaults.iteritems():
+        if key in opt.keys():
+            setattr(fv,key,opt[key])
+        else:
+            setattr(fv,key,value)
+    
+    # langaus
+    lang,landau,gaus,mpv,sl,mg,sg = langaus(obs,low_obs=fv.low_obs,high_obs=fv.high_obs,
+            mean=fv.mean, low_mean=fv.low_mean, high_mean=fv.high_mean,
+            sigma=fv.sigma, low_sigma=fv.low_sigma, high_sigma=fv.high_sigma,
+            sigma_lan=fv.sigma_lan, low_sigma_lan=fv.low_sigma_lan, high_sigma_lan=fv.high_sigma_lan)
+    # Exponential
+    lmbda = ROOT.RooRealVar("lambda","lambda exp",fv.lmbda,fv.low_lmbda,fv.high_lmbda)
+    exp = ROOT.RooExponential('bkg','exponential bkg',obs,lmbda)
+    
+    # Plus extra variable
+    signalfrac = ROOT.RooRealVar("signalfrac","Fraction of low charge clusters",0.5,0.,1.)
+    
+    # Adding them
+    lg = ROOT.RooAddPdf("clusterToT","Cluster charge with low cluster charge",lang,exp,signalfrac)
+
+    return lg,lang,exp,landau,gaus,mpv,sl,mg,sg,lmbda,signalfrac
